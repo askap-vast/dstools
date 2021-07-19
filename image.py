@@ -16,310 +16,424 @@ def prompt(msg):
     if resp not in ['y', 'n']:
         resp = raw_input(colored(msg))
 
-    return resp
-        
+    return True if resp == 'y' else False
+
+def nearest_power(number, powerlim=7):
+    original = number
+    exps = range(powerlim, 14)
+    pows = [2**i for i in exps]
+
+    keep = []
+    # Find highest power of 2 that is lower than number,
+    # iteratively subtract this and find next highest power
+    # until residual is below threshold (default 128)
+    while number > 2**powerlim:
+        gtpow = [num for num, power in zip(exps, pows) if number > power][-1]
+        keep.append(gtpow)
+
+        number -= 2**gtpow
+
+    # Add threshold to get next power of 2 above original number
+    keep.append(powerlim)
+    
+    return sum([2**i for i in keep])
+
+
+def update_param(name, val, dtype):
+    while True:
+        newval = raw_input("Enter new {} (currently {}): ".format(name, val))
+
+        # Accept old value if nothing entered
+        if not newval:
+            break
+
+        # Test for correct input type
+        try:
+            val = dtype(newval)
+            break
+        except ValueError:
+            print("{} must be of type {}".format(name, type(val)))
+
+    return val
+
 
 proj_dir = sys.argv[-1]
 if proj_dir[-1] != '/':
     proj_dir += '/'
 
+# Interpret 'obs' in a source name as one of multiple observations in their own directory
+# Interpret 'epoch' in a source name as a directory containing multiple sources (e.g. C3431)
 if 'obs' in proj_dir:
     source = proj_dir.split('_')[0].lower()
+elif 'epoch' in proj_dir:
+    source = proj_dir.split('/')[-2].lower()
 else:
     source = proj_dir.split('/')[0].lower()
 
+proj_dir = 'reduced/' + proj_dir
 
-imsize = 3584
-masksize = 25
-iterations = 2000
-interactive = True
-cellsize = ['1.0arcsec']
-clean_scales = [0, 3, 8]
+# PARAMETER SETTINGS
+# ------------------
+imradius = 0.8
+cell = 0.75
+cellsize = '{}arcsec'.format(cell)
+imsize = nearest_power(imradius * 3600 / cell)
 pblim = 0.01
+
+masksize = 20
+iterations = 2000
 threshold = 8E-5
 
-clean_mask = '{}{}.mask'.format(proj_dir, source)
+nterms = 3
+clean_scales = [0, 3, 8]
+robust = 0.5
 
-for int_freq in [1]:
-    mirfile = '{}.2100.{}.cal'.format(source, int_freq)
-    msname = '{}.ms'.format(source)
+field = '0'
+reffreq = '2100MHz'
+int_freqs = [2]
+interactive = True
 
-    # Check if version exists with field sources removed
-    if os.path.exists(proj_dir + mirfile + '.zapped'):
-        mirfile += '.zapped'
+clean_mask = '{}/{}.mask'.format(proj_dir, source)
+# -------------------------------------------------
 
-    # DATA IMPORT / FLAGGING
-    if os.path.exists(proj_dir + msname):
-        reimport = prompt('Redo data import?')
+accept_params = prompt("Imaging with radius of {} deg, using {} pixels with size {}. Proceed?".format(imradius, imsize, cellsize))
+if accept_params:
 
-        if reimport == 'y':
-            os.system('rm -r {}{}'.format(proj_dir, msname))
-            os.system('rm -r {}{}.flagversions'.format(proj_dir, msname))
-            os.system('rm -r {}selfcal/'.format(proj_dir))
-            os.system('mkdir {}selfcal/'.format(proj_dir))
+    for int_freq in int_freqs:
+        mirfile = '{}.{}.{}.cal'.format(source, reffreq[:-3], int_freq)
+        msname = '{}.ms'.format(source)
+        calibrated_ms = '{}/{}_cal.ms'.format(proj_dir, source)
 
-            importmiriad(mirfile='{}{}'.format(proj_dir, mirfile),
-                         vis='{}{}'.format(proj_dir, msname))
-    else:
-        importmiriad(mirfile='{}{}'.format(proj_dir, mirfile),
-                     vis='{}{}'.format(proj_dir, msname))
+        # Check if version exists with field sources removed
+        if os.path.exists(proj_dir + mirfile + '.zapped'):
+            mirfile += '.zapped'
 
+        # DATA IMPORT / FLAGGING
+        if os.path.exists(proj_dir + msname):
+            reimport = prompt('Redo data import?')
 
-    reflag = prompt('Do automatic flagging?')
-        
-    if reflag == 'y':
-        # Run some additional flagging
-        # flagdata(vis=proj_dir + msname, mode='manual', antenna='3&4')
-        flagdata(vis=proj_dir + msname, mode='rflag')
-        flagdata(vis=proj_dir + msname, mode='tfcrop')
-        flagdata(vis=proj_dir + msname, mode='tfcrop')
-        
+            if reimport:
+                os.system('rm -r {}/{}'.format(proj_dir, msname))
+                os.system('rm -r {}/{}.flagversions'.format(proj_dir, msname))
+                os.system('rm -r {}/selfcal/'.format(proj_dir))
+                os.system('mkdir {}/selfcal/'.format(proj_dir))
 
-    test_params = prompt('Experiment with imsize / flagging?')
+                importmiriad(mirfile='{}/{}'.format(proj_dir, mirfile),
+                            vis='{}/{}'.format(proj_dir, msname))
+        else:
+            importmiriad(mirfile='{}/{}'.format(proj_dir, mirfile),
+                        vis='{}/{}'.format(proj_dir, msname))
 
-    # Check if default imsize is acceptable (e.g. no strong out of field sources)
-    if test_params == 'y':
-        os.system('mkdir {}test_params'.format(proj_dir))
-        while True:
-        
-            tclean(vis=proj_dir + msname,
-                   field='0',
-                   cell=cellsize,
-                   imsize=[imsize],
-                   savemodel='modelcolumn',
-                   threshold=threshold,
-                   niter=2000,
-                   imagename='{}test_params/test_im'.format(proj_dir),
-                   nterms=2,
-                   deconvolver='mtmfs',
-                   scales=clean_scales,
-                   reffreq='2099.999MHz',
-                   weighting='briggs',
-                   robust=0.5,
-                   stokes='IQUV',
-                   interactive=interactive,
-                   pblimit=pblim)
+            
+        test_params = prompt('Experiment with imsize / cellsize / nterms / flagging?')
 
-            accept_imsize = prompt('Is current imsize of {} and pblim of {} acceptable?'.format(imsize, pblim))
-            # flag_cmd = input('Enter flagging command (empty to skip): ')
-            # if flag_cmd != '':
-            #     try:
-            #         eval(flag_cmd)
-            #     except Exception:
-            #         print('{ } \n ... is not a valid flagging command.'.format(flag_cmd))
-                
-            if accept_imsize == 'y':
-                break
-            else:
-                imsize = int(raw_input("Enter new imsize: "))
-                pblim = float(raw_input("Enter new pblim: "))
-    os.system('rm -r {}test_params'.format(proj_dir))
-    
-    selfcal = prompt('Run selfcal?')
-
-    if selfcal == 'y':
-        
-        # Run selfcal
-        i = 0
-        i = len(glob.glob('{}/{}.*.ms'.format(proj_dir, source)))
-        cont = 'y'
-        while cont == 'y':
-            i += 1
-            selfcal_template = '{}selfcal/{}.{}.selfcal_im{}_I'
-            selfcal_im = selfcal_template.format(proj_dir, source, int_freq, i)
-
-            # Use freshly split ms each iteration after first loop
-            selfcal_ms = proj_dir + msname.replace('.ms', '.selfcal.{}.ms'.format(i-1))
-            selfcal_ms = selfcal_ms if os.path.exists(selfcal_ms) else proj_dir + msname
-
-            # Set mask from previous iteration as input to next tclean loop
-            selfcal_mask = selfcal_template.format(proj_dir, source, int_freq, i-1) + '.mask'
-
-            # If no selfcal mask exists, check for a backed up mask in main directory
-            if os.path.exists(selfcal_mask):
-                init_mask = selfcal_mask
-            else:
-                init_mask = clean_mask if os.path.exists(clean_mask) else ''
-
-            tclean(vis=selfcal_ms,
-                   field='0',
-                   cell=cellsize,
-                   imsize=[imsize],
-                   savemodel='modelcolumn',
-                   threshold=threshold,
-                   niter=2000,
-                   imagename=selfcal_im,
-                   nterms=2,
-                   deconvolver='mtmfs',
-                   scales=clean_scales,
-                   reffreq='2099.999MHz',
-                   weighting='briggs',
-                   robust=0.5,
-                   stokes='IQUV',
-                   interactive=interactive,
-                   mask=init_mask,
-                   pblimit=pblim)
-
-            # Trial self-cal solution intervals
+        # Check if default imsize is acceptable (e.g. no strong out of field sources)
+        if test_params:
+            os.system('rm -r {}/test_params'.format(proj_dir))
+            os.system('mkdir {}/test_params'.format(proj_dir))
+            testms = '{}/test_params/testms.ms'.format(proj_dir)
+            os.system('cp -r {} {}'.format(proj_dir + msname, testms))
             while True:
-                interval = raw_input("Select solution interval (in min/s): ")
-                try:
-                    unit = 'min' if 'min' in interval else 's' if 's' in interval else ''
-                    num = int(interval.replace(unit, ''))
-                except ValueError:
-                    print("Invalid solution interval entered, must be format <int>[min/s].")
-                    continue
 
-                # Save self-cal plots
-                cal_file = '{}selfcal/{}.{}.phase_selfcal_{}.{}'.format(proj_dir, source, int_freq, interval, i)
-                cal_table = cal_file + '.cal'
-                cal_plot = cal_file + '.png'
-                gaincal(vis=selfcal_ms,
-                        caltable=cal_table,
-                        solint=interval,
-                        calmode='p',
-                        gaintype='G')
-                plotms(vis=cal_table,
-                       xaxis='time',
-                       yaxis='phase',
-                       plotrange=[0, 0, -30, 30],
-                       plotfile=cal_plot,
-                       showgui=True)
+                tclean(vis=testms,
+                       field=field,
+                       cell=[cellsize],
+                       imsize=[imsize],
+                       savemodel='modelcolumn',
+                       threshold=threshold,
+                       niter=2000,
+                       imagename='{}/test_params/test_im'.format(proj_dir),
+                       nterms=nterms,
+                       deconvolver='mtmfs',
+                       scales=clean_scales,
+                       reffreq=reffreq,
+                       weighting='briggs',
+                       robust=robust,
+                       stokes='IQUV',
+                       interactive=interactive,
+                       pblimit=pblim)
 
-                # Confirm solution is good before applying, else trial another solution
-                cal_good = prompt('Is self-cal a good solution?')
-
-                if cal_good == 'y':
-                    applycal(vis=selfcal_ms, gaintable=[cal_table], interp='linear')
-                    split(vis=selfcal_ms,
-                          outputvis=proj_dir + msname.replace('.ms', '.selfcal.{}.ms'.format(i)),
-                          datacolumn="corrected")
+                accept_params = prompt('Finished experimenting?')
+                if accept_params:
                     break
                 else:
-                    os.system("rm -r {} {}".format(cal_table, cal_plot))
+                    os.system('rm -r {}/test_params/test_im*'.format(proj_dir))
 
-            # Break from loop once solution is sufficient
-            cont = prompt('Proceed with more selfcal?')
+                    # Run some additional flagging
+                    reflag = prompt('Perform flagging?')
+                    if reflag:
 
-        # Backup clean mask to main project directory
-        backup_mask = selfcal_template.format(proj_dir, source, int_freq, i) + '.mask'
-        if os.path.exists(clean_mask):
-            replace_mask = prompt('Update the existing clean mask with current mask?')
+                        manualflag = prompt('Run manual flagging?')
+                        if manualflag:
+                            plotms(vis=proj_dir + msname, xaxis='channel', yaxis='amp', avgbaseline=False)
 
-            if replace_mask == 'y':
+                            flagchan = prompt('Flag channel ranges?')
+                            if flagchan:
+                                flagvals = raw_input('Specify channels to flag (; delimited, ~ range):')
+                                flagdata(vis=proj_dir + msname, mode='manual', spw='0:' + flagvals)
+
+                            flagtime = prompt('Flag time ranges?')    
+
+                        rflag = prompt('Run rflag?')
+                        if rflag:
+                            flagdata(vis=proj_dir + msname, mode='rflag')
+
+                        tfcrop = prompt('Run tfcrop?')
+                        if tfcrop:
+                            flagdata(vis=proj_dir + msname, mode='tfcrop')
+
+                        flag45 = prompt('Flag baseline 4-5?')
+                        if flag45:
+                            flagdata(vis=proj_dir + msname, mode='manual', antenna='3&4')
+
+                    # Update parameters
+                    param = update_param('imsize', imsize, int)
+                    pblim = update_param('pblim', pblim, float)
+                    cellsize = update_param('cellsize', cellsize, str)
+                    nterms = update_param('nterms', nterms, int)
+
+            
+        os.system('rm -rf {}/test_params'.format(proj_dir))
+
+        selfcal = prompt('Run selfcal?')
+
+        if selfcal:
+
+            # Run selfcal
+            files = glob.glob('{}/selfcal/{}.selfcal.[0-9].ms'.format(proj_dir, source))
+            i = len(files)
+            cont = 'y'
+            while cont:
+                i += 1
+                selfcal_template = '{}/selfcal/{}.{}.selfcal_im{}_I'
+                selfcal_im = selfcal_template.format(proj_dir, source, int_freq, i)
+
+                # Use freshly split ms each iteration after first loop
+                selfcal_ms = proj_dir + 'selfcal/' + msname.replace('.ms', '.selfcal.{}.ms'.format(i-1))
+                selfcal_ms = selfcal_ms if os.path.exists(selfcal_ms) else proj_dir + msname
+
+                # Set mask from previous iteration as input to next tclean loop
+                selfcal_mask = selfcal_template.format(proj_dir, source, int_freq, i-1) + '.mask'
+
+                # If no selfcal mask exists, check for a backed up mask in main directory
+                if os.path.exists(selfcal_mask):
+                    init_mask = selfcal_mask
+                else:
+                    init_mask = clean_mask if os.path.exists(clean_mask) else ''
+
+                tclean(vis=selfcal_ms,
+                       field=field,
+                       cell=[cellsize],
+                       imsize=[imsize],
+                       savemodel='modelcolumn',
+                       threshold=threshold,
+                       niter=2000,
+                       imagename=selfcal_im,
+                       nterms=nterms,
+                       deconvolver='mtmfs',
+                       scales=clean_scales,
+                       reffreq=reffreq,
+                       weighting='briggs',
+                       robust=robust,
+                       stokes='IQUV',
+                       interactive=interactive,
+                       mask=init_mask,
+                       pblimit=pblim)
+
+                # Trial self-cal solution intervals
+                while True:
+                    interval = raw_input("Select solution interval (in min/s): ")
+                    try:
+                        unit = 'min' if 'min' in interval else 's' if 's' in interval else ''
+                        num = int(interval.replace(unit, ''))
+                    except ValueError:
+                        print("Invalid solution interval entered, must be format <int>[min/s].")
+                        continue
+
+                    # Save self-cal plots
+                    cal_file = '{}/selfcal/{}.{}.phase_selfcal_{}.{}'.format(proj_dir, source, int_freq, interval, i)
+                    cal_table = cal_file + '.cal'
+                    cal_plot = cal_file + '.png'
+                    gaincal(vis=selfcal_ms,
+                            caltable=cal_table,
+                            solint=interval,
+                            calmode='p',
+                            gaintype='G')
+                    plotms(vis=cal_table,
+                        xaxis='time',
+                        yaxis='phase',
+                        plotrange=[0, 0, -30, 30],
+                        plotfile=cal_plot,
+                        showgui=True)
+
+                    # Confirm solution is good before applying, else trial another solution
+                    cal_good = prompt('Is self-cal a good solution?')
+
+                    if cal_good:
+                        applycal(vis=selfcal_ms, gaintable=[cal_table], interp='linear')
+                        split(vis=selfcal_ms,
+                            outputvis=proj_dir + 'selfcal/' + msname.replace('.ms', '.selfcal.{}.ms'.format(i)),
+                            datacolumn="corrected")
+                        break
+                    else:
+                        os.system("rm -r {} {}".format(cal_table, cal_plot))
+
+                # Break from loop once solution is sufficient
+                cont = prompt('Proceed with more selfcal?')
+
+            # Backup clean mask to main project directory
+            backup_mask = selfcal_template.format(proj_dir, source, int_freq, i) + '.mask'
+            if os.path.exists(clean_mask):
+                replace_mask = prompt('Update the existing clean mask with current mask?')
+
+                if replace_mask:
+                    os.system('cp -r {}.mask {}'.format(backup_mask, clean_mask))
+            else:
                 os.system('cp -r {}.mask {}'.format(backup_mask, clean_mask))
+
+            # Copy calibrated MS to root folder
+            os.system('cp -r {} {}'.format(selfcal_ms, calibrated_ms))
+
         else:
-            os.system('cp -r {}.mask {}'.format(backup_mask, clean_mask))
+            files = glob.glob('{}/selfcal/{}.selfcal.[0-9].ms'.format(proj_dir, source))
+            i = len(files)
+            selfcal_ms = proj_dir + 'selfcal/' + msname.replace('.ms', '.selfcal.{}.ms'.format(i))
+            os.system('cp -r {} {}'.format(selfcal_ms, calibrated_ms))
 
-    elif selfcal == 'n':
-        i = len(glob.glob("{}/*selfcal.*.ms".format(proj_dir)))
-        selfcal_ms = proj_dir + msname.replace('.ms', '.selfcal.{}.ms'.format(i))
-        
-    field_model_path = '{}field_model'.format(proj_dir)
-    if os.path.exists(field_model_path):
-        os.system('rm -r {}'.format(field_model_path))
-    os.system('mkdir {}'.format(field_model_path))
+        field_model_path = '{}/field_model'.format(proj_dir)
+        if os.path.exists(field_model_path):
+            os.system('rm -r {}'.format(field_model_path))
+        os.system('mkdir {}'.format(field_model_path))
 
-    # Deep clean to produce field model
-    tclean(vis=selfcal_ms,
-           field='0',
-           cell=cellsize,
-           imsize=[imsize],
-           threshold=threshold,
-           niter=iterations*5,
-           imagename='{}/{}.{}.im_deep'.format(field_model_path, source, int_freq),
-           nterms=2,
-           deconvolver='mtmfs',
-           scales=clean_scales,
-           reffreq='2099.999MHz',
-           weighting='briggs',
-           stokes='IQUV',
-           robust=0.5,
-           mask=clean_mask,
-           interactive=interactive,
-           pblimit=pblim)
+        # Deep clean to produce field model
+        tclean(vis=calibrated_ms,
+               field=field,
+               cell=[cellsize],
+               imsize=[imsize],
+               threshold=threshold,
+               niter=iterations*5,
+               imagename='{}/{}.{}.im_deep'.format(field_model_path, source, int_freq),
+               nterms=nterms,
+               deconvolver='mtmfs',
+               scales=clean_scales,
+               reffreq=reffreq,
+               weighting='briggs',
+               stokes='IQUV',
+               robust=robust,
+               mask=clean_mask,
+               interactive=interactive,
+               pblimit=pblim)
 
-    # Mask out the source
-    circle_cen = 'circle[[{}pix, {}pix], {}pix]'.format(imsize // 2, imsize // 2, masksize*3)
-    model = '{}/{}.{}.im_deep.model'.format(field_model_path, source, int_freq)
-    bgmodel = '{}/{}.{}.im_deep.bgmodel'.format(field_model_path, source, int_freq)
+        # Mask out the source
+        # Either use a generic circular mask at image center or specify via a custom tclean mask
+	automask = prompt("Automatically generate source mask?")
+        if automask:
+            circle_cen = 'circle[[{}pix, {}pix], {}pix]'.format(imsize // 2, imsize // 2, masksize*3)
+	else:
+            tclean(vis=calibrated_ms,
+                   field=field,
+                   cell=[cellsize],
+                   imsize=[imsize],
+                   threshold=threshold,
+                   niter=1,
+                   imagename='{}/{}.{}.maskgen'.format(field_model_path, source, int_freq),
+                   nterms=nterms,
+                   deconvolver='mtmfs',
+                   scales=clean_scales,
+                   reffreq=reffreq,
+                   weighting='briggs',
+                   stokes='IQUV',
+                   robust=robust,
+                   interactive=interactive,
+                   pblimit=pblim)
+            circle_cen = '{}/{}.{}.source.mask'.format(field_model_path, source, int_freq)
+            os.system('mv {}/{}.{}.maskgen.mask {}'.format(field_model_path, source, int_freq, circle_cen))
+            os.system('rm -r {}/{}.{}.maskgen*'.format(field_model_path, source, int_freq))
 
-    os.system('rm -r {}*'.format(bgmodel))
-    for tt in ['tt0', 'tt1']:
-        mask = '{}/{}.mask.{}'.format(field_model_path, source, tt)
-        modelfile = '{}.{}'.format(model, tt)
-        makemask(mode='copy', inpimage=modelfile, output=mask, inpmask=circle_cen, overwrite=True)
-        immath(imagename=[modelfile, mask], outfile=bgmodel + '.' + tt, expr='IM0*(1-IM1)')
+        model = '{}/{}.{}.im_deep.model'.format(field_model_path, source, int_freq)
+        bgmodel = '{}/{}.{}.im_deep.bgmodel'.format(field_model_path, source, int_freq)
 
-    os.system('rm -r {}/{}.{}.im_presub*'.format(field_model_path, source, int_freq))
-    # Insert masked background model into visibilities and subtract
-    tclean(vis=selfcal_ms,
-           field='0',
-           cell=cellsize,
-           imsize=[imsize],
-           startmodel=[bgmodel + '.tt0', bgmodel + '.tt1'],
-           savemodel='modelcolumn',
-           niter=0,
-           imagename='{}/{}.{}.im_presub'.format(field_model_path, source, int_freq),
-           nterms=2,
-           deconvolver='mtmfs',
-           scales=clean_scales,
-           reffreq='2099.999MHz',
-           weighting='briggs',
-           stokes='IQUV',
-           robust=0.5,
-           pblimit=pblim)
+        # os.system('rm -r {}*'.format(bgmodel))
+        for tt in ['tt{}'.format(i) for i in range(nterms)]:
+            mask = '{}/{}.mask.{}'.format(field_model_path, source, tt)
+            modelfile = '{}.{}'.format(model, tt)
+            makemask(mode='copy', inpimage=modelfile, output=mask, inpmask=circle_cen, overwrite=True)
+            immath(imagename=[modelfile, mask], outfile=bgmodel + '.' + tt, expr='IM0*(1-IM1)')
 
-    uvsub(vis=selfcal_ms)
+        # Insert masked background model into visibilities and subtract
+        os.system('rm -r {}/{}.{}.im_presub*'.format(field_model_path, source, int_freq))
+        tclean(vis=calibrated_ms,
+               field=field,
+               cell=[cellsize],
+               imsize=[imsize],
+               startmodel=[bgmodel + '.tt{}'.format(i) for i in range(nterms)],
+               savemodel='modelcolumn',
+               niter=0,
+               imagename='{}/{}.{}.im_presub'.format(field_model_path, source, int_freq),
+               nterms=nterms,
+               deconvolver='mtmfs',
+               scales=clean_scales,
+               reffreq=reffreq,
+               weighting='briggs',
+               stokes='IQUV',
+               robust=robust,
+               pblimit=pblim)
 
-    os.system('rm -r {}/{}.{}.im_subbed*'.format(field_model_path, source, int_freq))
-    # Reimage to confirm field subtraction
-    tclean(vis=selfcal_ms,
-           field='0',
-           datacolumn='corrected',
-           cell=cellsize,
-           imsize=[imsize],
-           threshold=threshold,
-           niter=iterations // 4,
-           imagename='{}/{}.{}.im_subbed'.format(field_model_path, source, int_freq),
-           nterms=2,
-           deconvolver='mtmfs',
-           scales=clean_scales,
-           reffreq='2099.999MHz',
-           weighting='briggs',
-           stokes='IQUV',
-           mask=clean_mask,
-           robust=0.5,
-           pblimit=pblim)
+        # Perform UV-subtraction and move to new file
+        subbed_ms = calibrated_ms.replace('.ms', '.subbed.ms')
+        os.system('cp -r {} {}'.format(calibrated_ms, calibrated_ms.replace('.ms', '.bak.ms')))
+        uvsub(vis=calibrated_ms)
+        os.system('mv {} {}'.format(calibrated_ms, subbed_ms))
+        os.system('mv {} {}'.format(calibrated_ms.replace('.bak.ms', '.ms'), calibrated_ms))
 
-    for tt in ['tt0', 'tt1']:
-        for stokes in ['I', 'V']:
-            for imtype in ['deep', 'subbed']:
+        # Reimage to confirm field subtraction
+        os.system('rm -r {}/{}.{}.im_subbed*'.format(field_model_path, source, int_freq))
+        tclean(vis=subbed_ms,
+               field=field,
+               datacolumn='corrected',
+               cell=[cellsize],
+               imsize=[imsize],
+               threshold=threshold,
+               niter=iterations // 4,
+               imagename='{}/{}.{}.im_subbed'.format(field_model_path, source, int_freq),
+               nterms=nterms,
+               deconvolver='mtmfs',
+               scales=clean_scales,
+               reffreq=reffreq,
+               weighting='briggs',
+               stokes='IQUV',
+               robust=robust,
+               pblimit=pblim)
 
-                os.system('rm -r {}/{}.{}.im_{}.{}.image*'.format(field_model_path, source, int_freq, imtype, stokes))
-                
-                imsubimage(imagename='{}/{}.{}.im_{}.image.{}/'.format(field_model_path,
-                                                                       source,
-                                                                       int_freq,
-                                                                       imtype,
-                                                                       tt),
-                           outfile='{}/{}.{}.im_{}.{}.image.{}'.format(field_model_path,
-                                                                       source,
-                                                                       int_freq,
-                                                                       imtype,
-                                                                       stokes,
-                                                                       tt),
-                           stokes=stokes)
-                exportfits(imagename='{}/{}.{}.im_{}.{}.image.{}'.format(field_model_path,
-                                                                         source,
-                                                                         int_freq,
-                                                                         imtype,
-                                                                         stokes,
-                                                                         tt),
-                           fitsimage='{}/{}.{}.im_{}.{}.{}.fits'.format(field_model_path,
-                                                                        source,
-                                                                        int_freq,
-                                                                        stokes,
-                                                                        imtype,
-                                                                        tt),
-                           overwrite=True)
+        for tt in ['tt{}'.format(i) for i in range(nterms)]:
+            for stokes in ['I', 'V']:
+                for imtype in ['deep', 'subbed']:
+
+                    os.system('rm -r {}/{}.{}.im_{}.{}.image*'.format(field_model_path, source, int_freq, imtype, stokes))
+
+                    imsubimage(imagename='{}/{}.{}.im_{}.image.{}/'.format(field_model_path,
+                                                                           source,
+                                                                           int_freq,
+                                                                           imtype,
+                                                                           tt),
+                               outfile='{}/{}.{}.im_{}.{}.image.{}'.format(field_model_path,
+                                                                           source,
+                                                                           int_freq,
+                                                                           imtype,
+                                                                           stokes,
+                                                                           tt),
+                               stokes=stokes)
+                    exportfits(imagename='{}/{}.{}.im_{}.{}.image.{}'.format(field_model_path,
+                                                                             source,
+                                                                             int_freq,
+                                                                             imtype,
+                                                                             stokes,
+                                                                             tt),
+                               fitsimage='{}/{}.{}.im_{}.{}.{}.fits'.format(field_model_path,
+                                                                            source,
+                                                                            int_freq,
+                                                                            stokes,
+                                                                            imtype,
+                                                                            tt),
+                               overwrite=True)
+
