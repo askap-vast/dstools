@@ -4,9 +4,11 @@ source functions.sh
 
 export proj_dir=$1
 export pcode=C3369
-export altpcode=$2
+export output_dir=$2
 export process_dir=/import/ada1/jpri6587/phd/atca/$pcode
 export data_dir=$(find $process_dir/raw_data/*/ | grep $proj_dir$)
+
+export proj_dir=reduced/$proj_dir
 
 # Load data
 prompt "Reload data?"
@@ -23,6 +25,7 @@ case $reload in
 	mkdir $proj_dir/
 	cd $proj_dir
 
+	print $data_dir
 	export infiles=$(ls $data_dir/* | grep $pcode | tr '\n' ',')
 
 	atlod in=$infiles out=$pcode.uv options=birdie,rfiflag,noauto,xycorr
@@ -80,11 +83,6 @@ for src in "${orders[@]}"; do
     done
 done
 
-# Restore pre-flagged versions
-for vis in $pcal $scal; do
-    cp -r ../$vis.$freq.flagged_backup $vis.$freq
-done
-
 # ------------------------------
 # PRIMARY / BANDPASS CALIBRATION
 # ------------------------------
@@ -98,6 +96,9 @@ case $reflag in
 
 	# Flag initial extreme values
 	flag_extreme $pcal.$freq 200
+
+	# Flag known bad channels for this band
+	flag_channels $pcal.$freq $freq
 
 	print "Running mfcal on $pcal.$freq"
 	# Solve for initial bandpass on primary calibrator
@@ -123,6 +124,7 @@ case $reflag in
 		[Yy]* )
 		    print "Running pgflag on $pcal.$freq"
 		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
+		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy
 		    print "Running mfcal on $pcal.$freq"
 		    mfcal vis=$pcal.$freq interval=40.0 refant=1
 		    ;;
@@ -130,6 +132,9 @@ case $reflag in
 		    : ;;
 	    esac
 
+	    # Check bandpass calibration
+	    uvspec vis=$pcal.$freq interval=40 axis=channel,amp device=/xs nxy=1,1
+	    uvspec vis=$pcal.$freq interval=40 axis=channel,phase device=/xs nxy=1,1
 
 	    prompt "Do more interactive flagging?"
 	    read flagmore
@@ -144,23 +149,29 @@ case $reflag in
 
     [Nn]* )
 	print "Skipping flagging" ;;
+
 esac
 
 prompt "Apply primary gain calibration?"
 read primary_cal
 case $primary_cal in
+
     [Yy]* ) 
 
 	# Gain calibrations for primary
 	gpcal vis=$pcal.$freq interval=0.1 options=xyvary minants=3 nfbin=8 spec=2.1 refant=1;
+
+	# Flag outliers in real/imaginary space
+	blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=real,imag options=nofqav,nobase
+	blflag vis=$pcal.$freq device=/xs stokes=xx,yy,yx,xy axis=real,imag options=nofqav,nobase
 
 	# Check primary calibration
 	uvplt vis=$pcal.$freq stokes=xx,yy axis=real,imag options=nofqav,nobase,equal device=/xs
 	;;
 
     [Nn]* )
-	print "Skipping primary gain calibration"
-	;;
+	print "Skipping primary gain calibration" ;;
+
 esac
 
 # ----------------------------
@@ -178,8 +189,8 @@ case $calibrate in
 	
 	[Yy]* )
 
-	    print "Flagging secondary calibrator"
 	    # Iterate between gain solutions and RFI flagging
+	    print "Flagging secondary calibrator"
 	    while true; do
 
 		# Run blflag on secondary prior to calibrating
@@ -196,6 +207,7 @@ case $calibrate in
 		    [Yy]* )
 			print "Running pgflag on $scal.$freq"
 			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
+			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy
 			;;
 		    [Nn]* ) : ;;
 		esac
@@ -204,9 +216,7 @@ case $calibrate in
 		gpcal vis=$scal.$freq interval=0.1 options="xyvary,qusolve" minants=3 nfbin=4 refant=1;
 
 		# Check secondary calibration
-		# uvplt vis=$scal.$freq stokes=xx,yy axis=time,amp options=nofqav device=/xs
-		# uvplt vis=$scal.$freq stokes=xx,yy axis=time,phase options=nofqav device=/xs
-		uvplt vis=$scal.$freq stokes=xx,yy axis=real,imag options=nofqav,nobase,equal device=/xs
+		uvplt vis=$scal.$freq stokes=xx,yy axis=real,imag options=nofqav,nobase,equal device=/xs;
 
 		prompt "Do more interactive flagging?"
 		read flagmore
@@ -221,6 +231,7 @@ case $calibrate in
 	
 	[Nn]* )
 	    print "Skipping secondary flagging"
+
 esac
 
 print "Propagating flux scale to secondary calibrator"
@@ -257,6 +268,7 @@ case $calibrate in
 		[Yy]* )
 		    print "Running pgflag on $target.$freq"
 		    pgflag vis=$target.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
+		    pgflag vis=$target.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
 		    ;;
 		[Nn]* )
 		    : ;;
@@ -288,9 +300,16 @@ print "Applying calibration to science target"
 uvaver vis=$scal.$freq out=$scal.$freq.cal
 uvaver vis=$target.$freq out=$target.$freq.cal
 
-# Clean up miriad files before moving to CASA (just keep calibrated target)
-mkdir $proj_dir/miriad
-mv $proj_dir/* $proj_dir/miriad/.
-mv $proj_dir/miriad/$target.$freq.cal $proj_dir/.
+if [ ! -z $output_dir ]; then
+    # If output directory specified, move results there
+    cd ../..
+    mkdir $output_dir
+    mv $proj_dir/$target.$freq.cal $output_dir/.
+else
+    # Clean up miriad files before moving to CASA (just keep calibrated target)
+    mkdir miriad
+    mv "*" $proj_dir/miriad/.
+    mv miriad/$target.$freq.cal $proj_dir/.
+fi
 
 print "DONE!"
