@@ -1,37 +1,40 @@
-import numpy as np
+#!/usr/bin/env python
 import click
-from casacore.tables import table, taql
-import time
 import os
-import re
+import numpy as np
+from casacore.tables import table, taql
 
 
 @click.command()
 @click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
+@click.option('-N', '--versionname', default=None,
+              help='Prefix for different processing versions')
 @click.argument('ms')
-def main(noflag, ms):
+def main(noflag, versionname, ms):
 
-    pattern = re.compile(r'\S*(SB\d{4,5}_POSSUM_)(\d{4}[-+]\d{2}.beam\d{2})\S*.ms')
-    src_name = pattern.sub(r'\1\2', ms)
-    sbid = ms.split('/')[0]
+    src_name = '/'.join(ms.split('/')[:-1])
 
-    ds_path = "{}/dynamic_spectra2/{}".format(sbid, src_name)
-    os.system("mkdir {}/dynamic_spectra2".format(sbid))
+    if versionname:
+        prefix = f'{versionname}_'
+    else:
+        prefix = ''
+
+    ds_path = "{}/dynamic_spectra/".format(src_name)
     os.system("mkdir {}".format(ds_path))
 
     pols = ["XX", "XY", "YX", "YY"]
 
     for polidx, pol in enumerate(pols):
 
-        outfile = "{}/dynamic_spectra_{}.npy".format(ds_path, pol)
+        outfile = "{}/{}dynamic_spectra_{}.npy".format(ds_path, prefix, pol)
 
         t = table(ms)
         tf = table("{}/SPECTRAL_WINDOW".format(ms))
 
         # Write time and frequency arrays, discarding duplicate timesamples
         times = np.unique(t.getcol('TIME'))
-        times.dump("{}/time.npy".format(ds_path, src_name))
-        tf[0]["CHAN_FREQ"].dump("{}/freq.npy".format(ds_path, src_name))
+        times.dump("{}/{}time.npy".format(ds_path, prefix))
+        tf[0]["CHAN_FREQ"].dump("{}/{}freq.npy".format(ds_path, prefix))
 
         val = len(times)
         
@@ -49,8 +52,4 @@ def main(noflag, ms):
         t.close()
 
 if __name__ == '__main__':
-    t1 = time.time()
     main()
-    t2 = time.time()
-
-    print(t2-t1)
