@@ -2,15 +2,15 @@
 
 source functions.sh
 
-export proj_dir=$1
-export pcode=C3369
+# Editable Script Parameters
 export refant=1
 export mfinterval=2.0
 export bpinterval=2.0
-export process_dir=/import/ada1/jpri6587/phd/atca/$pcode
-export data_dir=$(find $process_dir/raw_data/*/ | grep $proj_dir$)
+# --------------------------
 
-export proj_dir=reduced/$proj_dir
+export data_dir=$(pwd)/data/
+export proj_dir=reduced/$1/miriad/
+export pcode=$2
 
 # Load data
 prompt "Reload data?"
@@ -53,12 +53,12 @@ select f in $freqs; do
     fi
 
     if [ $(echo $f | grep 2100 | wc -l) > 0 ]; then
-    export freq=$f
-      export spec=2.1
+        export freq=$f
+        export spec=2.1
     else
-      # TODO: add logic here to return 5500 and 9000 MHz files
-      export freq=$f
-      export spec=5.5
+        # TODO: add logic here to return 5500 and 9000 MHz files
+        export freq=$f
+        export spec=5.5
     fi
     break
 done

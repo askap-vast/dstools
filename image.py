@@ -138,7 +138,6 @@ iterations = 2000
 threshold = 8e-5
 
 nterms = 3
-chanchunks = 8
 clean_scales = [0, 3, 8]
 robust = 0.5
 
@@ -437,7 +436,6 @@ if accept_params:
             niter=iterations * 5,
             imagename="{}/{}{}.im_deep".format(field_model_path, source, int_freq),
             nterms=nterms,
-            chanchunks=chanchunks,
             deconvolver="mtmfs",
             scales=clean_scales,
             reffreq=reffreq,
@@ -466,7 +464,6 @@ if accept_params:
                 niter=1,
                 imagename="{}/{}{}.maskgen".format(field_model_path, source, int_freq),
                 nterms=nterms,
-                chanchunks=chanchunks,
                 deconvolver="mtmfs",
                 scales=clean_scales,
                 reffreq=reffreq,
@@ -520,7 +517,6 @@ if accept_params:
             niter=0,
             imagename="{}/{}{}.im_presub".format(field_model_path, source, int_freq),
             nterms=nterms,
-            chanchunks=chanchunks,
             deconvolver="mtmfs",
             scales=clean_scales,
             reffreq=reffreq,
@@ -553,7 +549,6 @@ if accept_params:
             niter=iterations // 4,
             imagename="{}/{}{}.im_subbed".format(field_model_path, source, int_freq),
             nterms=nterms,
-            chanchunks=chanchunks,
             deconvolver="mtmfs",
             scales=clean_scales,
             reffreq=reffreq,
