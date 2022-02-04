@@ -12,8 +12,7 @@ class DynamicSpectrum:
         self.src = project.split("/")[-1]
         self.band = band
 
-        pathroot = '' if band == 'low' else 'reduced/'
-        self.ds_path = f"{pathroot}{project}/dynamic_spectra/{band}"
+        self.ds_path = f"{project}/dynamic_spectra/{band}"
         self.prefix = prefix
 
         self._load_data()
