@@ -1,17 +1,23 @@
-import numpy as np
+import astropy.units as u
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
+import numpy as np
+import pandas as pd
 from astropy.time import Time
 from astropy.visualization import ZScaleInterval, ImageNormalize
 
 
 class DynamicSpectrum:
+    def __init__(self, project, band='L', calscans=True, prefix=""):
+        self.src = project.split("/")[-1]
+        self.band = band
 
-    def __init__(self, project, calscans=True, prefix=''):
-        self.src = project.split('_')[0]
-        self.ds_path = f"reduced/{project}/dynamic_spectra"
+        pathroot = '' if band == 'low' else 'reduced/'
+        self.ds_path = f"{pathroot}{project}/dynamic_spectra/{band}"
         self.prefix = prefix
 
         self._load_data()
+
         if calscans:
             self._stack_cal_scans()
         self._make_stokes()
@@ -284,7 +290,11 @@ class DynamicSpectrum:
 
             lc_ax.plot(x, y.real, label=pol)
 
-            if pol == 'I':
+            df = pd.DataFrame({"time": x, "flux_density": y.real.reshape(1, -1)[0]})
+
+            df["time"] = Time("2021-09-16T08:31:34.927736") + x * u.hour
+
+            if pol == "I":
                 rms = np.sqrt(np.mean(np.square(y.imag)))
 
         lc_ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')

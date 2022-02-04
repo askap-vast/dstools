@@ -15,4 +15,4 @@ if msname.endswith('cal'):
     importmiriad(mirfile=mirfile, vis=msname)
 
 rotated_ms = msname.replace('.ms', '.rotated.target.ms')
-fixvis(vis=msname, outputvis=rotated_ms, phasecenter=phasecen)
+phaseshift(vis=msname, outputvis=rotated_ms, phasecenter=phasecen)

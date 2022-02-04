@@ -16,11 +16,12 @@ from dynamic_spectrum import DynamicSpectrum
 @click.option('-l', '--lightcurve', is_flag=True, default=False)
 @click.option('-p', '--spectrum', is_flag=True, default=False)
 @click.option('-C', '--calscans', is_flag=True, default=True)
+@click.option('-B', '--band', default='L', type=click.Choice(['L', 'C', 'X']))
 @click.option('-N', '--versionname', default=None,
               help='Prefix for different processing versions')
 @click.argument('project')
-def main(favg, tavg, cmax_i, cmax_qu, cmax_v, real, imag,
-         stokes, save, lightcurve, spectrum, calscans, versionname, project):
+def main(favg, tavg, cmax_i, cmax_qu, cmax_v, real, imag, stokes, save,
+         lightcurve, spectrum, calscans, band, versionname, project):
 
     prefix = f'{versionname}_' if versionname else ''
 
@@ -31,7 +32,7 @@ def main(favg, tavg, cmax_i, cmax_qu, cmax_v, real, imag,
         'V': cmax_v,
     }
 
-    ds = DynamicSpectrum(project, calscans=calscans, prefix=prefix)
+    ds = DynamicSpectrum(project, band=band, calscans=calscans, prefix=prefix)
 
     # Dynamic Spectrum
     # --------------------------------------
@@ -49,7 +50,7 @@ def main(favg, tavg, cmax_i, cmax_qu, cmax_v, real, imag,
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        fig, ax = ds.plot_lightcurve(tavg, save=save)
+        fig, ax = ds.plot_lightcurve(tavg, stokes, save=save)
     
     plt.show()
 
