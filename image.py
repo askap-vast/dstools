@@ -19,25 +19,15 @@ def prompt(msg):
     return True if resp == "y" else False
 
 
-def nearest_power(number, powerlim=7):
-    original = number
-    exps = range(powerlim, 14)
-    pows = [2 ** i for i in exps]
+def nearest_power(number):
 
-    keep = []
-    # Find highest power of 2 that is lower than number,
-    # iteratively subtract this and find next highest power
-    # until residual is below threshold (default 128)
-    while number > 2 ** powerlim:
-        gtpow = [num for num, power in zip(exps, pows) if number > power][-1]
-        keep.append(gtpow)
+    # Ensure number is even
+    number = number // 2 * 2
 
-        number -= 2 ** gtpow
+    # Get nearest multiple of 5
+    number = number // 5 * 5
 
-    # Add threshold to get next power of 2 above original number
-    keep.append(powerlim)
-
-    return sum([2 ** i for i in keep])
+    return int(number)
 
 
 def update_param(name, val, dtype):
@@ -96,10 +86,10 @@ def resolve_array_config(band, config):
     return freq, imradius, cell
 
 
-# CLI ARGUMENT PARSING (arg 0, 1, and 2 are consumed by casa, -c, and image.py)
+# CLI ARGUMENT PARSING (arg 0 is consumed by image.py)
 # --------------------
 
-args = sys.argv[3:]
+args = sys.argv[1:]
 
 if len(args) == 1:
     band = 'L'
@@ -147,16 +137,40 @@ int_freqs = [".2"] if reffreq == "2100MHz" else [""]
 interactive = True
 
 clean_mask = "{}/{}.{}.mask".format(proj_dir, source, band)
+phasecenter = ""
+outlierfile = ""
+
 # -------------------------------------------------
 
-accept_params = prompt(
-    "Imaging with radius of {} deg, using {} pixels with size {}. Proceed?".format(
-        imradius, imsize, cellsize
+while True:
+    accept_params = prompt(
+        
+        "Imaging with properties:\n  radius: {} deg\n  pixels: {}\n  cell  : {}\n  nterms: {}\n\nProceed?".format(
+            imradius, imsize, cellsize, nterms
+        )
     )
-)
+
+    if accept_params:
+        break
+
+    # Update parameters
+    imradius = update_param("imradius", imradius, float)
+    imsize = nearest_power(imradius * 3600 / cell)
+
+    cell = update_param("cell", cell, float)
+    cellsize = "{}arcsec".format(cell)
+
+    nterms = update_param("nterms", nterms, int)
+
+
 if accept_params:
 
+    os.system("mkdir -p {}".format(proj_dir))
     for int_freq in int_freqs:
+
+        # Data Import.
+        # ------------
+        
         mirfile = "{}.{}{}.cal".format(source, reffreq[:-3], int_freq)
         msname = "{}.{}.ms".format(source, band)
         calibrated_ms = "{}/{}_{}_cal.ms".format(proj_dir, source, band)
@@ -165,7 +179,6 @@ if accept_params:
         if os.path.exists(proj_dir + mirfile + ".zapped"):
             mirfile += ".zapped"
 
-        # DATA IMPORT / FLAGGING
         if os.path.exists(proj_dir + msname):
             reimport = prompt("Redo data import?")
 
@@ -183,9 +196,11 @@ if accept_params:
                 vis="{}/{}".format(proj_dir, msname),
             )
 
+        # Imaging Parameter Experimentation.
+        # ----------------------------------
+
         test_params = prompt("Experiment with imsize / cellsize / nterms / flagging?")
 
-        # Check if default imsize is acceptable (e.g. no strong out of field sources)
         if test_params:
             os.system("rm -r {}/test_params".format(proj_dir))
             os.system("mkdir {}/test_params".format(proj_dir))
@@ -194,11 +209,19 @@ if accept_params:
 
             while True:
 
+                lowres = prompt("Test with low resolution?")
+                testcell = f"{cell*5:2f}arcsec" if lowres else cellsize
+                testimsize = imsize//5 if lowres else imsize
+
+                # Optionally specify short timerange for quicker test imaging
+                listobs(vis=testms)
+                timerange = input("Enter test imaging timerange (empty for full observation): ")
+                
                 tclean(
                     vis=testms,
                     field=field,
-                    cell=[cellsize],
-                    imsize=[imsize],
+                    cell=[testcell],
+                    imsize=[testimsize],
                     savemodel="modelcolumn",
                     threshold=threshold,
                     niter=2000,
@@ -210,63 +233,68 @@ if accept_params:
                     weighting="briggs",
                     robust=robust,
                     stokes="IQUV",
+                    timerange=timerange,
                     interactive=interactive,
+                    phasecenter=phasecenter,
                     pblimit=pblim,
                 )
 
                 accept_params = prompt("Finished experimenting?")
                 if accept_params:
                     break
-                else:
-                    os.system("rm -r {}/test_params/test_im*".format(proj_dir))
 
-                    # Run some additional flagging
-                    reflag = prompt("Perform flagging?")
-                    if reflag:
+                os.system("rm -r {}/test_params/test_im*".format(proj_dir))
 
-                        manualflag = prompt("Run manual flagging?")
-                        if manualflag:
-                            plotms(
-                                vis=proj_dir + msname,
-                                xaxis="channel",
-                                yaxis="amp",
-                                avgbaseline=False,
+                # Run some additional flagging
+                reflag = prompt("Perform flagging?")
+                if reflag:
+
+                    manualflag = prompt("Run manual flagging?")
+                    if manualflag:
+                        plotms(
+                            vis=proj_dir + msname,
+                            xaxis="channel",
+                            yaxis="amp",
+                            avgbaseline=False,
+                        )
+
+                        flagchan = prompt("Flag channel ranges?")
+                        if flagchan:
+                            flagvals = input(
+                                "Specify channels to flag (; delimited, ~ range):"
                             )
-
-                            flagchan = prompt("Flag channel ranges?")
-                            if flagchan:
-                                flagvals = input(
-                                    "Specify channels to flag (; delimited, ~ range):"
-                                )
-                                flagdata(
-                                    vis=proj_dir + msname,
-                                    mode="manual",
-                                    spw="0:" + flagvals,
-                                )
-
-                            flagtime = prompt("Flag time ranges?")
-
-                        rflag = prompt("Run rflag?")
-                        if rflag:
-                            flagdata(vis=proj_dir + msname, mode="rflag")
-
-                        tfcrop = prompt("Run tfcrop?")
-                        if tfcrop:
-                            flagdata(vis=proj_dir + msname, mode="tfcrop")
-
-                        flag45 = prompt("Flag baseline 4-5?")
-                        if flag45:
                             flagdata(
-                                vis=proj_dir + msname, mode="manual", antenna="3&4"
+                                vis=proj_dir + msname,
+                                mode="manual",
+                                spw="0:" + flagvals,
                             )
 
-                    # Update parameters
-                    param = update_param("imsize", imsize, int)
-                    pblim = update_param("pblim", pblim, float)
-                    cellsize = update_param("cellsize", cellsize, str)
-                    nterms = update_param("nterms", nterms, int)
+                        flagtime = prompt("Flag time ranges?")
+
+                    rflag = prompt("Run rflag?")
+                    if rflag:
+                        flagdata(vis=proj_dir + msname, mode="rflag")
+
+                    tfcrop = prompt("Run tfcrop?")
+                    if tfcrop:
+                        flagdata(vis=proj_dir + msname, mode="tfcrop")
+
+                    flag45 = prompt("Flag baseline 4-5?")
+                    if flag45:
+                        flagdata(
+                            vis=proj_dir + msname, mode="manual", antenna="3&4"
+                        )
+
+                # Update parameters
+                param = update_param("imsize", imsize, int)
+                pblim = update_param("pblim", pblim, float)
+                cellsize = update_param("cellsize", cellsize, str)
+                nterms = update_param("nterms", nterms, int)
 
         os.system("rm -rf {}/test_params".format(proj_dir))
+
+        # Self calibration.
+        # -----------------
 
         selfcal = prompt("Run selfcal?")
 
@@ -274,7 +302,6 @@ if accept_params:
 
             os.system("mkdir -p {}/selfcal/{}".format(proj_dir, band))
 
-            # Run selfcal
             files = glob.glob("{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band))
             i = len(files)
             cont = "y"
@@ -321,6 +348,7 @@ if accept_params:
                     robust=robust,
                     stokes="IQUV",
                     interactive=interactive,
+                    phasecenter=phasecenter,
                     mask=init_mask,
                     pblimit=pblim,
                 )
@@ -399,56 +427,115 @@ if accept_params:
                 os.system("cp -r {} {}".format(backup_mask, clean_mask))
 
             # Copy calibrated MS to root folder
+            os.system("rm -r {}".format(calibrated_ms))
             os.system("cp -r {} {}".format(selfcal_ms, calibrated_ms))
 
         else:
-            selfcal_path = "{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band)
-            files = glob.glob(selfcal_path)
-            i = len(files)
-            if i == 0:
-                # If selfcal was skipped, use the original MS
-                selfcal_ms = proj_dir + msname
-            else:
-                selfcal_ms = sorted(files)[-1]
 
-            os.system("cp -r {} {}".format(selfcal_ms, calibrated_ms))
+            # If restarting an run with selfcal already complete, use existing calibrated MS.
+            # Otherwise use the most up-to-date selfcal version
+            if not os.path.exists(calibrated_ms):
+                selfcal_path = "{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band)
+                files = glob.glob(selfcal_path)
+                i = len(files)
+                if i == 0:
+                    # If selfcal was skipped, use the original MS
+                    selfcal_ms = proj_dir + msname
+                else:
+                    selfcal_ms = sorted(files)[-1]
 
-            # Check for existing clean mask
-            if not os.path.exists(clean_mask):
-                clean_mask = ""
+                os.system("cp -r {} {}".format(selfcal_ms, calibrated_ms))
 
-        # -----------------
-        #    DEEP CLEAN
-        # -----------------
-        
+                # Check for existing clean mask
+                if not os.path.exists(clean_mask):
+                    clean_mask = ""
+
+        # Preparation for Deep Clean
+        # --------------------------
+
         field_model_path = "{}/field_model/{}/".format(proj_dir, band)
-        if os.path.exists(field_model_path) and prompt("Start from fresh field model?"):
-            os.system("rm -r {}".format(field_model_path))
-            os.system("mkdir -p {}".format(field_model_path))
+        deep_mask = clean_mask
+        
+        if os.path.exists(field_model_path):
 
-        # Deep clean to produce field model
-        tclean(
-            vis=calibrated_ms,
-            field=field,
-            cell=[cellsize],
-            imsize=[imsize],
-            threshold=threshold,
-            niter=iterations * 5,
-            imagename="{}/{}{}.im_deep".format(field_model_path, source, int_freq),
-            nterms=nterms,
-            deconvolver="mtmfs",
-            scales=clean_scales,
-            reffreq=reffreq,
-            weighting="briggs",
-            stokes="IQUV",
-            robust=robust,
-            mask=clean_mask,
-            interactive=interactive,
-            pblimit=pblim,
-        )
+            # If continuing with an existing model, we should remove
+            # the mask parameter to ensure the existing clean mask is used
+            clearmodel = prompt("Start from fresh field model?")
+            if clearmodel:
+                os.system("rm -r {}".format(field_model_path))
+            else:
+                if prompt("Keep existing clean mask?"):
+                    deep_mask = ""
+                
+        os.system("mkdir -p {}".format(field_model_path))
 
-        # Mask out the source
+        # Optionally specify sources to remove in outlierfile.
+        # ----------------------------------------------------
+
+        kill_offaxis = prompt("Remove off-axis sources in kill_offaxis.txt?")
+        if kill_offaxis:
+            os.system("rm -r {}/kill_offaxis.txt".format(field_model_path))
+            with open("{}/kill_offaxis.txt".format(field_model_path), 'a') as f:
+                while True:
+                    i = 1
+                    killcoords = input("Enter source coordinates (J2000 hms dms): ")
+
+                    if killcoords == "":
+
+                        os.system("cat {}/kill_offaxis.txt".format(field_model_path))
+                        prompt("\nIs outlierfile correctly formatted?")
+                        break
+
+                    params = [
+                        "imagename={}/zap{}".format(field_model_path, i),
+                        "imsize=[100,100]",
+                        "phasecenter={}".format(killcoords),
+                    ]
+
+                    f.writelines('\n'.join(params))
+                    i += 1
+                    
+            outlierfile = "kill_offaxis.txt"
+
+        # Deep clean to produce field model.
+        # ----------------------------------
+        # This is within an endless loop to allow iterative cleaning without babysitting.
+        # Set a conservative clean mask and let it run until stopping criteria met,
+        # then assess whether further cleaning is required with an updated mask.
+
+        while True:
+            tclean(
+                vis=calibrated_ms,
+                field=field,
+                cell=[cellsize],
+                imsize=[imsize],
+                threshold=threshold,
+                niter=iterations * 5,
+                imagename="{}/{}{}.im_deep".format(field_model_path, source, int_freq),
+                nterms=nterms,
+                deconvolver="mtmfs",
+                scales=clean_scales,
+                reffreq=reffreq,
+                weighting="briggs",
+                stokes="IQUV",
+                robust=robust,
+                mask=deep_mask,
+                outlierfile=outlierfile,
+                phasecenter=phasecenter,
+                interactive=interactive,
+                pblimit=pblim,
+            )
+
+            cont = prompt("Continue with further cleaning?")
+            if not cont:
+                break
+            else:
+                deep_mask = ""
+
+        # Mask out the source.
+        # --------------------
         # Either use a generic circular mask at image center or specify via a custom tclean mask
+
         automask = prompt("Automatically generate source mask?")
         if automask:
             source_mask = "circle[[{}pix, {}pix], {}pix]".format(
@@ -471,6 +558,7 @@ if accept_params:
                 stokes="IQUV",
                 robust=robust,
                 interactive=interactive,
+                phasecenter=phasecenter,
                 pblimit=pblim,
             )
             source_mask = "{}/{}{}.source.mask".format(
@@ -523,6 +611,7 @@ if accept_params:
             weighting="briggs",
             stokes="IQUV",
             robust=robust,
+            phasecenter=phasecenter,
             pblimit=pblim,
         )
 
@@ -555,10 +644,13 @@ if accept_params:
             weighting="briggs",
             stokes="IQUV",
             robust=robust,
+            phasecenter=phasecenter,
             pblimit=pblim,
         )
 
-        # Export to FITS format
+        # Export to FITS format.
+        # ----------------------
+        
         for tt in ["tt{}".format(i) for i in range(nterms)]:
             for stokes in ["I", "V"]:
                 for imtype in ["deep", "subbed"]:
