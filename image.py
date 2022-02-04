@@ -47,42 +47,43 @@ def update_param(name, val, dtype):
 
     return val
 
+
 def resolve_array_config(band, config):
     """Determine reffreq, primary beam and cell sizes from array paramters."""
 
     wavelengths = {
-        'L': 0.0967,
-        'C': 0.0461,
-        'X': 0.0200,
+        "L": 0.0967,
+        "C": 0.0461,
+        "X": 0.0200,
     }
     frequencies = {
-        'L': '2100',
-        'C': '5500',
-        'X': '9000',
+        "L": "2100",
+        "C": "5500",
+        "X": "9000",
     }
     primary_beams = {
-        'L': 0.75,
-        'C': 0.25,
-        'X': 0.25,
+        "L": 0.75,
+        "C": 0.25,
+        "X": 0.25,
     }
     max_baselines = {
-        '6km': 6000,
-        '750_no6': 750,
-        '750_6': 5020,
-        'H168': 185,
+        "6km": 6000,
+        "750_no6": 750,
+        "750_6": 5020,
+        "H168": 185,
     }
 
     freq = frequencies[band]
-    
+
     wavelength = wavelengths[band]
     baseline = max_baselines[config]
 
     # Convert to resolution in arcsec
     resolution = wavelength / baseline * 206264.8
-    
+
     imradius = primary_beams[band]
     cell = round(resolution / 5, 2)
-         
+
     return freq, imradius, cell
 
 
@@ -92,11 +93,11 @@ def resolve_array_config(band, config):
 args = sys.argv[1:]
 
 if len(args) == 1:
-    band = 'L'
-    config = '6km'
+    band = "L"
+    config = "6km"
 elif len(args) == 2:
     band = args[1]
-    config = '6km'
+    config = "6km"
 else:
     band = args[1]
     config = args[2]
@@ -144,7 +145,6 @@ outlierfile = ""
 
 while True:
     accept_params = prompt(
-        
         "Imaging with properties:\n  radius: {} deg\n  pixels: {}\n  cell  : {}\n  nterms: {}\n\nProceed?".format(
             imradius, imsize, cellsize, nterms
         )
@@ -170,7 +170,7 @@ if accept_params:
 
         # Data Import.
         # ------------
-        
+
         mirfile = "{}.{}{}.cal".format(source, reffreq[:-3], int_freq)
         msname = "{}.{}.ms".format(source, band)
         calibrated_ms = "{}/{}_{}_cal.ms".format(proj_dir, source, band)
@@ -211,12 +211,12 @@ if accept_params:
 
                 lowres = prompt("Test with low resolution?")
                 testcell = f"{cell*5:2f}arcsec" if lowres else cellsize
-                testimsize = imsize//5 if lowres else imsize
+                testimsize = imsize // 5 if lowres else imsize
 
                 # Optionally specify short timerange for quicker test imaging
                 listobs(vis=testms)
                 timerange = input("Enter test imaging timerange (empty for full observation): ")
-                
+
                 tclean(
                     vis=testms,
                     field=field,
@@ -260,9 +260,7 @@ if accept_params:
 
                         flagchan = prompt("Flag channel ranges?")
                         if flagchan:
-                            flagvals = input(
-                                "Specify channels to flag (; delimited, ~ range):"
-                            )
+                            flagvals = input("Specify channels to flag (; delimited, ~ range):")
                             flagdata(
                                 vis=proj_dir + msname,
                                 mode="manual",
@@ -281,9 +279,7 @@ if accept_params:
 
                     flag45 = prompt("Flag baseline 4-5?")
                     if flag45:
-                        flagdata(
-                            vis=proj_dir + msname, mode="manual", antenna="3&4"
-                        )
+                        flagdata(vis=proj_dir + msname, mode="manual", antenna="3&4")
 
                 # Update parameters
                 param = update_param("imsize", imsize, int)
@@ -302,7 +298,9 @@ if accept_params:
 
             os.system("mkdir -p {}/selfcal/{}".format(proj_dir, band))
 
-            files = glob.glob("{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band))
+            files = glob.glob(
+                "{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band)
+            )
             i = len(files)
             cont = "y"
             while cont:
@@ -316,9 +314,7 @@ if accept_params:
                     + "selfcal/{}/".format(band)
                     + msname.replace(".ms", ".selfcal.{}.ms".format(i - 1))
                 )
-                selfcal_ms = (
-                    selfcal_ms if os.path.exists(selfcal_ms) else proj_dir + msname
-                )
+                selfcal_ms = selfcal_ms if os.path.exists(selfcal_ms) else proj_dir + msname
 
                 # Set mask from previous iteration as input to next tclean loop
                 selfcal_mask = (
@@ -357,18 +353,10 @@ if accept_params:
                 while True:
                     interval = input("Select solution interval (in min/s): ")
                     try:
-                        unit = (
-                            "min"
-                            if "min" in interval
-                            else "s"
-                            if "s" in interval
-                            else ""
-                        )
+                        unit = "min" if "min" in interval else "s" if "s" in interval else ""
                         num = int(interval.replace(unit, ""))
                     except ValueError:
-                        print(
-                            "Invalid solution interval entered, must be format <int>[min/s]."
-                        )
+                        print("Invalid solution interval entered, must be format <int>[min/s].")
                         continue
 
                     # Save self-cal plots
@@ -413,13 +401,9 @@ if accept_params:
                 cont = prompt("Proceed with more selfcal?")
 
             # Backup clean mask to main project directory
-            backup_mask = (
-                selfcal_template.format(proj_dir, band, source, int_freq, i) + ".mask"
-            )
+            backup_mask = selfcal_template.format(proj_dir, band, source, int_freq, i) + ".mask"
             if os.path.exists(clean_mask):
-                replace_mask = prompt(
-                    "Update the existing clean mask with current mask?"
-                )
+                replace_mask = prompt("Update the existing clean mask with current mask?")
 
                 if replace_mask:
                     os.system("cp -r {} {}".format(backup_mask, clean_mask))
@@ -435,7 +419,9 @@ if accept_params:
             # If restarting an run with selfcal already complete, use existing calibrated MS.
             # Otherwise use the most up-to-date selfcal version
             if not os.path.exists(calibrated_ms):
-                selfcal_path = "{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(proj_dir, band, source, band)
+                selfcal_path = "{}/selfcal/{}/{}.{}.selfcal.[0-9].ms".format(
+                    proj_dir, band, source, band
+                )
                 files = glob.glob(selfcal_path)
                 i = len(files)
                 if i == 0:
@@ -455,7 +441,7 @@ if accept_params:
 
         field_model_path = "{}/field_model/{}/".format(proj_dir, band)
         deep_mask = clean_mask
-        
+
         if os.path.exists(field_model_path):
 
             # If continuing with an existing model, we should remove
@@ -466,7 +452,7 @@ if accept_params:
             else:
                 if prompt("Keep existing clean mask?"):
                     deep_mask = ""
-                
+
         os.system("mkdir -p {}".format(field_model_path))
 
         # Optionally specify sources to remove in outlierfile.
@@ -475,7 +461,7 @@ if accept_params:
         kill_offaxis = prompt("Remove off-axis sources in kill_offaxis.txt?")
         if kill_offaxis:
             os.system("rm -r {}/kill_offaxis.txt".format(field_model_path))
-            with open("{}/kill_offaxis.txt".format(field_model_path), 'a') as f:
+            with open("{}/kill_offaxis.txt".format(field_model_path), "a") as f:
                 while True:
                     i = 1
                     killcoords = input("Enter source coordinates (J2000 hms dms): ")
@@ -492,9 +478,9 @@ if accept_params:
                         "phasecenter={}".format(killcoords),
                     ]
 
-                    f.writelines('\n'.join(params))
+                    f.writelines("\n".join(params))
                     i += 1
-                    
+
             outlierfile = "kill_offaxis.txt"
 
         # Deep clean to produce field model.
@@ -561,17 +547,11 @@ if accept_params:
                 phasecenter=phasecenter,
                 pblimit=pblim,
             )
-            source_mask = "{}/{}{}.source.mask".format(
-                field_model_path, source, int_freq
-            )
+            source_mask = "{}/{}{}.source.mask".format(field_model_path, source, int_freq)
             os.system(
-                "mv {}/{}{}.maskgen.mask {}".format(
-                    field_model_path, source, int_freq, source_mask
-                )
+                "mv {}/{}{}.maskgen.mask {}".format(field_model_path, source, int_freq, source_mask)
             )
-            os.system(
-                "rm -r {}/{}{}.maskgen*".format(field_model_path, source, int_freq)
-            )
+            os.system("rm -r {}/{}{}.maskgen*".format(field_model_path, source, int_freq))
 
         model = "{}/{}{}.im_deep.model".format(field_model_path, source, int_freq)
         bgmodel = "{}/{}{}.im_deep.bgmodel".format(field_model_path, source, int_freq)
@@ -617,14 +597,10 @@ if accept_params:
 
         # Perform UV-subtraction and move to new file
         subbed_ms = calibrated_ms.replace(".ms", ".subbed.ms")
-        os.system(
-            "cp -r {} {}".format(calibrated_ms, calibrated_ms.replace(".ms", ".bak.ms"))
-        )
+        os.system("cp -r {} {}".format(calibrated_ms, calibrated_ms.replace(".ms", ".bak.ms")))
         uvsub(vis=calibrated_ms)
         os.system("mv {} {}".format(calibrated_ms, subbed_ms))
-        os.system(
-            "mv {} {}".format(calibrated_ms.replace(".ms", ".bak.ms"), calibrated_ms)
-        )
+        os.system("mv {} {}".format(calibrated_ms.replace(".ms", ".bak.ms"), calibrated_ms))
 
         # Reimage to confirm field subtraction
         os.system("rm -r {}/{}{}.im_subbed*".format(field_model_path, source, int_freq))
@@ -650,7 +626,7 @@ if accept_params:
 
         # Export to FITS format.
         # ----------------------
-        
+
         for tt in ["tt{}".format(i) for i in range(nterms)]:
             for stokes in ["I", "V"]:
                 for imtype in ["deep", "subbed"]:

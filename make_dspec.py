@@ -6,12 +6,12 @@ from casacore.tables import table, taql
 
 
 @click.command()
-@click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
-@click.option('-B', '--band', default='L', type=click.Choice(['L', 'C', 'X', 'low']))
-@click.argument('ms')
+@click.option("-F", "--noflag", is_flag=True, default=False, help="Remove flagging mask.")
+@click.option("-B", "--band", default="L", type=click.Choice(["L", "C", "X", "low"]))
+@click.argument("ms")
 def main(noflag, band, ms):
 
-    project = '/'.join(ms.split('/')[:-1])
+    project = "/".join(ms.split("/")[:-1])
 
     ds_path = "{}/dynamic_spectra/{}".format(project, band)
     os.system("mkdir -p {}".format(ds_path))
@@ -26,12 +26,12 @@ def main(noflag, band, ms):
         tf = table("{}/SPECTRAL_WINDOW".format(ms))
 
         # Write time and frequency arrays, discarding duplicate timesamples
-        times = np.unique(t.getcol('TIME'))
+        times = np.unique(t.getcol("TIME"))
         times.dump("{}/time.npy".format(ds_path, project))
         tf[0]["CHAN_FREQ"].dump("{}/freq.npy".format(ds_path, project))
 
         val = len(times)
-        
+
         try:
             waterfall = t.getcol("CORRECTED_DATA")[:, :, polidx]
         except RuntimeError as e:
@@ -50,6 +50,6 @@ def main(noflag, band, ms):
         waterfall.dump(outfile)
         t.close()
 
-if __name__ == '__main__':
-    main()
 
+if __name__ == "__main__":
+    main()
