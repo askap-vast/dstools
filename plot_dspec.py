@@ -64,7 +64,7 @@ def main(
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        fig, ax = ds.plot_lightcurve(tavg, stokes, save=save)
+        fig, ax = ds.plot_lightcurve(tavg, save=save)
 
     plt.show()
 
