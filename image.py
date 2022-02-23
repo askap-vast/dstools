@@ -23,14 +23,7 @@ proj_dir = args[0]
 if proj_dir[-1] != "/":
     proj_dir += "/"
 
-# Interpret 'obs' in a source name as one of multiple observations in their own directory
-# Interpret 'epoch' in a source name as a directory containing multiple sources (e.g. C3431)
-if "obs" in proj_dir:
-    source = proj_dir.split("_")[0].lower()
-elif "epoch" in proj_dir or "reduced" in proj_dir or "merged" in proj_dir:
-    source = proj_dir.split("/")[-2].lower()
-else:
-    source = proj_dir.split("/")[0].lower()
+source = proj_dir.split("/")[-2].lower()
 
 # PARAMETER SETTINGS
 # ------------------
@@ -317,6 +310,7 @@ if accept_params:
             replace_mask = prompt("Update the existing clean mask with current mask?")
 
             if replace_mask:
+                os.system("rm -r {}".format(clean_mask))
                 os.system("cp -r {} {}".format(backup_mask, clean_mask))
         else:
             os.system("cp -r {} {}".format(backup_mask, clean_mask))
@@ -357,11 +351,12 @@ if accept_params:
 
         # If continuing with an existing model, we should remove
         # the mask parameter to ensure the existing clean mask is used
-        clearmodel = prompt("Start from fresh field model?")
-        if clearmodel:
-            os.system("mv {} {}_backup".format(field_model_path, field_model_path))
-        else:
-            if prompt("Keep existing clean mask?"):
+        clear_model = prompt("Start from fresh field model?")
+        if clear_model:
+            os.system("mv {} {}_backup".format(field_model_path, field_model_path[:-1]))
+
+            keep_mask = prompt("Keep existing clean mask?")
+            if keep_mask:
                 deep_mask = ""
 
     os.system("mkdir -p {}".format(field_model_path))
@@ -385,8 +380,8 @@ if accept_params:
         if not use_existing:
             os.system("rm -r {}".format(offaxis_file))
             with open(offaxis_file, "a") as f:
+                i = 1
                 while True:
-                    i = 1
                     killcoords = input("Enter source coordinates (J2000 hms dms): ")
 
                     if killcoords == "":
@@ -396,7 +391,7 @@ if accept_params:
 
                     params = [
                         "imagename={}/outlier{}".format(field_model_path, i),
-                        "imsize=[100,100]",
+                        "imsize=[200,200]",
                         "phasecenter={}\n".format(killcoords),
                     ]
 
@@ -441,6 +436,11 @@ if accept_params:
 
         cont = prompt("Continue with further cleaning?")
         if not cont:
+
+            deep_mask = "{}/{}.im_deep.mask".format(field_model_path, source)
+            os.system("rm -r {}".format(clean_mask))
+            os.system("cp -r {} {}".format(deep_mask, clean_mask))
+            
             break
         else:
             deep_mask = ""
