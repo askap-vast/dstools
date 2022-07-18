@@ -34,8 +34,6 @@ class DynamicSpectrum:
         t0.format = "iso"
         tN.format = "iso"
 
-        self.time -= self.time[0]
-
         dts = [0]
         dts.extend([self.time[i] - self.time[i - 1] for i in range(1, len(self.time))])
         self.dts = np.array(dts)
@@ -55,6 +53,10 @@ class DynamicSpectrum:
 
         self.freq = np.load(f"{file_prefix}freq.npy", allow_pickle=True) / 1e6
         self.time = np.load(f"{file_prefix}time.npy", allow_pickle=True) / 3600
+        self.time_start = Time(self.time[0] / 24.0, format="mjd", scale="utc")
+        self.time_start.format = "iso"
+
+        self.time -= self.time[0]
 
         self.XX = np.load(f"{file_prefix}dynamic_spectra_XX.npy", allow_pickle=True) * 1e3
         self.XY = np.load(f"{file_prefix}dynamic_spectra_XY.npy", allow_pickle=True) * 1e3
