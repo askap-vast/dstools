@@ -49,10 +49,11 @@ The script then steps through prompts to:
 
 Run the script with
 ```
-casa -c image.py reduced/<PROJECT_NAME>/<TARGET_NAME> <BAND> <CONFIG>
+casa -c image.py reduced/<PROJECT_NAME>/<TARGET_NAME>/<INPUT_FILE> <BAND> <CONFIG>
 ```
+where <INPUT_FILE> are calibrated visibilities either in miriad (ending in .cal), UV FITS (ending in .calfits), or CASA MeasurementSet (ending in .ms) format.
 NOTE: the command interface for this script will be updated in future to avoid writing the full directory path
-The `<BAND>` and `<CONFIG>` arguments specify the frequency band (`L`, `C`, or `X`) and array configuration (`6km`, `750_no6`, `750_6`, or `H168`), which will be used to set imaging parameters. If not provided, `<BAND>` will default to a value of `L` and `<CONFIG>` will default to a value of `6km`.
+The `<BAND>` and `<CONFIG>` arguments specify the frequency band (`low`, `mid`, `L`, `C`, or `X`) and array configuration (`6km`, `750_no6`, `750_6`, or `H168`), which will be used to set imaging parameters. If not provided, `<BAND>` will default to a value of `L` and `<CONFIG>` will default to a value of `6km`.
 
 You can further adjust parameters in this script, such the:
 * robust parameter,
@@ -79,7 +80,7 @@ These are a few small CASA / Python scripts used to collapse a MeasurementSet (e
 
 Run the script with
 ```
-casa -c fix_phasecentre.py reduced/<PROJECT_NAME><MS> <COORDS>
+casa -c fix_phasecentre.py reduced/<PROJECT_NAME>/<MS> <COORDS>
 ```
 where `<MS>` is the MeasurementSet you want to work with and `<COORDS>` are the target coordinates in the format `"J2000 hms dms"` format (e.g. `"J2000 12h30m41.2s -45d11m04.1s"`). `:` delimiters will result in the declination being treated in hourangle units.
 

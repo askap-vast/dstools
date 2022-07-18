@@ -24,11 +24,11 @@ intab.putcol("ANTENNA2", np.ones(nrows))
 interval = intab.getcol("INTERVAL")
 timebin = "{}s".format(min(interval) * 1e-2)
 
-# average over baselines greater than 200m
+# average over baselines
 mstransform(
     vis=msname,
     outputvis=savename,
-    datacolumn="corrected",
+    datacolumn="data",
     uvrange=uvrange,
     timeaverage=True,
     timebin=timebin,

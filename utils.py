@@ -1,3 +1,4 @@
+import os
 
 def colored(msg):
 
@@ -48,19 +49,25 @@ def update_param(name, val, dtype):
 
 
 def resolve_array_config(band, config):
-    """Determine reffreq, primary beam and cell sizes from array paramters."""
+    """Determine reffreq, primary beam and cell sizes from array parameters."""
 
     wavelengths = {
+        "low": 0.4026,
+        "mid": 0.2450,
         "L": 0.0967,
         "C": 0.0461,
         "X": 0.0200,
     }
     frequencies = {
+        "low": "888.49",
+        "mid": "1367.49",
         "L": "2100",
         "C": "5500",
         "X": "9000",
     }
     primary_beams = {
+        "low": 1,
+        "mid": 0.8,
         "L": 0.75,
         "C": 0.25,
         "X": 0.25,
@@ -84,3 +91,26 @@ def resolve_array_config(band, config):
     cell = round(resolution / 5, 2)
 
     return freq, imradius, cell
+
+
+def import_data(input_file, proj_dir, msname, reimport=False):
+
+    if reimport:
+        os.system(f"mv {proj_dir}/{msname} {proj_dir}/{msname}.bak")
+        os.system(f"rm -r {proj_dir}/{msname}.flagversions")
+
+
+    if input_file.endswith('.calfits'):
+        importuvfits(
+            fitsfile=input_file,
+            vis=f"{proj_dir}/{msname}",
+        )
+    elif input_file.endswith('.cal'):
+        importmiriad(
+            mirfile=input_file,
+            vis=f"{proj_dir}/{msname}",
+        )
+    elif input_file.endswith('.ms'):
+        os.system(f"cp -r {input_file} {proj_dir}/{msname}")
+
+    return

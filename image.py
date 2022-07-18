@@ -1,7 +1,7 @@
 import os
 import sys
 import glob
-from utils import colored, prompt, nearest_power, resolve_array_config, update_param
+from utils import colored, prompt, nearest_power, resolve_array_config, update_param, import_data
 
 
 # CLI ARGUMENT PARSING (arg 0 is consumed by image.py)
@@ -19,10 +19,8 @@ else:
     band = args[1]
     config = args[2]
 
-proj_dir = args[0]
-if proj_dir[-1] != "/":
-    proj_dir += "/"
-
+input_file = args[0]
+proj_dir = '/'.join(input_file.split('/')[:-1]) + '/'
 source = proj_dir.split("/")[-2].lower()
 
 # PARAMETER SETTINGS
@@ -79,26 +77,21 @@ if accept_params:
     # Data Import.
     # ------------
 
-    mirfile = glob.glob(f"{proj_dir}/{source}.{freq}*.cal")[0].split('/')[-1]
     msname = "{}.{}.ms".format(source, band)
     calibrated_ms = "{}/{}_{}_cal.ms".format(proj_dir, source, band)
 
-    if os.path.exists(proj_dir + msname):
-        reimport = prompt("Redo data import?")
+    # mirfile = glob.glob(f"{proj_dir}/{source}.{freq}*.calfits")[0].split('/')[-1]
 
-        if reimport:
-            os.system("mv {}/{} {}/{}.bak".format(proj_dir, msname, proj_dir, msname))
-            os.system("rm -r {}/{}.flagversions".format(proj_dir, msname))
-
-            importmiriad(
-                mirfile="{}/{}".format(proj_dir, mirfile),
-                vis="{}/{}".format(proj_dir, msname),
-            )
-    else:
-        importmiriad(
-            mirfile="{}/{}".format(proj_dir, mirfile),
-            vis="{}/{}".format(proj_dir, msname),
+    reimport = prompt("Redo data import?")
+    if not os.path.exists(proj_dir + msname) or reimport:
+        import_data(
+            input_file,
+            proj_dir,
+            msname,
+            reimport=reimport
         )
+
+
 
     # Imaging Parameter Experimentation.
     # ----------------------------------
