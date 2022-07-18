@@ -112,7 +112,7 @@ if accept_params:
 
             # Optionally specify short timerange for quicker test imaging
             listobs(vis=testms)
-            timerange = input("Enter test imaging timerange (empty for full observation): ")
+            timerange = prompt("Enter test imaging timerange (empty for full observation): ")
 
             tclean(
                 vis=testms,
@@ -179,7 +179,7 @@ if accept_params:
                     flagdata(vis=proj_dir + msname, mode="manual", antenna="3&4")
 
             # Update parameters
-            param = update_param("imsize", imsize, int)
+            imsize = update_param("imsize", imsize, int)
             pblim = update_param("pblim", pblim, float)
             cellsize = update_param("cellsize", cellsize, str)
             nterms = update_param("nterms", nterms, int)
