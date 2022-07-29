@@ -16,7 +16,7 @@ from dynamic_spectrum import DynamicSpectrum
 @click.option("-l", "--lightcurve", is_flag=True, default=False)
 @click.option("-p", "--spectrum", is_flag=True, default=False)
 @click.option("-C", "--calscans", is_flag=True, default=True)
-@click.option("-B", "--band", default="L", type=click.Choice(["L", "C", "X"]))
+@click.option("-B", "--band", default="L", type=click.Choice(["low", "mid", "L", "C", "X"]))
 @click.option("-N", "--versionname", default=None, help="Prefix for different processing versions")
 @click.argument("project")
 def main(

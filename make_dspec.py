@@ -7,7 +7,7 @@ from casacore.tables import table, taql
 
 @click.command()
 @click.option("-F", "--noflag", is_flag=True, default=False, help="Remove flagging mask.")
-@click.option("-B", "--band", default="L", type=click.Choice(["L", "C", "X", "low"]))
+@click.option("-B", "--band", default="L", type=click.Choice(["low", "mid", "L", "C", "X"]))
 @click.argument("ms")
 def main(noflag, band, ms):
 
