@@ -112,7 +112,7 @@ if accept_params:
 
             # Optionally specify short timerange for quicker test imaging
             listobs(vis=testms)
-            timerange = prompt("Enter test imaging timerange (empty for full observation): ")
+            timerange = input("Enter test imaging timerange (empty for full observation): ")
 
             tclean(
                 vis=testms,
