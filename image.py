@@ -61,11 +61,11 @@ while True:
         break
 
     # Update parameters
-    imradius = update_param("imradius", imradius, float)
-    imsize = nearest_power(imradius * 3600 / cell)
-
     cell = update_param("cell", cell, float)
     cellsize = "{}arcsec".format(cell)
+
+    imradius = update_param("imradius", imradius, float)
+    imsize = nearest_power(imradius * 3600 / cell)
 
     nterms = update_param("nterms", nterms, int)
 
