@@ -1,8 +1,28 @@
+# DStools #
+
+A processing pipeline to produce dynamic spectra from ATCA and ASKAP visibilities.
+
 ## Installation / Setup ##
 
-Simply clone this repo to a working directory which will contain your data. 
+Clone this repo and install with `pip` or `poetry`, preferably into a virtual environment. In order to make the modules from this package available within CASA, create or edit `~/.casa/config.py` to add the following lines
+```
+import sys
 
-These tools rely on your RPFITS files residing in a `data/` subdirectory. Any extra files with the same target name (e.g. backup 1934 scans) can be placed in a subdirectory of `data/` to avoid being auto-ingested.
+dstools_path = '/path/to/dstools/installation'
+
+sys.path.append('')
+sys.path.append(dstools_path)
+```
+where `dstools_path` should point to the install path. If you are unsure where this is, open a python REPL after installing `dstools` and run
+```
+import dstoolsa
+
+print(dstools.__path__[0])
+```
+
+The command line scripts should now be accessible from anywhere.
+
+These tools rely on your RPFITS files residing in a `data/` subdirectory of your working directory. Any extra files with the same target name (e.g. backup 1934 scans) can be placed in a subdirectory of `data/` to avoid being auto-ingested.
 
 ### NOTE: If Skipping ATCA Calibration ###
 
@@ -24,17 +44,14 @@ where `<PROJECT_NAME>` can be whatever you like and `<TARGET_NAME>` is the name 
 
 ## ATCA Calibration ##
 
-`atca_cal.sh` is a miriad script to calibrate and flag ATCA data prior to use with CASA in the other scripts. I have designed the flow of this to match my needs which may not necessarily meet yours! If not, just produce flagged and calibrated visibilities in `.uv` format as you otherwise would, and make sure to drop them in the `miriad` subdirectory as describe in Installation / Setup
+`dstools-cal` is a miriad script to calibrate and flag ATCA data prior to use with CASA in the other scripts. I have designed the flow of this to match my needs which may not necessarily meet yours! If not, just produce flagged and calibrated visibilities in `.uv` format as you otherwise would, and make sure to drop them in the `miriad` subdirectory as describe in Installation / Setup
 
-You can optionally edit the first few lines of the script to change the `refant`, `mfinterval` and `bpinterval` parameters that will be used for each miriad task.
-
-Run the script with
 ```
-atca_cal.sh <PROJECT_NAME> <PROJECT_CODE>
+dstools-cal <PROJECT_NAME> <PROJECT_CODE>
 ```
-where `<PROJECT_CODE>` is your observation's project code and `<PROJECT_NAME>` is the name of a sub-directory to store processing output, call this whatever you like. 
+where `<PROJECT_CODE>` is your observation's project code and `<PROJECT_NAME>` is the name of a sub-directory to store processing output, call this whatever you like. You can supply further options to modify gain and bandpass solution intervals and the reference antenna, see details with `dstools-cal --help`.
 
-The script then steps through prompts to:
+The script steps through prompts to:
 * load the RPFITS files, 
 * select the IF to be processed, 
 * declare which scan targets to use for primary and secondary calibrators and the target source,
@@ -45,21 +62,24 @@ The script then steps through prompts to:
 
 ## Imaging, Field Modeling \& Subtraction ##
 
-`image.py` is a CASA script that imports calibrated visibilities and performs self-calibration and imaging tasks. The deconvolution stage also stores the model for all cleaned field sources and produces a uv-subtracted MeasurementSet with (ideally) only the target source remaining---to be further used in constructing lightcurves and dynamic spectra.
+`dstools-model-field` is a CASA script that imports calibrated visibilities and performs self-calibration and imaging tasks. The deconvolution stage also stores the model for all cleaned field sources and produces a uv-subtracted MeasurementSet with (ideally) only the target source remaining---to be further used in constructing lightcurves and dynamic spectra.
 
 Run the script with
 ```
-casa -c image.py reduced/<PROJECT_NAME>/<TARGET_NAME>/<INPUT_FILE> <BAND> <CONFIG>
+dstools-model-field reduced/<PROJECT_NAME>/<TARGET_NAME>/<DATA>
 ```
-where <INPUT_FILE> are calibrated visibilities either in miriad (ending in .cal), UV FITS (ending in .calfits), or CASA MeasurementSet (ending in .ms) format.
-NOTE: the command interface for this script will be updated in future to avoid writing the full directory path
-The `<BAND>` and `<CONFIG>` arguments specify the frequency band (`low`, `mid`, `L`, `C`, or `X`) and array configuration (`6km`, `750_no6`, `750_6`, or `H168`), which will be used to set imaging parameters. If not provided, `<BAND>` will default to a value of `L` and `<CONFIG>` will default to a value of `6km`.
+where `<DATA>` are calibrated visibilities either in miriad (ending in .cal), UV FITS (ending in .calfits), or CASA MeasurementSet (ending in .ms) format.
 
-You can further adjust parameters in this script, such the:
+You can supply further options such as:
+* array configuration (`6km`, `750_no6`, `750_6`, or `H168`),
+* frequency band (`low`, `mid`, `L`, `C`, or `X`),
 * robust parameter,
+* clean threshold,
+* maximum clean iterations,
 * primary beam limit,
 * number of Taylor terms used in mtmfs deconvolution,
 * number and size of clean scales,
+* use of widefield gridder with w-projection,
 * and whether to use interactive `tclean`.
 
 The script then progresses through prompts to load the data into a MeasurementSet and optionally test the imaging parameters are appropriate and perform additional flagging before performing further processing. 
@@ -68,46 +88,53 @@ The next stage is an optional self-calibration loop to improve phase calibration
 
 Next is a deep clean to produce the field source model. By default this is set to interactive mode to place a clean mask carefully over each field source. Once happy that the mask covers all sources of interest you can set the threshold and iterations to desired levels before running the remainder of the task automatically. 
 
-Once the field model has been produced, the next step is to mask the target source from this model so that it is untouched by uv subtraction. If your source is at the phase / image centre you can use automatic masking to cut out a circle of radius 10 pixels. The better approach is to opt out of this which will trigger another interactive `tclean` run so that you can draw a clean mask manually around your target source. Click the green arrow to finish `tclean` and this will be used to remove your source from the field model. The masked field model will then be inserted into the MeasurementSet and subtracted from the visibilities. The resulting subtracted MeasurementSet is stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/` with a `subbed.ms` suffix.
+Once the field model has been produced, the next step is to mask the target source from this model so that it is untouched by uv subtraction. If your source is at the phase / image centre you can use automatic masking to cut out a circle of radius 30 pixels. The better approach is to opt out of this which will trigger another interactive `tclean` run so that you can draw a clean mask manually around your target source. Click the green arrow to finish `tclean` and this will be used to remove your source from the field model. The masked field model will then be inserted into the MeasurementSet and subtracted from the visibilities. The resulting subtracted MeasurementSet is stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/` with a `subbed.ms` suffix.
 
 `tclean` will run once more to produce a field-subtracted image so that you can confirm no field sources remain. Results of both the deep and subtracted clean are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/field_model/<BAND>/`.
 
 ## Baseline Averaging / Dynamic Spectrum Forming ##
 
-These are a few small CASA / Python scripts used to collapse a MeasurementSet (either the subtracted version from `image.py` or another MeasurementSet entirely) into a time vs frequency array ready for plotting.
+These are a few small CASA / Python scripts used to collapse a MeasurementSet (either the subtracted version from `dstools-model-field` or another MeasurementSet entirely) into a time vs frequency array ready for plotting.
 
-`fix_phasecentre.py` is a CASA script that rotates a MeasurementSet's phase centre to provided coordinates. 
+`dstools-rotate` is a script that rotates a MeasurementSet's phase centre to provided coordinates. 
 
 Run the script with
 ```
-casa -c fix_phasecentre.py reduced/<PROJECT_NAME>/<MS> <COORDS>
+dstools-rotate reduced/<PROJECT_NAME>/<MS> <COORDS>
 ```
 where `<MS>` is the MeasurementSet you want to work with and `<COORDS>` are the target coordinates in the format `"J2000 hms dms"` format (e.g. `"J2000 12h30m41.2s -45d11m04.1s"`). `:` delimiters will result in the declination being treated in hourangle units.
 
-`avg_baselines.py` is a CASA script that averages the data over all baselines.
+`dstools-avg-baselines` is a script that averages the data over all baselines. Options are available to select either the DATA or CORRECTED_DATA column with `-c`, and include a lower cutoff to uv distance used to improve results with RFI affected short baselines with `-u`. 
 
 Run the script with
 ```
-casa -c avg_baselines.py reduced/<PROJECT_NAME>/<MS> <MIN_UVDIST>
+dstools-avg-baselines reduced/<PROJECT_NAME>/<MS>
 ```
-where `<MIN_UVDIST>` is an optional lower cutoff to uv distance, used to improve results with RFI affected short baselines. 
-
-`make_dspec.py` is a python script that converts the flux, frequency, and time values in a MeasurementSet data column into numpy arrays for each instrumental polarisation. These are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/dynamic_spectra/<BAND>/`. If a corrected data column exists it will be used, though the subtracted products from `image.py` will be fresh MeasurementSets with no corrected column.
-
-Run the script with
+and see option details with
 ```
-python make_dspec.py -B <BAND> reduced/<PROJECT_NAME>/<MS>
+dstools-avg-baselines --help
+```
+
+`dstools-make-dspec` is a python script that converts the flux, frequency, and time values in a MeasurementSet data column into numpy arrays for each instrumental polarisation. These are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/dynamic_spectra/<BAND>/`. Options include selection of data column, frequency band, and removal of flagging mask.
+
+Run the script supplying the path to the baseline averaged MeasurementSet. If using products from the field modeling stage, this is
+```
+dstools-make-dspec reduced/<PROJECT_NAME>/<TARGET_NAME>/<MS>
+```
+See option details with
+```
+dstools-make-dspec --help
 ```
 
 ## Plotting ##
 
-`plot_dspec.py` is a convenience script for plotting the dynamic spectra produced by `make_dspec.py`.
+`dstools-plot-dspec` is a convenience script for plotting the dynamic spectra produced by `dstools-make-dspec`.
 
 Run the script with
 ```
-python plot_dspec.py -f <FREQ_AVG> -t <TIME_AVG> -B <BAND> reduced/<PROJECT_NAME>
+dstools-plot-dspec -f <FREQ_AVG> -t <TIME_AVG> reduced/<PROJECT_NAME>/<TARGET_NAME>
 ```
-where `<FREQ_AVG>` and `<TIME_AVG>` are integer factors to average / rebin the data by. See other optional arguments / flags with
+where `<FREQ_AVG>` and `<TIME_AVG>` are integer factors to average / rebin the data by. See other option details with
 ```
-python plot_dspec.py --help
+dstools-plot-dspec --help
 ```

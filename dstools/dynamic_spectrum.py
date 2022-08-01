@@ -8,17 +8,19 @@ from astropy.visualization import ZScaleInterval, ImageNormalize
 
 
 class DynamicSpectrum:
-    def __init__(self, project, band="L", calscans=True, prefix=""):
-        self.src = project.split("/")[-1]
+    def __init__(self, project, band='L', calscans=True, prefix=''):
+        self.src = project.split('/')[-1]
         self.band = band
 
-        self.ds_path = f"{project}/dynamic_spectra/{band}"
+
+        self.ds_path = f'{project}/dynamic_spectra/{band}'
         self.prefix = prefix
 
         self._load_data()
 
-        if calscans:
+        if calscans and self.band not in ['low', 'mid']:
             self._stack_cal_scans()
+
         self._make_stokes()
 
         self.tmin = self.time[0]
@@ -27,12 +29,12 @@ class DynamicSpectrum:
         self.fmax = self.freq[-1]
 
     def _get_scan_intervals(self):
-        """Find indices of start/end of each calibrator scan cycle"""
+        '''Find indices of start/end of each calibrator scan cycle'''
 
-        t0 = Time(self.time[0] / 24.0, format="mjd", scale="utc")
-        tN = Time(self.time[-1] / 24.0, format="mjd", scale="utc")
-        t0.format = "iso"
-        tN.format = "iso"
+        t0 = Time(self.time[0] / 24.0, format='mjd', scale='utc')
+        tN = Time(self.time[-1] / 24.0, format='mjd', scale='utc')
+        t0.format = 'iso'
+        tN.format = 'iso'
 
         dts = [0]
         dts.extend([self.time[i] - self.time[i - 1] for i in range(1, len(self.time))])
@@ -47,24 +49,24 @@ class DynamicSpectrum:
         self.scan_end_indices = np.append(scan_end_indices, len(self.time) - 1)
 
     def _load_data(self):
-        """Load instrumental pols and time/freq data, converting to MHz, s, and mJy"""
+        '''Load instrumental pols and time/freq data, converting to MHz, s, and mJy'''
 
-        file_prefix = f"{self.ds_path}/{self.prefix}"
+        file_prefix = f'{self.ds_path}/{self.prefix}'
 
-        self.freq = np.load(f"{file_prefix}freq.npy", allow_pickle=True) / 1e6
-        self.time = np.load(f"{file_prefix}time.npy", allow_pickle=True) / 3600
-        self.time_start = Time(self.time[0] / 24.0, format="mjd", scale="utc")
-        self.time_start.format = "iso"
+        self.freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
+        self.time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
+        self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
+        self.time_start.format = 'iso'
 
         self.time -= self.time[0]
 
-        self.XX = np.load(f"{file_prefix}dynamic_spectra_XX.npy", allow_pickle=True) * 1e3
-        self.XY = np.load(f"{file_prefix}dynamic_spectra_XY.npy", allow_pickle=True) * 1e3
-        self.YX = np.load(f"{file_prefix}dynamic_spectra_YX.npy", allow_pickle=True) * 1e3
-        self.YY = np.load(f"{file_prefix}dynamic_spectra_YY.npy", allow_pickle=True) * 1e3
+        self.XX = np.load(f'{file_prefix}dynamic_spectra_XX.npy', allow_pickle=True) * 1e3
+        self.XY = np.load(f'{file_prefix}dynamic_spectra_XY.npy', allow_pickle=True) * 1e3
+        self.YX = np.load(f'{file_prefix}dynamic_spectra_YX.npy', allow_pickle=True) * 1e3
+        self.YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
 
     def _stack_cal_scans(self):
-        """Insert null data representing off-source time"""
+        '''Insert null data representing off-source time'''
 
         self._get_scan_intervals()
         avg_scan_dt = np.median(self.dts[: self.scan_end_indices[0]])
@@ -109,7 +111,7 @@ class DynamicSpectrum:
         self.YY = np.ma.masked_where(YY == 0, YY)
 
     def _make_stokes(self):
-        """Convert instrumental polarisations to Stokes products.
+        '''Convert instrumental polarisations to Stokes products.
 
         NOTE:
         For some inexplicable reason the I, Q, and U products result in
@@ -117,7 +119,7 @@ class DynamicSpectrum:
         the array averaged/reshaped. This -1j*1j hack seems to fix it.
         Object and data types are <class 'numpy.ma.core.MaskedArray'>
         and complex128 in both cases
-        """
+        '''
 
         I = -1j * 1j * (self.XX + self.YY) / 2
         Q = 1j * 1j * (self.XY + self.YX) / 2
@@ -129,10 +131,10 @@ class DynamicSpectrum:
         Q = np.flip(Q, axis=1)
         U = np.flip(U, axis=1)
         V = np.flip(V, axis=1)
-        self.data = {"I": I, "Q": Q, "U": U, "V": V}
+        self.data = {'I': I, 'Q': Q, 'U': U, 'V': V}
 
     def rebin(self, o, n, axis):
-        """Create unitary array compression matrix from o -> n length.
+        '''Create unitary array compression matrix from o -> n length.
 
         if rebinning along row axis we want:
          - (o // n) + 1 entries in each row that sum to unity,
@@ -149,7 +151,7 @@ class DynamicSpectrum:
 
         The inner product of this compressor with an array will rebin
         the array conserving the total intensity along the given axis.
-        """
+        '''
 
         compressor = np.zeros((n, o))
         comp_ratio = n / o
@@ -190,10 +192,10 @@ class DynamicSpectrum:
         return compressor if axis == 0 else compressor.T
 
     def rebin2D(self, array, new_shape):
-        """Re-bin along time / frequency axes conserving flux."""
+        '''Re-bin along time / frequency axes conserving flux.'''
 
         if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
-            raise ValueError("New shape should not be greater than old shape in either dimension")
+            raise ValueError('New shape should not be greater than old shape in either dimension')
 
         time_comp = self.rebin(array.shape[0], new_shape[0], axis=0)
         freq_comp = self.rebin(array.shape[1], new_shape[1], axis=1)
@@ -203,40 +205,40 @@ class DynamicSpectrum:
 
     def plot_ds(self, favg, tavg, stokes, cmax=20, save=False, imag=False):
 
-        fbins = self.data["I"].shape[1] // favg
-        tbins = self.data["I"].shape[0] // tavg
+        fbins = self.data['I'].shape[1] // favg
+        tbins = self.data['I'].shape[0] // tavg
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
         data = self.rebin2D(data, (tbins, fbins))
 
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
-        cmin = -2 if stokes == "I" else -cmax
+        cmin = -2 if stokes == 'I' else -cmax
         cmax = cmax
 
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(
             np.transpose(data),
             extent=[self.tmin, self.tmax, self.fmax, self.fmin],
-            aspect="auto",
-            origin="lower",
+            aspect='auto',
+            origin='lower',
             norm=norm,
             clim=(cmin, cmax),
-            cmap="plasma",
+            cmap='plasma',
         )
         ax.text(
-            0.05, 0.95, f"Stokes {stokes}", color="white", weight="bold", transform=ax.transAxes
+            0.05, 0.95, f'Stokes {stokes}', color='white', weight='bold', transform=ax.transAxes
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-        cb.set_label("Flux Density (mJy)")
-        ax.set_xlabel("Time (hours)")
-        ax.set_ylabel("Frequency (MHz)")
+        cb.set_label('Flux Density (mJy)')
+        ax.set_xlabel('Time (hours)')
+        ax.set_ylabel('Frequency (MHz)')
 
         if save:
-            path_template = "{}/{}_stokes{}_subbed_ds_fbins{}-tbins{}.png"
+            path_template = '{}/{}_stokes{}_subbed_ds_fbins{}-tbins{}.png'
             fig.savefig(
                 path_template.format(self.ds_path, self.src.lower(), stokes.lower(), fbins, tbins),
-                bbox_inches="tight",
-                format="png",
+                bbox_inches='tight',
+                format='png',
                 dpi=300,
             )
 
@@ -246,31 +248,31 @@ class DynamicSpectrum:
 
         sp_fig, sp_ax = plt.subplots(figsize=(7, 5))
 
-        fbins = self.data["I"].shape[1] // favg
+        fbins = self.data['I'].shape[1] // favg
         df = (self.fmax - self.fmin) / fbins
         x = [(i * df + self.fmin) for i in range(fbins)]
 
-        for pol in ["I", "Q", "U", "V"]:
+        for pol in ['I', 'Q', 'U', 'V']:
             y = self.rebin2D(self.data[pol], (1, fbins))
             y = np.flip(np.transpose(y))
 
             sp_ax.plot(x, y.real, label=pol)
 
-            if pol == "I":
+            if pol == 'I':
                 rms = np.sqrt(np.mean(np.square(y.imag)))
 
-        sp_ax.set_ylabel("Flux Density (mJy)")
-        sp_ax.set_xlabel("Frequency (MHz)")
-        sp_ax.axhline(rms, ls=":", color="r", label=f"rms={rms:.1f} mJy")
-        sp_ax.axhline(-rms, ls=":", color="r")
+        sp_ax.set_ylabel('Flux Density (mJy)')
+        sp_ax.set_xlabel('Frequency (MHz)')
+        sp_ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
+        sp_ax.axhline(-rms, ls=':', color='r')
         sp_ax.legend()
 
         if save:
-            path_template = "{}/{}_spectrum_fbins{}.png"
+            path_template = '{}/{}_spectrum_fbins{}.png'
             sp_fig.savefig(
                 path_template.format(self.ds_path, self.src.lower(), fbins),
-                bbox_inches="tight",
-                format="png",
+                bbox_inches='tight',
+                format='png',
                 dpi=300,
             )
 
@@ -279,34 +281,37 @@ class DynamicSpectrum:
     def plot_lightcurve(self, tavg, save=False):
         lc_fig, lc_ax = plt.subplots(figsize=(7, 5))
 
-        tbins = self.data["I"].shape[0] // tavg
+        tbins = self.data['I'].shape[0] // tavg
         dt = (self.tmax - self.tmin) / tbins
         x = np.array([i * dt for i in range(tbins)])
 
-        for pol in ["I", "Q", "U", "V"]:
+        for pol in ['I', 'V']:
             y = self.rebin2D(self.data[pol], (tbins, 1))
 
             lc_ax.plot(x, y.real, label=pol)
 
-            df = pd.DataFrame({"time": x, "flux_density": y.real.reshape(1, -1)[0]})
+            df = pd.DataFrame({
+                'time': self.time_start + x * u.hour,
+                'flux_density': y.real.reshape(1, -1)[0]
+            })
+            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
+            df.dropna().to_csv(f'{self.ds_path}/lc_stokes{pol.lower()}.csv')
 
-            df["time"] = Time("2021-09-16T08:31:34.927736") + x * u.hour
-
-            if pol == "I":
+            if pol == 'I':
                 rms = np.sqrt(np.mean(np.square(y.imag)))
 
-        lc_ax.axhline(rms, ls=":", color="r", label=f"rms={rms:.1f} mJy")
-        lc_ax.axhline(-rms, ls=":", color="r")
+        lc_ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
+        lc_ax.axhline(-rms, ls=':', color='r')
         lc_ax.legend()
-        lc_ax.set_ylabel("Flux Density (mJy)")
-        lc_ax.set_xlabel("Time (hours)")
+        lc_ax.set_ylabel('Flux Density (mJy)')
+        lc_ax.set_xlabel('Time (hours)')
 
         if save:
-            path_template = "{}/{}_lc_tbins{}.png"
+            path_template = '{}/{}_lc_tbins{}.png'
             lc_fig.savefig(
                 path_template.format(self.ds_path, self.src.lower(), tbins),
-                bbox_inches="tight",
-                format="png",
+                bbox_inches='tight',
+                format='png',
                 dpi=300,
             )
 

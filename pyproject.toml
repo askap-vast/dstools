@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "dstools"
+version = "1.0.0"
+description = "A processing pipeline to produce dynamic spectra from ATCA and ASKAP visibilities."
+authors = ["Joshua Pritchard <joshua.pritchard@sydney.edu.au>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+click = "^8.0.3"
+astropy = "^5.0.1"
+pandas = "^1.4.1"
+matplotlib = "^3.5.1"
+python-casacore = "^3.4.0"
+numpy = "^1.22.2"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.scripts]
+dstools-cal = "dstools.cli.cal:main"
+dstools-model-field = "dstools.cli.model_field:main"
+dstools-rotate = "dstools.cli.fix_phasecentre:main"
+dstools-avg-baselines = "dstools.cli.avg_baselines:main"
+dstools-make-dspec = "dstools.cli.make_dspec:main"
+dstools-plot-dspec = "dstools.cli.plot_dspec:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

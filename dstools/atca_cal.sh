@@ -1,16 +1,16 @@
 #!/bin/bash
 
-source functions.sh
+export source_path=$1
 
-# Editable Script Parameters
-export refant=1
-export mfinterval=2.0
-export bpinterval=2.0
-# --------------------------
+source $1/functions.sh
 
-export data_dir=$(pwd)/data/
-export proj_dir=reduced/$1/miriad/
-export pcode=$2
+export proj_dir=reduced/$2/miriad/
+export data_dir=$(pwd)/$3
+export pcode=$4
+export refant=$5
+export mfinterval=$6
+export bpinterval=$7
+export gpinterval=$8
 
 # Load data
 prompt "Reload data?"
@@ -22,8 +22,8 @@ case $reload in
 	export reflag="y"
 
 	# Move pre-flagged primary scan back in
-	cp -r $proj_dir/*flagged_backup .
-	rm -rf $proj_dir/
+	cp -r $proj_dir/*flagged_backup . 2>/dev/null
+	rm -rf $proj_dir/ 2>/dev/null
 	mkdir -p $proj_dir/
 	cd $proj_dir
 
@@ -52,7 +52,7 @@ select f in $freqs; do
 	continue
     fi
 
-    if [ $(echo $f | grep 2100 | wc -l) > 0 ]; then
+    if [ $(echo $f | grep 2100 | wc -l) -gt 0 ]; then
         export freq=$f
         export spec=2.1
     else
@@ -170,7 +170,7 @@ case $primary_cal in
     [Yy]* ) 
 
 	# Gain calibrations for primary
-	gpcal vis=$pcal.$freq interval=0.1 options=xyvary minants=3 nfbin=16 spec=$spec refant=$refant;
+	gpcal vis=$pcal.$freq interval=$gpinterval options=xyvary minants=3 nfbin=16 spec=$spec refant=$refant;
 
 	# Flag outliers in real/imaginary space
 	blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=real,imag options=nofqav,nobase
@@ -228,7 +228,7 @@ case $calibrate in
 		esac
 		
 		# Gain calibrations for secondary calibrator
-		gpcal vis=$scal.$freq interval=0.1 options="xyvary,qusolve" minants=3 nfbin=4 refant=$refant;
+		gpcal vis=$scal.$freq interval=$gpinterval options="xyvary,qusolve" minants=3 nfbin=4 refant=$refant;
 
 		# Check secondary calibration
 		uvplt vis=$scal.$freq stokes=xx,yy axis=real,imag options=nofqav,nobase,equal device=/xs;
@@ -319,7 +319,7 @@ uvaver vis=$target.$freq out=$target.$freq.cal
 
 # Clean up miriad files before moving to CASA (just keep calibrated target)
 export target_dir=$(echo $target | tr '[:lower:]' '[:upper:]')
-mkdir ../$target_dir
+mkdir ../$target_dir 2>/dev/null
 mv $target.$freq.cal ../$target_dir/.
 
 print "DONE!"
