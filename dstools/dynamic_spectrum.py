@@ -31,11 +31,6 @@ class DynamicSpectrum:
     def _get_scan_intervals(self):
         '''Find indices of start/end of each calibrator scan cycle'''
 
-        t0 = Time(self.time[0] / 24.0, format='mjd', scale='utc')
-        tN = Time(self.time[-1] / 24.0, format='mjd', scale='utc')
-        t0.format = 'iso'
-        tN.format = 'iso'
-
         dts = [0]
         dts.extend([self.time[i] - self.time[i - 1] for i in range(1, len(self.time))])
         self.dts = np.array(dts)
@@ -69,10 +64,14 @@ class DynamicSpectrum:
         '''Insert null data representing off-source time'''
 
         self._get_scan_intervals()
+
+        # Calculate average correlator cycle time from first scan
         avg_scan_dt = np.median(self.dts[: self.scan_end_indices[0]])
-        num_scan_intervals = (
-            self.time[self.scan_start_indices[1:]] - self.time[self.scan_end_indices[:-1]]
-        ) / avg_scan_dt
+
+        # Calculate number of cycles in each calibrator/stow break
+        time_end_break = self.time[self.scan_start_indices[1:]]
+        time_start_break = self.time[self.scan_end_indices[:-1]]
+        num_break_cycles = np.append((time_end_break - time_start_break), 0) / avg_scan_dt
         num_channels = self.XX.shape[1]
 
         # Create initial time-slice to start stacking target and calibrator scans together
@@ -81,7 +80,7 @@ class DynamicSpectrum:
         )
 
         for start_index, end_index, num_scans in zip(
-            self.scan_start_indices[:-1], self.scan_end_indices[:-1], num_scan_intervals
+            self.scan_start_indices, self.scan_end_indices, num_break_cycles
         ):
 
             # Select each contiguous on-target chunk of data
