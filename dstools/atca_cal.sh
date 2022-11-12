@@ -1,7 +1,5 @@
 #!/bin/bash
 
-export source_path=$1
-
 source $1/functions.sh
 
 export proj_dir=reduced/$2/miriad/

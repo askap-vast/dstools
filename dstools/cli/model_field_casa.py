@@ -51,6 +51,8 @@ def import_data(input_file, proj_dir, msname):
               help='Project namespace / sub-directory, default is to infer from data path')
 @click.option('-I', '--interactive/--no-interactive', default=True,
               help='Run tclean in interactive mode')
+@click.option('-a', '--automask/--no-automask', default=False,
+              help='Use auto-multithresh mode to automatically generate clean mask.')
 @click.argument('data')
 def main(
         data,
@@ -66,6 +68,7 @@ def main(
         pblim,
         proj_dir,
         interactive,
+        automask,
 ):
 
     # PARAMETER SETTINGS
@@ -96,6 +99,11 @@ def main(
     clean_mask = '{}/{}.{}.mask'.format(proj_dir, source, band)
     outlierfile = ''
 
+    # Set cycleniter=niter if using both automasking and interactive mode
+    # to ensure major cycles trigger at expected times
+    usemask = 'auto-multithresh' if automask else 'user'
+    cycleniter = iterations if automask and interactive else -1
+
     # -------------------------------------------------
 
     while True:
@@ -123,7 +131,7 @@ def main(
     # ------------
 
     msname = '{}.{}.ms'.format(source, band)
-    calibrated_ms = '{}/{}_{}_cal.ms'.format(proj_dir, source, band)
+    calibrated_ms = '{}/{}.{}.selfcal.ms'.format(proj_dir, source, band)
 
     if os.path.exists(proj_dir + msname):
         reimport = prompt('Redo data import?')
@@ -158,32 +166,33 @@ def main(
             listobs(vis=testms)
             timerange = input('Enter test imaging timerange (empty for full observation): ')
 
-            tclean(
-                vis=testms,
-                field=field,
-                cell=[testcell],
-                imsize=[testimsize],
-                threshold=threshold,
-                niter=2000,
-                imagename='{}/test_params/test_im'.format(proj_dir),
-                nterms=nterms,
-                deconvolver='mtmfs',
-                scales=clean_scales,
-                reffreq=reffreq,
-                weighting='briggs',
-                robust=robust,
-                stokes='IQUV',
-                timerange=timerange,
-                interactive=interactive,
-                phasecenter=phasecenter,
-                pblimit=pblim,
-            )
+            test_image = prompt("Make test image?")
+            if test_image:
+                tclean(
+                    vis=testms,
+                    field=field,
+                    cell=[testcell],
+                    imsize=[testimsize],
+                    threshold=threshold,
+                    niter=2000,
+                    imagename='{}/test_params/test_im'.format(proj_dir),
+                    nterms=nterms,
+                    deconvolver='mtmfs',
+                    scales=clean_scales,
+                    reffreq=reffreq,
+                    weighting='briggs',
+                    robust=robust,
+                    stokes='IQUV',
+                    timerange=timerange,
+                    interactive=interactive,
+                    phasecenter=phasecenter,
+                    pblimit=pblim,
+                )
+                os.system('rm -r {}/test_params/test_im*'.format(proj_dir))
 
             accept_params = prompt('Finished experimenting?')
             if accept_params:
                 break
-
-            os.system('rm -r {}/test_params/test_im*'.format(proj_dir))
 
             # Run some additional flagging
             reflag = prompt('Perform flagging?')
@@ -311,6 +320,7 @@ def main(
                     vis=selfcal_ms,
                     caltable=cal_table,
                     solint=interval,
+                    minblperant=3,
                     calmode='p',
                     gaintype='G',
                 )
@@ -399,45 +409,19 @@ def main(
 
     os.system('mkdir -p {}'.format(field_model_path))
 
-    # Optionally specify sources to remove in outlierfile.
-    # ----------------------------------------------------
-
+    # Optionally specify outlier sources to remove
     kill_offaxis = prompt('Clean off-axis sources separately?')
+    outliers = []
     if kill_offaxis:
 
-        # Clear old outlier images
-        os.system('rm -r {}/outlier*'.format(field_model_path))
-        offaxis_file = '{}/kill_offaxis.txt'.format(field_model_path)
-
-        # Check for pre-existing outlierfile parameters
-        use_existing = False
-        if os.path.exists(offaxis_file):
-            use_existing = prompt('Use paramaters in existing kill_offaxis.txt?')
-
         # Interactively specify offaxis source coordinates
-        if not use_existing:
-            os.system('rm -r {}'.format(offaxis_file))
-            with open(offaxis_file, 'a') as f:
-                i = 1
-                while True:
-                    killcoords = input('Enter source coordinates (J2000 hms dms): ')
+        while True:
+            killcoords = input('Enter source coordinates (J2000 hms dms): ')
 
-                    if killcoords == '':
+            if killcoords == '':
+                break
 
-                        os.system('cat {}'.format(offaxis_file))
-                        break
-
-                    params = [
-                        'imagename={}/outlier{}'.format(field_model_path, i),
-                        'imsize=[200,200]',
-                        'phasecenter={}\n'.format(killcoords),
-                    ]
-
-                    f.writelines('\n'.join(params))
-                    i += 1
-
-        # Set outlierfile, default is ''
-        outlierfile = offaxis_file
+            outliers.append(killcoords)
 
     # Deep clean to produce field model.
     # ----------------------------------
@@ -449,15 +433,132 @@ def main(
     if os.path.exists(field_model_path):
         deep_clean = prompt('Perform deep clean?')
 
-    while deep_clean:
+    imnames = ['im_outlier' for _ in outliers] + ['im_deep']
+    imsizes = [200 for _ in outliers] + [imsize]
+    masktypes = ['user' for _ in outliers] + [usemask]
+    outliers += [phasecenter]
+
+
+    work_ms = calibrated_ms.replace('.ms', '.subbed.ms')
+    if not os.path.exists(work_ms):
+        os.system("cp -r {} {}".format(calibrated_ms, work_ms))
+
+    for size, imname, masktype, phasecen in zip(imsizes, imnames, masktypes, outliers):
+
+        clean_round = len(glob.glob('{}/*{}*.image.tt0'.format(field_model_path, imname)))
+        imname = f'{imname}{clean_round}'
+
+        while deep_clean:
+            tclean(
+                vis=work_ms,
+                field=field,
+                cell=[cellsize],
+                imsize=[size],
+                threshold=threshold,
+                niter=iterations,
+                imagename='{}/{}.{}'.format(field_model_path, source, imname),
+                nterms=nterms,
+                deconvolver='mtmfs',
+                scales=clean_scales,
+                reffreq=reffreq,
+                weighting='briggs',
+                stokes='IQUV',
+                robust=robust,
+                mask=deep_mask,
+                usemask=masktype,
+                pbmask=0.0,
+                cycleniter=cycleniter,
+                outlierfile=outlierfile,
+                gridder=gridder,
+                wprojplanes=wprojplanes,
+                phasecenter=phasecen,
+                interactive=interactive,
+                pblimit=pblim,
+            )
+
+            cont = prompt('Continue with further cleaning?')
+            if not cont:
+
+                deep_mask = '{}/{}.{}.mask'.format(field_model_path, source, imname)
+                os.system('rm -r {}'.format(clean_mask))
+                os.system('cp -r {} {}'.format(deep_mask, clean_mask))
+
+                break
+            else:
+                deep_mask = ''
+
+        # Mask out the source.
+        # --------------------
+        # Either use a generic circular mask at image center or specify via a custom tclean mask
+
+        model = '{}/{}.{}.model'.format(field_model_path, source, imname)
+        bgmodel = '{}/{}.{}.bgmodel'.format(field_model_path, source, imname)
+
+        if not prompt('Mask out region of field model?'):
+            source_mask = 'circle[[{}pix, {}pix], {}pix]'.format(
+                size-1, size-1, 1
+            )
+        elif prompt('Automatically generate source mask?'):
+            source_mask = 'circle[[{}pix, {}pix], {}pix]'.format(
+                size // 2, size // 2, 10 * 3
+            )
+        else:
+            tclean(
+                vis=work_ms,
+                field=field,
+                cell=[cellsize],
+                imsize=[size],
+                threshold=threshold,
+                niter=1,
+                imagename='{}/{}.maskgen'.format(field_model_path, source),
+                nterms=nterms,
+                deconvolver='mtmfs',
+                scales=clean_scales,
+                reffreq=reffreq,
+                weighting='briggs',
+                stokes='IQUV',
+                robust=robust,
+                interactive=interactive,
+                phasecenter=phasecen,
+                pblimit=pblim,
+            )
+            source_mask = '{}/{}.source.mask'.format(field_model_path, source)
+            os.system(
+                'mv {}/{}.maskgen.mask {}'.format(field_model_path, source, source_mask)
+            )
+            os.system('rm -r {}/{}.maskgen*'.format(field_model_path, source))
+
+        os.system('rm -r {}*'.format(bgmodel))
+        for tt in ['tt{}'.format(i) for i in range(nterms)]:
+            mask = '{}/{}.{}.mask.{}'.format(field_model_path, source, imname, tt)
+            modelfile = '{}.{}'.format(model, tt)
+            bgmodelfile = bgmodel + '.' + tt
+
+            # Remove target source from field model
+            makemask(
+                mode='copy',
+                inpimage=modelfile,
+                output=mask,
+                inpmask=source_mask,
+                overwrite=True,
+            )
+            immath(
+                imagename=[modelfile, mask],
+                outfile=bgmodelfile,
+                expr='IM0*(1-IM1)',
+            )
+                
+
+        # Insert masked background model into visibilities and subtract
         tclean(
-            vis=calibrated_ms,
+            vis=work_ms,
             field=field,
             cell=[cellsize],
             imsize=[imsize],
-            threshold=threshold,
-            niter=iterations,
-            imagename='{}/{}.im_deep'.format(field_model_path, source),
+            startmodel=[bgmodel + '.tt{}'.format(i) for i in range(nterms)],
+            savemodel='modelcolumn',
+            niter=0,
+            imagename='{}/{}.im_presub'.format(field_model_path, source),
             nterms=nterms,
             deconvolver='mtmfs',
             scales=clean_scales,
@@ -465,128 +566,20 @@ def main(
             weighting='briggs',
             stokes='IQUV',
             robust=robust,
-            mask=deep_mask,
-            outlierfile=outlierfile,
             gridder=gridder,
             wprojplanes=wprojplanes,
             phasecenter=phasecenter,
-            interactive=interactive,
             pblimit=pblim,
         )
+        os.system('rm -r {}/{}.im_presub*'.format(field_model_path, source))
 
-        cont = prompt('Continue with further cleaning?')
-        if not cont:
-
-            deep_mask = '{}/{}.im_deep.mask'.format(field_model_path, source)
-            os.system('rm -r {}'.format(clean_mask))
-            os.system('cp -r {} {}'.format(deep_mask, clean_mask))
-
-            break
-        else:
-            deep_mask = ''
-
-    # Mask out the source.
-    # --------------------
-    # Either use a generic circular mask at image center or specify via a custom tclean mask
-
-    automask = prompt('Automatically generate source mask?')
-    if automask:
-        source_mask = 'circle[[{}pix, {}pix], {}pix]'.format(
-            imsize // 2, imsize // 2, 10 * 3
-        )
-    else:
-        tclean(
-            vis=calibrated_ms,
-            field=field,
-            cell=[cellsize],
-            imsize=[imsize],
-            threshold=threshold,
-            niter=1,
-            imagename='{}/{}.maskgen'.format(field_model_path, source),
-            nterms=nterms,
-            deconvolver='mtmfs',
-            scales=clean_scales,
-            reffreq=reffreq,
-            weighting='briggs',
-            stokes='IQUV',
-            robust=robust,
-            interactive=interactive,
-            phasecenter=phasecenter,
-            pblimit=pblim,
-        )
-        source_mask = '{}/{}.source.mask'.format(field_model_path, source)
-        os.system(
-            'mv {}/{}.maskgen.mask {}'.format(field_model_path, source, source_mask)
-        )
-        os.system('rm -r {}/{}.maskgen*'.format(field_model_path, source))
-
-    model = '{}/{}.im_deep.model'.format(field_model_path, source)
-    bgmodel = '{}/{}.im_deep.bgmodel'.format(field_model_path, source)
-
-    os.system('rm -r {}*'.format(bgmodel))
-    for tt in ['tt{}'.format(i) for i in range(nterms)]:
-        mask = '{}/{}.mask.{}'.format(field_model_path, source, tt)
-        modelfile = '{}.{}'.format(model, tt)
-        bgmodelfile = bgmodel + '.' + tt
-
-        # Remove target source from field model
-        makemask(
-            mode='copy',
-            inpimage=modelfile,
-            output=mask,
-            inpmask=source_mask,
-            overwrite=True,
-        )
-        immath(
-            imagename=[modelfile, mask],
-            outfile=bgmodelfile,
-            expr='IM0*(1-IM1)',
-        )
-
-    # Insert masked background model into visibilities and subtract
-    os.system('rm -r {}/{}.im_presub*'.format(field_model_path, source))
-    tclean(
-        vis=calibrated_ms,
-        field=field,
-        cell=[cellsize],
-        imsize=[imsize],
-        startmodel=[bgmodel + '.tt{}'.format(i) for i in range(nterms)],
-        savemodel='modelcolumn',
-        niter=0,
-        imagename='{}/{}.im_presub'.format(field_model_path, source),
-        nterms=nterms,
-        deconvolver='mtmfs',
-        scales=clean_scales,
-        reffreq=reffreq,
-        weighting='briggs',
-        stokes='IQUV',
-        robust=robust,
-        gridder=gridder,
-        wprojplanes=wprojplanes,
-        phasecenter=phasecenter,
-        pblimit=pblim,
-    )
-
-
-    # Perform UV-subtraction.
-    # -----------------------
-
-    # Back up existing calibrated and subtracted visbilities
-    subbed_ms = calibrated_ms.replace('.ms', '.subbed.ms')
-    os.system('cp -r {} {}'.format(calibrated_ms, calibrated_ms.replace('.ms', '.bak.ms')))
-    os.system('mv {} {}'.format(subbed_ms, subbed_ms.replace('.ms', '.bak.ms')))
-
-    # Do model subtraction
-    uvsub(vis=calibrated_ms)
-
-    # Move subtracted visibilities to file with .subbed extension
-    os.system('mv {} {}'.format(calibrated_ms, subbed_ms))
-    os.system('mv {} {}'.format(calibrated_ms.replace('.ms', '.bak.ms'), calibrated_ms))
+        # Perform UV-subtraction.
+        uvsub(vis=work_ms)
 
     # Reimage to confirm field subtraction
     os.system('rm -r {}/{}im_subbed*'.format(field_model_path, source))
     tclean(
-        vis=subbed_ms,
+        vis=work_ms,
         field=field,
         datacolumn='corrected',
         cell=[cellsize],
@@ -610,9 +603,13 @@ def main(
     # Export to FITS format.
     # ----------------------
 
-    for tt in ['tt{}'.format(i) for i in range(nterms)]:
-        for stokes in ['I', 'V']:
-            for imtype in ['deep', 'subbed']:
+    imtypes = [f'deep{i}' for i in range(clean_round)] + ['subbed']
+    taylorterms = [f'tt{i}' for i in range(nterms)]
+    stokes_params = ['I', 'V']
+
+    for tt in taylorterms:
+        for stokes in stokes_params:
+            for imtype in imtypes:
 
                 os.system(
                     'rm -r {}/{}.im_{}.{}.image*'.format(
@@ -620,22 +617,24 @@ def main(
                     )
                 )
 
+                imagename = '{}/{}.im_{}.image.{}/'.format(
+                    field_model_path, source, imtype, tt
+                )
+                subimagename = '{}/{}.im_{}.{}.image.{}'.format(
+                    field_model_path, source, imtype, stokes, tt
+                )
+                fitsname = '{}/{}.im_{}.{}.{}.fits'.format(
+                    field_model_path, source, stokes, imtype, tt
+                )
+
                 imsubimage(
-                    imagename='{}/{}.im_{}.image.{}/'.format(
-                        field_model_path, source, imtype, tt
-                    ),
-                    outfile='{}/{}.im_{}.{}.image.{}'.format(
-                        field_model_path, source, imtype, stokes, tt
-                    ),
+                    imagename=imagename,
+                    outfile=subimagename,
                     stokes=stokes,
                 )
                 exportfits(
-                    imagename='{}/{}.im_{}.{}.image.{}'.format(
-                        field_model_path, source, imtype, stokes, tt
-                    ),
-                    fitsimage='{}/{}.im_{}.{}.{}.fits'.format(
-                        field_model_path, source, stokes, imtype, tt
-                    ),
+                    imagename=subimagename,
+                    fitsimage=fitsname,
                     overwrite=True,
                 )
 

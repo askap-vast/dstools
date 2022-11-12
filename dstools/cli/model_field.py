@@ -25,7 +25,9 @@ from dstools.utils import parse_casa_args
 @click.option('-l', '--pblim', default=-0.1,
               help='Primary beam fractional power cutoff, default is no cutoff.')
 @click.option('-P', '--proj_dir', type=click.Path(), default=None,
-              help='Project namespace / sub-directory, default is to infer from data path')
+              help='Project namespace / sub-directory, default is to infer from data path.')
+@click.option('-a', '--automask/--no-automask', default=False,
+              help='Use auto-multithresh mode to automatically generate clean mask.')
 @click.option('-I', '--interactive/--no-interactive', default=True,
               help='Run tclean in interactive mode')
 @click.option('--log2term/--no-log2term', default=True,
