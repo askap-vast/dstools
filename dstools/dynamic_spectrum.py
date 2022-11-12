@@ -1,3 +1,4 @@
+import logging
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
@@ -5,10 +6,12 @@ import numpy as np
 import pandas as pd
 from astropy.time import Time
 from astropy.visualization import ZScaleInterval, ImageNormalize
+from scipy.signal import correlate
 
+logger = logging.getLogger(__name__)
 
 class DynamicSpectrum:
-    def __init__(self, project, band='L', calscans=True, prefix=''):
+    def __init__(self, project, band='L', tavg=1, favg=1, calscans=True, prefix=''):
         self.src = project.split('/')[-1]
         self.band = band
 
@@ -17,9 +20,7 @@ class DynamicSpectrum:
         self.prefix = prefix
 
         self._load_data()
-
-        if calscans and self.band not in ['low', 'mid']:
-            self._stack_cal_scans()
+        self._stack_cal_scans(tavg, favg)
 
         self._make_stokes()
 
@@ -50,6 +51,7 @@ class DynamicSpectrum:
 
         self.freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
         self.time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
+
         self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
         self.time_start.format = 'iso'
 
@@ -60,7 +62,7 @@ class DynamicSpectrum:
         self.YX = np.load(f'{file_prefix}dynamic_spectra_YX.npy', allow_pickle=True) * 1e3
         self.YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
 
-    def _stack_cal_scans(self):
+    def _stack_cal_scans(self, tavg, favg):
         '''Insert null data representing off-source time'''
 
         self._get_scan_intervals()
@@ -74,24 +76,40 @@ class DynamicSpectrum:
         num_break_cycles = np.append((time_end_break - time_start_break), 0) / avg_scan_dt
         num_channels = self.XX.shape[1]
 
+        fbins = num_channels // favg
+
         # Create initial time-slice to start stacking target and calibrator scans together
         new_data_XX = new_data_XY = new_data_YX = new_data_YY = np.zeros(
-            (1, num_channels), dtype=complex
+            (1, fbins), dtype=complex
         )
+
+        # Check that data is not being truncated by stacking insufficient time chunks together
+        # This is a diagnostic of errors in data combination, where duplicated times are
+        # dropped in dstools.make_dspec if data is combined incorrectly.
+        if self.scan_end_indices[-1] + 1 < self.XX.shape[0]:
+            logger.warning("More time samples in data array than time array")
+            logger.warning("Check results with -C to see full data")
 
         for start_index, end_index, num_scans in zip(
             self.scan_start_indices, self.scan_end_indices, num_break_cycles
         ):
+
+            tbins = (end_index - start_index) // tavg
 
             # Select each contiguous on-target chunk of data
             XX_chunk = self.XX[start_index:end_index, :]
             XY_chunk = self.XY[start_index:end_index, :]
             YX_chunk = self.YX[start_index:end_index, :]
             YY_chunk = self.YY[start_index:end_index, :]
+            
+            XX_chunk = self.rebin2D(XX_chunk, (tbins, fbins))
+            XY_chunk = self.rebin2D(XY_chunk, (tbins, fbins))
+            YX_chunk = self.rebin2D(YX_chunk, (tbins, fbins))
+            YY_chunk = self.rebin2D(YY_chunk, (tbins, fbins))
 
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
-            nan_chunk = np.full((int(num_scans), num_channels), np.nan + np.nan * 1j)
+            nan_chunk = np.full((int(num_scans) // tavg, fbins), 0 + 0 * 1j)
 
             new_data_XX = np.vstack([new_data_XX, np.vstack([XX_chunk, nan_chunk])])
             new_data_XY = np.vstack([new_data_XY, np.vstack([XY_chunk, nan_chunk])])
@@ -99,30 +117,17 @@ class DynamicSpectrum:
             new_data_YY = np.vstack([new_data_YY, np.vstack([YY_chunk, nan_chunk])])
 
         # Mask out NaN values
-        XX = np.ma.masked_invalid(new_data_XX[1:])
-        XY = np.ma.masked_invalid(new_data_XY[1:])
-        YX = np.ma.masked_invalid(new_data_YX[1:])
-        YY = np.ma.masked_invalid(new_data_YY[1:])
-
-        self.XX = np.ma.masked_where(XX == 0, XX)
-        self.XY = np.ma.masked_where(XY == 0, XY)
-        self.YX = np.ma.masked_where(YX == 0, YX)
-        self.YY = np.ma.masked_where(YY == 0, YY)
+        self.XX = np.ma.masked_invalid(new_data_XX[1:])
+        self.XY = np.ma.masked_invalid(new_data_XY[1:])
+        self.YX = np.ma.masked_invalid(new_data_YX[1:])
+        self.YY = np.ma.masked_invalid(new_data_YY[1:])
 
     def _make_stokes(self):
-        '''Convert instrumental polarisations to Stokes products.
+        '''Convert instrumental polarisations to Stokes products.'''
 
-        NOTE:
-        For some inexplicable reason the I, Q, and U products result in
-        an array full of NaNs if both calibrator scans are added and
-        the array averaged/reshaped. This -1j*1j hack seems to fix it.
-        Object and data types are <class 'numpy.ma.core.MaskedArray'>
-        and complex128 in both cases
-        '''
-
-        I = -1j * 1j * (self.XX + self.YY) / 2
-        Q = 1j * 1j * (self.XY + self.YX) / 2
-        U = 1j * 1j * (self.XX - self.YY) / 2
+        I = (self.XX + self.YY) / 2
+        Q = - (self.XY + self.YX) / 2
+        U = - (self.XX - self.YY) / 2
         V = 1j * (self.XY - self.YX) / 2
 
         # Flip frequency axis of data to intuitive order
@@ -130,6 +135,7 @@ class DynamicSpectrum:
         Q = np.flip(Q, axis=1)
         U = np.flip(U, axis=1)
         V = np.flip(V, axis=1)
+
         self.data = {'I': I, 'Q': Q, 'U': U, 'V': V}
 
     def rebin(self, o, n, axis):
@@ -202,13 +208,48 @@ class DynamicSpectrum:
 
         return result
 
-    def plot_ds(self, favg, tavg, stokes, cmax=20, save=False, imag=False):
+    def plot_crosspol_ds(self, cmax=20, save=False):
 
-        fbins = self.data['I'].shape[1] // favg
-        tbins = self.data['I'].shape[0] // tavg
+        data = np.sqrt(np.abs(self.data['U']**2 + self.data['V']**2))
+
+        norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
+        cmax = cmax
+        cmin = 0
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        im = ax.imshow(
+            np.transpose(data),
+            extent=[self.tmin, self.tmax, self.fmax, self.fmin],
+            aspect='auto',
+            origin='lower',
+            norm=norm,
+            clim=(cmin, cmax),
+            cmap='plasma',
+        )
+        ax.text(
+            0.05, 0.95, r'sqrt(U^2 + V^2)', color='white', weight='bold', transform=ax.transAxes
+        )
+        cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
+        cb.set_label('Flux Density (mJy)')
+        ax.set_xlabel('Time (hours)')
+        ax.set_ylabel('Frequency (MHz)')
+
+        if save:
+            data.dump(f'{self.ds_path}/{self.src.lower()}_crosspol_ds.npy')
+
+            path_template = '{}/{}_crosspol_subbed_ds_fbins{}-tbins{}.png'
+            fig.savefig(
+                path_template.format(self.ds_path, self.src.lower(), 'REPL', 'REPL'),
+                bbox_inches='tight',
+                format='png',
+                dpi=300,
+            )
+
+        return fig, ax
+
+    def plot_ds(self, stokes, cmax=20, save=False, imag=False):
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
-        data = self.rebin2D(data, (tbins, fbins))
 
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
         cmin = -2 if stokes == 'I' else -cmax
@@ -233,9 +274,11 @@ class DynamicSpectrum:
         ax.set_ylabel('Frequency (MHz)')
 
         if save:
+            data.dump(f'{self.ds_path}/{self.src.lower()}_{stokes.lower()}_ds.npy')
+
             path_template = '{}/{}_stokes{}_subbed_ds_fbins{}-tbins{}.png'
             fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), stokes.lower(), fbins, tbins),
+                path_template.format(self.ds_path, self.src.lower(), stokes.lower(), 'REPL', 'REPL'),
                 bbox_inches='tight',
                 format='png',
                 dpi=300,
@@ -243,16 +286,17 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def plot_spectrum(self, favg, save=False):
+    def plot_spectrum(self, save=False):
 
         sp_fig, sp_ax = plt.subplots(figsize=(7, 5))
 
+        favg = 1
         fbins = self.data['I'].shape[1] // favg
         df = (self.fmax - self.fmin) / fbins
         x = [(i * df + self.fmin) for i in range(fbins)]
 
         for pol in ['I', 'Q', 'U', 'V']:
-            y = self.rebin2D(self.data[pol], (1, fbins))
+            # y = self.rebin2D(self.data[pol], (1, fbins))
             y = np.flip(np.transpose(y))
 
             sp_ax.plot(x, y.real, label=pol)
@@ -277,15 +321,41 @@ class DynamicSpectrum:
 
         return sp_fig, sp_ax
 
-    def plot_lightcurve(self, tavg, save=False):
+    def plot_acf(self, save=False):
+
+        acf_fig, acf_ax = plt.subplots(figsize=(7, 5))
+
+        acf2d = correlate(self.data['V'].real, self.data['V'].real)
+        # acf2d = acf2d[acf2d.shape[0]//2:, acf2d.shape[1]//2:]
+        # acf2d = np.flip(acf2d, axis=1).T
+
+        norm = ImageNormalize(acf2d, interval=ZScaleInterval(contrast=0.2))
+
+        acf_ax.imshow(
+            acf2d,
+            extent=[0, self.tmax-self.tmin, 0, self.fmax-self.fmin],
+            aspect='auto',
+            norm=norm,
+            cmap='plasma',
+        )
+        acf_ax.set_xlabel('Time Lag (h)')
+        acf_ax.set_ylabel('Frequency Lag (MHz)')
+
+        if save:
+            acf_fig.savefig(f'{self.ds_path}/{self.src.lower()}_acf.png')
+
+        return acf_fig, acf_ax
+        
+    def plot_lightcurve(self, save=False):
         lc_fig, lc_ax = plt.subplots(figsize=(7, 5))
 
+        tavg = 1
         tbins = self.data['I'].shape[0] // tavg
         dt = (self.tmax - self.tmin) / tbins
         x = np.array([i * dt for i in range(tbins)])
 
-        for pol in ['I', 'V']:
-            y = self.rebin2D(self.data[pol], (tbins, 1))
+        for pol in ['I', 'Q', 'U', 'V']:
+            y = self.data[pol].mean(axis=1)
 
             lc_ax.plot(x, y.real, label=pol)
 

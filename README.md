@@ -15,7 +15,7 @@ sys.path.append(dstools_path)
 ```
 where `dstools_path` should point to the install path. If you are unsure where this is, open a python REPL after installing `dstools` and run
 ```
-import dstoolsa
+import dstools
 
 print(dstools.__path__[0])
 ```
