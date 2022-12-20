@@ -10,7 +10,7 @@ def import_data(input_file, proj_dir, msname):
     os.system(f'mv {proj_dir}/{msname} {proj_dir}/{msname}.bak')
     os.system(f'rm -r {proj_dir}/{msname}.flagversions')
 
-    if input_file.endswith('.calfits'):
+    if input_file.endswith('.fits'):
         importuvfits(
             fitsfile=input_file,
             vis=f'{proj_dir}/{msname}',
