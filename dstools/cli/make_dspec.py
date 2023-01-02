@@ -8,34 +8,37 @@ from casacore.tables import table, taql
 @click.command()
 @click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
 @click.option('-B', '--band', default='L', type=click.Choice(['low', 'mid', 'L', 'C', 'X']))
+@click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
 @click.option('-c', '--datacolumn', type=click.Choice(['data', 'corrected']), default='data',
               help='Selection of DATA or CORRECTED_DATA column.')
 @click.argument('ms')
-def main(noflag, band, datacolumn, ms):
+def main(noflag, band, versionname, datacolumn, ms):
 
     # Parse path into target directory to create dynamic spectra products
     if ms[-1] == '/':
         ms = ms[:-1]
-        
+   
     project = '/'.join(ms.split('/')[:-1])
     project = project if len(project) > 0 else '.'
 
-    ds_path = '{}/dynamic_spectra/{}'.format(project, band)
-    os.system('mkdir -p {}'.format(ds_path))
+    prefix = f'{versionname}_' if versionname else ''
+    ds_path = f'{project}/dynamic_spectra/{band}'
+    os.system(f'mkdir -p {ds_path}')
 
     pols = ['XX', 'XY', 'YX', 'YY']
 
     for polidx, pol in enumerate(pols):
 
-        outfile = '{}/dynamic_spectra_{}.npy'.format(ds_path, pol)
+        file_prefix = f'{ds_path}/{prefix}'
+        outfile = f'{file_prefix}dynamic_spectra_{pol}.npy'
 
         t = table(ms)
-        tf = table('{}/SPECTRAL_WINDOW'.format(ms))
+        tf = table(f'{ms}/SPECTRAL_WINDOW')
 
         # Write time and frequency arrays, discarding duplicate timesamples
         times = np.unique(t.getcol('TIME'))
-        times.dump('{}/time.npy'.format(ds_path, project))
-        tf[0]['CHAN_FREQ'].dump('{}/freq.npy'.format(ds_path, project))
+        times.dump(f'{file_prefix}time.npy')
+        tf[0]['CHAN_FREQ'].dump(f'{file_prefix}freq.npy')
 
         val = len(times)
 

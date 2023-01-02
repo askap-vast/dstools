@@ -15,16 +15,17 @@ logger = logging.getLogger(__name__)
 @click.option('-r', '--real', is_flag=True, default=True)
 @click.option('-i', '--imag', is_flag=True, default=False)
 @click.option('-s', '--stokes', default='IQUV')
-@click.option('-x', '--crosspols', is_flag=True, default=False)
-@click.option('-S', '--save', is_flag=True, default=False)
-@click.option('-a', '--acf', is_flag=True, default=False)
+@click.option('-d', '--dspec', is_flag=True, default=False)
 @click.option('-l', '--lightcurve', is_flag=True, default=False)
 @click.option('-p', '--spectrum', is_flag=True, default=False)
+@click.option('-x', '--crosspols', is_flag=True, default=False)
+@click.option('-a', '--acf', is_flag=True, default=False)
 @click.option('-F', '--fold', is_flag=True, default=False)
 @click.option('-T', '--period', default=None, type=float)
 @click.option('-o', '--period_offset', default=0, type=float)
 @click.option('-C', '--calscans', is_flag=True, default=True)
 @click.option('-B', '--band', default='L', type=click.Choice(['low', 'mid', 'L', 'C', 'X']))
+@click.option('-S', '--save', is_flag=True, default=False)
 @click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.argument('project')
@@ -37,16 +38,17 @@ def main(
     real,
     imag,
     stokes,
-    crosspols,
-    save,
-    acf,
+    dspec,
     lightcurve,
     spectrum,
+    crosspols,
+    acf,
     fold,
     period,
     period_offset,
     calscans,
     band,
+    save,
     versionname,
     verbose,
     project,
@@ -73,33 +75,37 @@ def main(
         fold=fold,
         period=period,
         period_offset=period_offset,
+        save=save,
     )
 
     # Dynamic Spectrum
     # --------------------------------------
-    for s in stokes:
-        if real:
-            fig, ax = ds.plot_ds(stokes=s, cmax=cmax[s], save=save)
-        if imag:
-            fig, ax = ds.plot_ds(stokes=s, cmax=cmax[s], save=save, imag=True)
+    if dspec:
+        for s in stokes:
+            if real:
+                ds.plot_ds(stokes=s, cmax=cmax[s])
+            if imag:
+                ds.plot_ds(stokes=s, cmax=cmax[s], imag=True)
 
+    # Cross-polarisations sqrt(U^2 + V^2)
     if crosspols:
-        fig, ax = ds.plot_crosspol_ds(cmax=cmax['I'], save=save)
+        ds.plot_crosspol_ds(cmax=cmax['I'])
 
     # Spectrum
     # --------------------------------------
     if spectrum:
-        fig, ax = ds.plot_spectrum(save=save)
+        ds.plot_spectrum()
 
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        fig, ax = ds.plot_lightcurve(save=save)
+        ds.plot_lightcurve()
 
     # Dynamic Spectrum 2D Auto-correlation Function
     # --------------------------------------
     if acf:
-        fig, ax = ds.plot_acf(save=save)
+        for s in stokes:
+            ds.plot_acf(stokes=s)
 
     plt.show()
 
