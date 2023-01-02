@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 @click.option('-a', '--acf', is_flag=True, default=False)
 @click.option('-l', '--lightcurve', is_flag=True, default=False)
 @click.option('-p', '--spectrum', is_flag=True, default=False)
+@click.option('-F', '--fold', is_flag=True, default=False)
+@click.option('-T', '--period', default=None, type=float)
+@click.option('-o', '--period_offset', default=0, type=float)
 @click.option('-C', '--calscans', is_flag=True, default=True)
 @click.option('-B', '--band', default='L', type=click.Choice(['low', 'mid', 'L', 'C', 'X']))
 @click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
@@ -39,6 +42,9 @@ def main(
     acf,
     lightcurve,
     spectrum,
+    fold,
+    period,
+    period_offset,
     calscans,
     band,
     versionname,
@@ -57,7 +63,17 @@ def main(
         'V': cmax_v,
     }
 
-    ds = DynamicSpectrum(project, band=band, calscans=calscans, tavg=tavg, favg=favg, prefix=prefix)
+    ds = DynamicSpectrum(
+        project=project,
+        band=band,
+        calscans=calscans,
+        tavg=tavg,
+        favg=favg,
+        prefix=prefix,
+        fold=fold,
+        period=period,
+        period_offset=period_offset,
+    )
 
     # Dynamic Spectrum
     # --------------------------------------

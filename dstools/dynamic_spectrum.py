@@ -11,9 +11,13 @@ from scipy.signal import correlate
 logger = logging.getLogger(__name__)
 
 class DynamicSpectrum:
-    def __init__(self, project, band='L', tavg=1, favg=1, calscans=True, prefix=''):
+    def __init__(self, project, band='L', tavg=1, favg=1, calscans=True, prefix='', period=None, period_offset=0, fold=False):
         self.src = project.split('/')[-1]
         self.band = band
+
+        self.period = period
+        self.period_offset = period_offset
+        self.fold = fold
 
 
         self.ds_path = f'{project}/dynamic_spectra/{band}'
@@ -26,8 +30,33 @@ class DynamicSpectrum:
 
         self.tmin = self.time[0]
         self.tmax = self.time[-1]
-        self.fmin = self.freq[0]
-        self.fmax = self.freq[-1]
+        self.fmin = self.freq[-1]
+        self.fmax = self.freq[0]
+
+    def _fold(self, data):
+
+        # Calculate number of pixels in each chunk
+        pixel_duration = self.avg_scan_dt * self.tavg
+        chunk_length = min(int(self.period // pixel_duration), len(data))
+
+        # Create left-padded zeros, derived from period phase offset
+        offset = (0.5 + self.period_offset) * self.period 
+        leftpad_length = int(offset // self.avg_scan_dt)
+        leftpad_chunk = np.zeros((leftpad_length, data.shape[1]))
+
+        # Create right-padded zeros
+        rightpad_length = chunk_length - (leftpad_length + len(data)) % chunk_length
+        rightpad_chunk = np.zeros((rightpad_length, data.shape[1]))
+
+        # Stack and split data
+        data = np.vstack((leftpad_chunk, data, rightpad_chunk))
+        numsplits = int(data.shape[0] // chunk_length)
+        arrays = np.split(data, numsplits)
+
+        # Compute average along stack axis
+        data = np.mean(arrays, axis=0)
+
+        return data
 
     def _get_scan_intervals(self):
         '''Find indices of start/end of each calibrator scan cycle'''
@@ -136,6 +165,17 @@ class DynamicSpectrum:
         U = np.flip(U, axis=1)
         V = np.flip(V, axis=1)
 
+        # Fold data to selected period
+        if self.fold:
+
+            if not self.period:
+                raise ValueError("Must pass period argument when folding.")
+
+            I = self._fold(I)
+            Q = self._fold(Q)
+            U = self._fold(U)
+            V = self._fold(V)
+
         self.data = {'I': I, 'Q': Q, 'U': U, 'V': V}
 
     def rebin(self, o, n, axis):
@@ -219,7 +259,7 @@ class DynamicSpectrum:
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(
             np.transpose(data),
-            extent=[self.tmin, self.tmax, self.fmax, self.fmin],
+            extent=[self.tmin, self.tmax, self.fmin, self.fmax],
             aspect='auto',
             origin='lower',
             norm=norm,
@@ -251,6 +291,7 @@ class DynamicSpectrum:
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
 
+        tmin, tmax = (-0.5, 0.5) if self.fold else (self.tmin, self.tmax)
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
         cmin = -2 if stokes == 'I' else -cmax
         cmax = cmax
@@ -258,7 +299,7 @@ class DynamicSpectrum:
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(
             np.transpose(data),
-            extent=[self.tmin, self.tmax, self.fmax, self.fmin],
+            extent=[tmin, tmax, self.fmin, self.fmax],
             aspect='auto',
             origin='lower',
             norm=norm,
@@ -270,7 +311,9 @@ class DynamicSpectrum:
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label('Flux Density (mJy)')
-        ax.set_xlabel('Time (hours)')
+
+        xlabel = 'Phase' if self.fold else 'Time (hours)'
+        ax.set_xlabel(xlabel)
         ax.set_ylabel('Frequency (MHz)')
 
         if save:
