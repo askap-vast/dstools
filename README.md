@@ -38,6 +38,7 @@ where `<PROJECT_NAME>` can be whatever you like and `<TARGET_NAME>` is the name 
 * CASA 6
 * python-casacore
 * click
+* colorlog
 * numpy
 * astropy
 * pandas
@@ -128,13 +129,34 @@ dstools-make-dspec --help
 
 ## Plotting ##
 
-`dstools-plot-dspec` is a convenience script for plotting the dynamic spectra produced by `dstools-make-dspec`.
+`dstools-plot-dspec` is a convenience script for plotting the dynamic spectra produced by `dstools-make-dspec`, as well as functionality to produce 1D lightcurves and spectra, 2D auto-correlation functions, and fold the data to a specified period before plotting.
 
-Run the script with
+To produce a basic dynamic spectrum, run the script with
 ```
-dstools-plot-dspec -f <FREQ_AVG> -t <TIME_AVG> reduced/<PROJECT_NAME>/<TARGET_NAME>
+dstools-plot-dspec -d -f <FREQ_AVG> -t <TIME_AVG> reduced/<PROJECT_NAME>/<TARGET_NAME>
 ```
 where `<FREQ_AVG>` and `<TIME_AVG>` are integer factors to average / rebin the data by. See other option details with
 ```
 dstools-plot-dspec --help
+```
+
+`dstools` can also be imported into your own scripts/notebooks as a package for more customised plotting. The main object is `DynamicSpectrum` which can be created as follows:
+```
+import matplotlib.pyplot as plt
+from dstools.dynamic_spectrum import DynamicSpectrum
+
+# Create DS object
+ds = DynamicSpectrum(
+    project='reduced/<PROJECT_NAME>/<TARGET_NAME>',
+    tavg=<TIME_AVG>,
+    favg=<FREQ_AVG>,
+)
+
+# Plot dynamic spectrum with real visibilities and color-scale clipped at 20 mJy/beam
+fig, ax = ds.plot_ds(stokes='I', cmax=20, imag=False)
+
+# Add or modify custom plot elements here using the fig and ax objects
+...
+
+plt.show()
 ```

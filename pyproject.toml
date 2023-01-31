@@ -12,6 +12,7 @@ pandas = "^1.4.1"
 matplotlib = "^3.5.1"
 python-casacore = "^3.4.0"
 numpy = "^1.22.2"
+colorlog = "^6.7.0"
 
 [tool.poetry.dev-dependencies]
 
