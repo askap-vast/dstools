@@ -94,12 +94,12 @@ def main(
     # Spectrum
     # --------------------------------------
     if spectrum:
-        ds.plot_spectrum()
+        ds.plot_spectrum(stokes=stokes)
 
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        ds.plot_lightcurve()
+        ds.plot_lightcurve(stokes=stokes)
 
     # Dynamic Spectrum 2D Auto-correlation Function
     # --------------------------------------

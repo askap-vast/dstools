@@ -193,6 +193,79 @@ class DynamicSpectrum:
 
         self.data = {'I': I, 'Q': Q, 'U': U, 'V': V}
 
+    def _plot_1d(self, axis, stokes):
+        
+        fig, ax = plt.subplots(figsize=(7, 5))
+
+        # Average along opposite axis
+        avg_axis = int(not axis)
+
+        bins = self.data['I'].shape[axis]
+
+        if axis == 0:
+            ax.set_xlabel('Time (hours)')
+            plottype = 'lc'
+            valmin, valmax = (-0.5, 0.5) if self.fold else (self.tmin, self.tmax)
+
+        else:
+            ax.set_xlabel('Frequency (MHz)')
+            plottype = 'spectrum'
+            valmin, valmax = self.fmin, self.fmax
+
+        diff = (valmax - valmin) / bins
+        x = np.array([valmin + i * diff for i in range(bins)])
+
+        for pol in stokes:
+
+            y = self.data[pol].mean(axis=avg_axis)
+            ax.plot(x, y.real, label=pol)
+
+            if axis == 0:
+                label = 'time'
+                values = self.time_start + x * u.hour
+            else:
+                label = 'frequency'
+                values = self.fmin * x * u.MHz
+            
+            df = pd.DataFrame({
+                label: values,
+                'flux_density': y.real.reshape(1, -1)[0]
+            })
+            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
+            df.dropna().to_csv(
+                f'{self.ds_path}/{self.src.lower()}_{plottype}_stokes{pol.lower()}.csv'
+            )
+
+
+        # Calculate rms from imaginary Stokes I data
+        i = self.data['I'].mean(axis=avg_axis)
+        rms = np.sqrt(np.mean(np.square(i.imag)))
+        noisebins = len(i.imag) // 20
+        diff = (valmax - valmin) / noisebins
+
+        x = np.array([valmin + i * diff for i in range(noisebins)])
+
+        noisearray = np.square(i.imag.reshape(len(i.imag), 1))
+        noise = np.sqrt(self.rebin2D(noisearray, (noisebins, 1)))
+        
+        ax.plot(x, noise, color='r')
+        ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
+        ax.axhline(-rms, ls=':', color='r')
+
+        ax.legend()
+        
+        ax.set_ylabel('Flux Density (mJy)')
+
+        if self.save:
+            fig.savefig(
+                f'{self.ds_path}/{self.src.lower()}_{bins}bins.png',
+                bbox_inches='tight',
+                format='png',
+                dpi=300,
+            )
+
+        return fig, ax
+
     def rebin(self, o, n, axis):
         '''Create unitary array compression matrix from o -> n length.
 
@@ -301,6 +374,18 @@ class DynamicSpectrum:
 
         return fig, ax
 
+    def plot_spectrum(self, stokes):
+
+        sp_fig, sp_ax = self._plot_1d(axis=1, stokes=stokes)
+
+        return sp_fig, sp_ax
+
+    def plot_lightcurve(self, stokes):
+
+        lc_fig, lc_ax = self._plot_1d(axis=0, stokes=stokes)
+
+        return lc_fig, lc_ax
+
     def plot_ds(self, stokes, cmax=20, imag=False):
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
@@ -342,49 +427,6 @@ class DynamicSpectrum:
             )
 
         return fig, ax
-
-    def plot_spectrum(self):
-
-        sp_fig, sp_ax = plt.subplots(figsize=(7, 5))
-
-        favg = 1
-        fbins = self.data['I'].shape[1] // favg
-        df = (self.fmax - self.fmin) / fbins
-
-        x = [(i * df + self.fmin) for i in range(fbins)]
-
-        for pol in ['I', 'Q', 'U', 'V']:
-            y = self.data[pol].mean(axis=0)
-
-            sp_ax.plot(x, y.real, label=pol)
-
-            df = pd.DataFrame({
-                'time': self.time_start + x * u.hour,
-                'flux_density': y.real.reshape(1, -1)[0]
-            })
-            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
-            df.dropna().to_csv(f'{self.ds_path}/lc_stokes{pol.lower()}.csv')
-
-
-            if pol == 'I':
-                rms = np.sqrt(np.mean(np.square(y.imag)))
-
-        sp_ax.set_ylabel('Flux Density (mJy)')
-        sp_ax.set_xlabel('Frequency (MHz)')
-        sp_ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
-        sp_ax.axhline(-rms, ls=':', color='r')
-        sp_ax.legend()
-
-        if self.save:
-            path_template = '{}/{}_spectrum_fbins{}.png'
-            sp_fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), fbins),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-        return sp_fig, sp_ax
 
     def plot_acf(self, stokes='I'):
 
@@ -439,104 +481,3 @@ class DynamicSpectrum:
 
         return acf_fig, acf_ax, acfz_fig, acfz_ax
 
-    def _plot_1d(self, axis):
-        
-        fig, ax = plt.subplots(figsize=(7, 5))
-
-        bins = self.data['I'].shape[axis]
-
-        if axis == 0:
-            
-            xlabel = 'Time (hours)'
-            plottype = 'lc'
-            diff = (self.tmax - self.tmin) / bins
-        else:
-
-            xlabel = 'Frequency (MHz)'
-            plottype = 'spectrum'
-            diff = (self.fmax - self.fmin) / bins
-        
-
-        x = np.array([i * diff for i in range(bins)])
-
-        for pol in ['I', 'Q', 'U', 'V']:
-            y = self.data[pol].mean(axis=axis)
-
-            ax.plot(x, y.real, label=pol)
-
-            if axis == 0:
-                label = 'time'
-                values = self.time_start + x * u.hour
-            else:
-                label = 'frequency'
-                values = x * u.MHz
-            
-            df = pd.DataFrame({
-                label: values,
-                'flux_density': y.real.reshape(1, -1)[0]
-            })
-            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
-            df.dropna().to_csv(f'{self.ds_path}/{plottype}_stokes{pol.lower()}.csv')
-
-            if pol == 'I':
-                rms = np.sqrt(np.mean(np.square(y.imag)))
-
-        ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
-        ax.axhline(-rms, ls=':', color='r')
-        ax.legend()
-        
-        ax.set_ylabel('Flux Density (mJy)')
-        ax.set_xlabel(xlabel)
-
-        if self.save:
-            path_template = '{}/{}_{}_tbins{}.png'
-            fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), bins),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-        return fig, ax
- 
-    def plot_lightcurve(self):
-
-        lc_fig, lc_ax = plt.subplots(figsize=(7, 5))
-
-        tavg = 1
-        tbins = self.data['I'].shape[0] // tavg
-        dt = (self.tmax - self.tmin) / tbins
-
-        x = np.array([i * dt for i in range(tbins)])
-
-        for pol in ['I', 'Q', 'U', 'V']:
-            y = self.data[pol].mean(axis=1)
-
-            lc_ax.plot(x, y.real, label=pol)
-
-            df = pd.DataFrame({
-                'time': self.time_start + x * u.hour,
-                'flux_density': y.real.reshape(1, -1)[0]
-            })
-            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
-            df.dropna().to_csv(f'{self.ds_path}/lc_stokes{pol.lower()}.csv')
-
-            if pol == 'I':
-                rms = np.sqrt(np.mean(np.square(y.imag)))
-
-        lc_ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
-        lc_ax.axhline(-rms, ls=':', color='r')
-        lc_ax.legend()
-        lc_ax.set_ylabel('Flux Density (mJy)')
-        lc_ax.set_xlabel('Time (hours)')
-
-        if self.save:
-            path_template = '{}/{}_lc_tbins{}.png'
-            lc_fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), tbins),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-        return lc_fig, lc_ax
