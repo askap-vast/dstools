@@ -158,16 +158,19 @@ def main(
 
         while True:
 
-            lowres = prompt('Test with low resolution?')
-            testcell = f'{cell*5:2f}arcsec' if lowres else cellsize
-            testimsize = imsize // 5 if lowres else imsize
-
-            # Optionally specify short timerange for quicker test imaging
-            listobs(vis=testms)
-            timerange = input('Enter test imaging timerange (empty for full observation): ')
-
             test_image = prompt("Make test image?")
             if test_image:
+
+                # Optionally specify low-res and short timerange for quicker test imaging
+                lowres = prompt('Test with low resolution?')
+                testcell = f'{cell*5:2f}arcsec' if lowres else cellsize
+                testimsize = imsize // 5 if lowres else imsize
+
+                # Optionally specify short timerange for quicker test imaging
+                listobs(vis=testms)
+                timerange = input('Enter test imaging timerange (empty for full observation): ')
+
+
                 tclean(
                     vis=testms,
                     field=field,
