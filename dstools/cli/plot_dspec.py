@@ -1,7 +1,7 @@
 import click
 import logging
 import matplotlib.pyplot as plt
-from astroutils.logger import setupLogger
+from dstools.utils import setupLogger
 from dstools.dynamic_spectrum import DynamicSpectrum
 
 logger = logging.getLogger(__name__)
