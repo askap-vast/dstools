@@ -105,7 +105,7 @@ def main(
     # --------------------------------------
     if acf:
         for s in stokes:
-            ds.plot_acf(stokes=s)
+            ds.plot_acf(stokes=s, contrast=0.2)
 
     plt.show()
 

@@ -428,7 +428,7 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def plot_acf(self, stokes='I'):
+    def plot_acf(self, stokes='I', contrast=0.4):
 
         # Compute auto-correlation and select upper-right quadrant
         acf2d = correlate(self.data[stokes].real, self.data[stokes].real)
@@ -441,7 +441,7 @@ class DynamicSpectrum:
         # Plot 2D ACF
         acf_fig, acf_ax = plt.subplots(figsize=(7, 5))
 
-        norm = ImageNormalize(acf2d, interval=ZScaleInterval(contrast=0.8))
+        norm = ImageNormalize(acf2d, interval=ZScaleInterval(contrast=contrast))
         im = acf_ax.imshow(
             acf2d,
             extent=[0, self.tmax-self.tmin, 0, self.fmax-self.fmin],
