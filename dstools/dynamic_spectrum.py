@@ -494,7 +494,7 @@ class DynamicSpectrum:
         acfz_fig, acfz_ax = plt.subplots(figsize=(7, 5))
 
         zero_trace_acf = acf2d[-1, 1:]
-        time_lag = [(i+1)*self.avg_scan_dt for i in range(len(zero_trace_acf))]
+        time_lag = np.linspace(0, self.tmax-self.tmin, len(zero_trace_acf))
         acfz_ax.plot(
             time_lag,
             zero_trace_acf,
