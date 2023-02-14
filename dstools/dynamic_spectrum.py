@@ -27,6 +27,7 @@ class DynamicSpectrum:
 
     calscans: bool=True
     fold: bool=False
+    trim: bool=True
     save: bool=False
 
     def __post_init__(self):
@@ -100,18 +101,34 @@ class DynamicSpectrum:
 
         file_prefix = f'{self.ds_path}/{self.prefix}'
 
-        self.freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
+        XX = np.load(f'{file_prefix}dynamic_spectra_XX.npy', allow_pickle=True) * 1e3
+        XY = np.load(f'{file_prefix}dynamic_spectra_XY.npy', allow_pickle=True) * 1e3
+        YX = np.load(f'{file_prefix}dynamic_spectra_YX.npy', allow_pickle=True) * 1e3
+        YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
+
+        # Remove flagged channels at top/bottom of band
+        if self.trim:
+            allpols = np.isfinite(np.nansum((XX + XY + YX + YY), axis=0))
+            minfreq = np.argmax(allpols)
+            maxfreq = -np.argmax(allpols[::-1]) + 1
+        else:
+            minfreq = 0
+            maxfreq = -1
+
+        self.XX = XX[:, minfreq:maxfreq]
+        self.XY = XY[:, minfreq:maxfreq]
+        self.YX = YX[:, minfreq:maxfreq]
+        self.YY = YY[:, minfreq:maxfreq]
+
+        freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
+        self.freq = freq[minfreq:maxfreq]
         self.time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
 
         self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
         self.time_start.format = 'iso'
 
         self.time -= self.time[0]
-
-        self.XX = np.load(f'{file_prefix}dynamic_spectra_XX.npy', allow_pickle=True) * 1e3
-        self.XY = np.load(f'{file_prefix}dynamic_spectra_XY.npy', allow_pickle=True) * 1e3
-        self.YX = np.load(f'{file_prefix}dynamic_spectra_YX.npy', allow_pickle=True) * 1e3
-        self.YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
+        
 
     def _stack_cal_scans(self, scan_start_indices, scan_end_indices):
         '''Insert null data representing off-source time.'''

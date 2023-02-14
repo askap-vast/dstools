@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 @click.option('-B', '--band', default='L', type=click.Choice(['low', 'mid', 'L', 'C', 'X']))
 @click.option('-S', '--save', is_flag=True, default=False)
 @click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
+@click.option('-R', '--trim', is_flag=True, default=True,
+              help='Remove flagged channels at top/bottom of band.')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.argument('project')
 def main(
@@ -44,6 +46,7 @@ def main(
     crosspols,
     acf,
     fold,
+    trim,
     period,
     period_offset,
     calscans,
@@ -73,6 +76,7 @@ def main(
         favg=favg,
         prefix=prefix,
         fold=fold,
+        trim=trim,
         period=period,
         period_offset=period_offset,
         save=save,
