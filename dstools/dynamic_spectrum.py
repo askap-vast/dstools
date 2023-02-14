@@ -67,7 +67,7 @@ class DynamicSpectrum:
         arrays = np.split(data, numsplits)
 
         # Compute average along stack axis
-        data = np.mean(arrays, axis=0)
+        data = np.nanmean(arrays, axis=0)
 
         return data
 
@@ -152,7 +152,7 @@ class DynamicSpectrum:
 
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
-            nan_chunk = np.full((int(num_scans) // self.tavg, fbins), 0 + 0 * 1j)
+            nan_chunk = np.full((int(num_scans) // self.tavg, fbins), np.nan + np.nan * 1j)
 
             new_data_XX = np.vstack([new_data_XX, np.vstack([XX_chunk, nan_chunk])])
             new_data_XY = np.vstack([new_data_XY, np.vstack([XY_chunk, nan_chunk])])
@@ -160,10 +160,10 @@ class DynamicSpectrum:
             new_data_YY = np.vstack([new_data_YY, np.vstack([YY_chunk, nan_chunk])])
 
         # Mask out NaN values
-        self.XX = np.ma.masked_invalid(new_data_XX[1:])
-        self.XY = np.ma.masked_invalid(new_data_XY[1:])
-        self.YX = np.ma.masked_invalid(new_data_YX[1:])
-        self.YY = np.ma.masked_invalid(new_data_YY[1:])
+        self.XX = new_data_XX[1:]
+        self.XY = new_data_XY[1:]
+        self.YX = new_data_YX[1:]
+        self.YY = new_data_YY[1:]
 
     def _make_stokes(self):
         '''Convert instrumental polarisations to Stokes products.'''
@@ -180,6 +180,11 @@ class DynamicSpectrum:
         U = np.flip(U, axis=1)
         V = np.flip(V, axis=1)
 
+        # Set masked values to NaN (chunk stacking causes these to be complex zeros)
+        I[I == 0.0 + 0.0j] = np.nan
+        Q[Q == 0.0 + 0.0j] = np.nan
+        U[U == 0.0 + 0.0j] = np.nan
+        V[V == 0.0 + 0.0j] = np.nan
         # Fold data to selected period
         if self.fold:
 
@@ -217,7 +222,7 @@ class DynamicSpectrum:
 
         for pol in stokes:
 
-            y = self.data[pol].mean(axis=avg_axis)
+            y = np.nanmean(self.data[pol], axis=avg_axis)
             ax.plot(x, y.real, label=pol)
 
             if axis == 0:
@@ -231,7 +236,6 @@ class DynamicSpectrum:
                 label: values,
                 'flux_density': y.real.reshape(1, -1)[0]
             })
-            df.loc[df.flux_density.isin([-1.000000, 1.000000, 0.000000]), 'flux_density'] = np.nan
             df.dropna().to_csv(
                 f'{self.ds_path}/{self.src.lower()}_{plottype}_stokes{pol.lower()}.csv'
             )
