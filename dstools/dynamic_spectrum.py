@@ -1,4 +1,5 @@
 import logging
+import warnings
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
@@ -47,6 +48,7 @@ class DynamicSpectrum:
         self.fmax = self.freq[0]
 
     def _fold(self, data):
+        '''Average chunks of data folding at specified period.'''
 
         # Calculate number of pixels in each chunk
         pixel_duration = self.avg_scan_dt * self.tavg
@@ -72,17 +74,19 @@ class DynamicSpectrum:
         return data
 
     def _get_scan_intervals(self):
-        '''Find indices of start/end of each calibrator scan cycle'''
+        '''Find indices of start/end of each calibrator scan cycle.'''
 
         dts = [0]
-        dts.extend([self.time[i] - self.time[i - 1] for i in range(1, len(self.time))])
+        dts.extend([self.time[i] - self.time[i-1] for i in range(1, len(self.time))])
         dts = np.array(dts)
 
         # Locate indices signaling beginning of cal-scan (scan intervals longer than ~10 seconds)
         scan_start_indices = np.where(np.abs(dts) > 10.1 / 3600)[0]
 
-        # End indices are just prior to the next start index, then insert first scan start index
+        # End indices are just prior to the next start index, then 
         scan_end_indices = scan_start_indices - 1
+
+        # Insert first scan start index and last scan end index
         scan_start_indices = np.insert(scan_start_indices, 0, 0)
         scan_end_indices = np.append(scan_end_indices, len(self.time) - 1)
 
@@ -92,7 +96,7 @@ class DynamicSpectrum:
         return avg_scan_dt, scan_start_indices, scan_end_indices
 
     def _load_data(self):
-        '''Load instrumental pols and time/freq data, converting to MHz, s, and mJy'''
+        '''Load instrumental pols and time/freq data, converting to MHz, s, and mJy.'''
 
         file_prefix = f'{self.ds_path}/{self.prefix}'
 
@@ -110,7 +114,7 @@ class DynamicSpectrum:
         self.YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
 
     def _stack_cal_scans(self, scan_start_indices, scan_end_indices):
-        '''Insert null data representing off-source time'''
+        '''Insert null data representing off-source time.'''
 
         # Calculate number of cycles in each calibrator/stow break
         time_end_break = self.time[scan_start_indices[1:]]
@@ -185,6 +189,7 @@ class DynamicSpectrum:
         Q[Q == 0.0 + 0.0j] = np.nan
         U[U == 0.0 + 0.0j] = np.nan
         V[V == 0.0 + 0.0j] = np.nan
+
         # Fold data to selected period
         if self.fold:
 
@@ -207,24 +212,29 @@ class DynamicSpectrum:
 
         bins = self.data['I'].shape[axis]
 
+        # Set plot parameters for either lightcurve or 1D spectrum
         if axis == 0:
-            ax.set_xlabel('Time (hours)')
             plottype = 'lc'
             valmin, valmax = (-0.5, 0.5) if self.fold else (self.tmin, self.tmax)
-
+            ax.set_xlabel('Time (hours)')
         else:
-            ax.set_xlabel('Frequency (MHz)')
             plottype = 'spectrum'
             valmin, valmax = self.fmin, self.fmax
+            ax.set_xlabel('Frequency (MHz)')
 
-        diff = (valmax - valmin) / bins
-        x = np.array([valmin + i * diff for i in range(bins)])
+        interval = (valmax - valmin) / bins
+        x = np.array([valmin + i*interval for i in range(bins)])
 
         for pol in stokes:
 
-            y = np.nanmean(self.data[pol], axis=avg_axis)
+            # Catch RuntimeWarning that occurs when averaging empty time/freq slices
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                y = np.nanmean(self.data[pol], axis=avg_axis)
+
             ax.plot(x, y.real, label=pol)
 
+            # Record to csv
             if axis == 0:
                 label = 'time'
                 values = self.time_start + x * u.hour
@@ -242,17 +252,11 @@ class DynamicSpectrum:
 
 
         # Calculate rms from imaginary Stokes I data
-        i = self.data['I'].mean(axis=avg_axis)
-        rms = np.sqrt(np.mean(np.square(i.imag)))
-        noisebins = len(i.imag) // 20
-        diff = (valmax - valmin) / noisebins
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            v = np.nanmean(self.data['I'], axis=avg_axis)
+            rms = np.nanstd(v.imag)
 
-        x = np.array([valmin + i * diff for i in range(noisebins)])
-
-        noisearray = np.square(i.imag.reshape(len(i.imag), 1))
-        noise = np.sqrt(self.rebin2D(noisearray, (noisebins, 1)))
-        
-        ax.plot(x, noise, color='r')
         ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
         ax.axhline(-rms, ls=':', color='r')
 
@@ -262,7 +266,7 @@ class DynamicSpectrum:
 
         if self.save:
             fig.savefig(
-                f'{self.ds_path}/{self.src.lower()}_{bins}bins.png',
+                f'{self.ds_path}/{self.src.lower()}_{plottype}_{bins}bins.png',
                 bbox_inches='tight',
                 format='png',
                 dpi=300,
@@ -290,6 +294,11 @@ class DynamicSpectrum:
         '''
 
         compressor = np.zeros((n, o))
+
+        # Exit early with empty array if chunk is empty
+        if compressor.size == 0:
+            return compressor
+
         comp_ratio = n / o
 
         nrow = 0
@@ -297,6 +306,7 @@ class DynamicSpectrum:
 
         budget = 1
         overflow = 0
+
         # While loop to avoid visiting n^2 zero-value cells
         while nrow < n and ncol < o:
 
@@ -305,30 +315,33 @@ class DynamicSpectrum:
                 value = overflow
                 overflow = 0
                 budget -= value
-                dnrow = 0
-                dncol = 1
+                row_shift = 0
+                col_shift = 1
             # Use remaining budget if at end of current row
             elif budget < comp_ratio:
                 value = budget
                 overflow = comp_ratio - budget
                 budget = 1
-                dnrow = 1
-                dncol = 0
+                row_shift = 1
+                col_shift = 0
             # Otherwise spend n / o and move to next column
             else:
                 value = comp_ratio
                 budget -= value
-                dnrow = 0
-                dncol = 1
+                row_shift = 0
+                col_shift = 1
 
             compressor[nrow, ncol] = value
-            nrow += dnrow
-            ncol += dncol
+            nrow += row_shift
+            ncol += col_shift
 
         return compressor if axis == 0 else compressor.T
 
     def rebin2D(self, array, new_shape):
         '''Re-bin along time / frequency axes conserving flux.'''
+
+        if new_shape == array.shape:
+            return array
 
         if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
             raise ValueError('New shape should not be greater than old shape in either dimension')
@@ -339,13 +352,13 @@ class DynamicSpectrum:
 
         return result
 
-    def plot_crosspol_ds(self, cmax=20):
+    def plot_crosspol_ds(self, cmax=20, cmin=0):
 
-        data = np.sqrt(np.abs(self.data['U']**2 + self.data['V']**2))
+        U = self.data['U']
+        V = self.data['V']
+        data = np.sqrt(np.abs(U**2 + V**2))
 
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
-        cmax = cmax
-        cmin = 0
         
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(
@@ -368,9 +381,9 @@ class DynamicSpectrum:
         if self.save:
             data.dump(f'{self.ds_path}/{self.src.lower()}_crosspol_ds.npy')
 
-            path_template = '{}/{}_crosspol_subbed_ds_fbins{}-tbins{}.png'
+            path_template = '{}/{}_crosspol_subbed_ds_favg{}-tavg{}.png'
             fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), 'REPL', 'REPL'),
+                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
                 bbox_inches='tight',
                 format='png',
                 dpi=300,
@@ -378,17 +391,17 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def plot_spectrum(self, stokes):
-
-        sp_fig, sp_ax = self._plot_1d(axis=1, stokes=stokes)
-
-        return sp_fig, sp_ax
-
     def plot_lightcurve(self, stokes):
 
         lc_fig, lc_ax = self._plot_1d(axis=0, stokes=stokes)
 
         return lc_fig, lc_ax
+
+    def plot_spectrum(self, stokes):
+
+        sp_fig, sp_ax = self._plot_1d(axis=1, stokes=stokes)
+
+        return sp_fig, sp_ax
 
     def plot_ds(self, stokes, cmax=20, imag=False):
 
@@ -422,9 +435,9 @@ class DynamicSpectrum:
         if self.save:
             data.dump(f'{self.ds_path}/{self.src.lower()}_{stokes.lower()}_ds.npy')
 
-            path_template = '{}/{}_stokes{}_subbed_ds_fbins{}-tbins{}.png'
+            path_template = '{}/{}_stokes{}_subbed_ds_favg{}-tavg{}.png'
             fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), stokes.lower(), 'REPL', 'REPL'),
+                path_template.format(self.ds_path, self.src.lower(), stokes.lower(), self.favg, self.tavg),
                 bbox_inches='tight',
                 format='png',
                 dpi=300,
