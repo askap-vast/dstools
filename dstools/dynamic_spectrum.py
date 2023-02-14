@@ -371,7 +371,13 @@ class DynamicSpectrum:
             cmap='plasma',
         )
         ax.text(
-            0.05, 0.95, r'sqrt(U^2 + V^2)', color='white', weight='bold', transform=ax.transAxes
+            0.05,
+            0.95,
+            r'sqrt(U^2 + V^2)',
+            color='white',
+            weight='heavy',
+            path_effects=[pe.withStroke(linewidth=2, foreground='black')],
+            transform=ax.transAxes,
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label('Flux Density (mJy)')
@@ -423,7 +429,13 @@ class DynamicSpectrum:
             cmap='plasma',
         )
         ax.text(
-            0.05, 0.95, f'Stokes {stokes}', color='white', weight='bold', transform=ax.transAxes
+            0.05,
+            0.95,
+            f'Stokes {stokes}',
+            color='white',
+            weight='heavy',
+            path_effects=[pe.withStroke(linewidth=2, foreground='black')],
+            transform=ax.transAxes,
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label('Flux Density (mJy)')
