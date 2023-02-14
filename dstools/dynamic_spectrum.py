@@ -191,8 +191,8 @@ class DynamicSpectrum:
 
         # Compute Stokes products from instrumental pols
         I = (self.XX + self.YY) / 2
-        Q = - (self.XY + self.YX) / 2
-        U = - (self.XX - self.YY) / 2
+        Q = (self.XX - self.YY) / 2
+        U = (self.XY + self.YX) / 2
         V = 1j * (self.XY - self.YX) / 2
 
         # Flip frequency axis of data to intuitive order
