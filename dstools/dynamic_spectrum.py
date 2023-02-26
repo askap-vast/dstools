@@ -160,10 +160,10 @@ class DynamicSpectrum:
             tbins = (end_index - start_index) // self.tavg
 
             # Select each contiguous on-target chunk of data
-            XX_chunk = self.XX[start_index:end_index, :]
-            XY_chunk = self.XY[start_index:end_index, :]
-            YX_chunk = self.YX[start_index:end_index, :]
-            YY_chunk = self.YY[start_index:end_index, :]
+            XX_chunk = self.XX[start_index:end_index+1, :]
+            XY_chunk = self.XY[start_index:end_index+1, :]
+            YX_chunk = self.YX[start_index:end_index+1, :]
+            YY_chunk = self.YY[start_index:end_index+1, :]
             
             # Rebin data with selected time and frequency averaging factors
             XX_chunk = self.rebin2D(XX_chunk, (tbins, fbins))
