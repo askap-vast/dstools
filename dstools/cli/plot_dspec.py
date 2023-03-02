@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
               help='Averaging factor across frequency axis..')
 @click.option('-t', '--tavg', default=1, type=int,
               help='Averaging factor across time axis.')
+@click.option('--fmin', default=None, type=float,
+              help='Selection of minimum frequency in MHz.')
+@click.option('--fmax', default=None, type=float,
+              help='Selection of maximum frequency in MHz.')
+@click.option('--tmin', default=None, type=float,
+              help='Selection of minimum time in hours.')
+@click.option('--tmax', default=None, type=float,
+              help='Selection of maximum time in hours.')
 @click.option('-I', '--cmax_i', default=50, type=float,
               help='Maximum colormap normalisation in Stokes I.')
 @click.option('-Q', '--cmax_qu', default=10, type=float,
@@ -54,6 +62,10 @@ logger = logging.getLogger(__name__)
 def main(
     favg,
     tavg,
+    fmin,
+    fmax,
+    tmin,
+    tmax,
     cmax_i,
     cmax_qu,
     cmax_v,
@@ -94,6 +106,10 @@ def main(
         calscans=calscans,
         tavg=tavg,
         favg=favg,
+        minfreq=fmin,
+        maxfreq=fmax,
+        mintime=tmin,
+        maxtime=tmax,
         prefix=prefix,
         fold=fold,
         trim=trim,

@@ -22,6 +22,11 @@ class DynamicSpectrum:
     favg: int=1
     tavg: int=1
 
+    minfreq: float=None
+    maxfreq: float=None
+    mintime: float=None
+    maxtime: float=None
+
     period: float=None
     period_offset: float=0.
 
@@ -99,6 +104,7 @@ class DynamicSpectrum:
     def _load_data(self):
         '''Load instrumental pols and time/freq data, converting to MHz, s, and mJy.'''
 
+        # Import instrumental polarisations and time/frequency arrays
         file_prefix = f'{self.ds_path}/{self.prefix}'
 
         XX = np.load(f'{file_prefix}dynamic_spectra_XX.npy', allow_pickle=True) * 1e3
@@ -106,29 +112,55 @@ class DynamicSpectrum:
         YX = np.load(f'{file_prefix}dynamic_spectra_YX.npy', allow_pickle=True) * 1e3
         YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
 
-        # Remove flagged channels at top/bottom of band
+        freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
+        time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
+
+        # Optionally remove flagged channels at top/bottom of band
         if self.trim:
             allpols = np.isfinite(np.nansum((XX + XY + YX + YY), axis=0))
-            minfreq = np.argmax(allpols)
-            maxfreq = -np.argmax(allpols[::-1]) + 1
+            minchan = np.argmax(allpols)
+            maxchan = -np.argmax(allpols[::-1]) + 1
         else:
-            minfreq = 0
-            maxfreq = -1
+            minchan = 0
+            maxchan = -1
 
-        self.XX = XX[:, minfreq:maxfreq]
-        self.XY = XY[:, minfreq:maxfreq]
-        self.YX = YX[:, minfreq:maxfreq]
-        self.YY = YY[:, minfreq:maxfreq]
+        # Select channel range
+        if self.maxfreq:
+            if self.band == 'L':
+                minchan = np.argmax(freq < self.maxfreq)
+            else:
+                minchan = np.argmax(freq > self.minfreq)
+        if self.minfreq:
+            if self.band == 'L':
+                maxchan = -np.argmax((freq > self.minfreq)[::-1]) + 1
+            else:
+                maxchan = -np.argmax((freq < self.maxfreq)[::-1]) + 1
 
-        freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
-        self.freq = freq[minfreq:maxfreq]
-        self.time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
+        # Select time range
+        if self.mintime:
+            mintime = np.argmax(time - time[0] > self.mintime)
+        else:
+            mintime = 0
 
+        if self.maxtime:
+            maxtime = -np.argmax((time - time[0] < self.maxtime)[::-1]) + 1
+        else:
+            maxtime = -1
+
+        # Make data selection
+        self.XX = XX[mintime:maxtime, minchan:maxchan]
+        self.XY = XY[mintime:maxtime, minchan:maxchan]
+        self.YX = YX[mintime:maxtime, minchan:maxchan]
+        self.YY = YY[mintime:maxtime, minchan:maxchan]
+
+        self.freq = freq[minchan:maxchan]
+        self.time = time[mintime:maxtime]
+
+        # Identify start time and set observation start to t=0
         self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
         self.time_start.format = 'iso'
 
-        self.time -= self.time[0]
-        
+        self.time -= time[0]
 
     def _stack_cal_scans(self, scan_start_indices, scan_end_indices):
         '''Insert null data representing off-source time.'''
