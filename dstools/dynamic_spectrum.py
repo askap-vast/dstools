@@ -253,6 +253,7 @@ class DynamicSpectrum:
         self.data = {'I': I, 'Q': Q, 'U': U, 'V': V}
 
     def _plot_1d(self, axis, stokes):
+        '''Plot 1D sequence (e.g. lightcurve or 1D spectrum).'''
         
         fig, ax = plt.subplots(figsize=(7, 5))
 
@@ -322,6 +323,23 @@ class DynamicSpectrum:
             )
 
         return fig, ax
+
+    def acf(self, stokes):
+        '''Generate a 2D auto-correlation of the dynamic spectrum.'''
+
+        # Replace NaN with zeros to calculate auto-correlation
+        data = self.data[stokes].real
+        data[np.isnan(data)] = 0.
+
+        # Compute auto-correlation and select upper-right quadrant
+        acf2d = correlate(data, data)
+        acf2d = acf2d[acf2d.shape[0]//2:, acf2d.shape[1]//2:]
+
+        # Reorder time-frequency axes and normalise
+        acf2d = np.flip(acf2d, axis=1).T
+        acf2d /= np.nanmax(acf2d)
+
+        return acf2d
 
     def rebin(self, o, n, axis):
         '''Create unitary array compression matrix from o -> n length.
@@ -402,6 +420,7 @@ class DynamicSpectrum:
         return result
 
     def plot_crosspol_ds(self, cmax=20, cmin=0):
+        '''Plot quadrature sum of cross-polarisations: sqrt(U^2 + V^2).'''
 
         U = self.data['U']
         V = self.data['V']
@@ -447,18 +466,21 @@ class DynamicSpectrum:
         return fig, ax
 
     def plot_lightcurve(self, stokes):
+        '''Plot channel-averaged lightcurve.'''
 
         lc_fig, lc_ax = self._plot_1d(axis=0, stokes=stokes)
 
         return lc_fig, lc_ax
 
     def plot_spectrum(self, stokes):
+        '''Plot time-averaged spectrum.'''
 
         sp_fig, sp_ax = self._plot_1d(axis=1, stokes=stokes)
 
         return sp_fig, sp_ax
 
     def plot_ds(self, stokes, cmax=20, imag=False):
+        '''Plot dynamic spectrum.'''
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
 
@@ -507,19 +529,10 @@ class DynamicSpectrum:
         return fig, ax
 
     def plot_acf(self, stokes='I', contrast=0.4):
+        '''Plot 2D auto-correlation function of the dynamic spectrum.'''
 
-        # Replace NaN with zeros to calculate auto-correlation
-        data = self.data[stokes].real
-        data[np.isnan(data)] = 0.
-
-        # Compute auto-correlation and select upper-right quadrant
-        acf2d = correlate(data, data)
-        acf2d = acf2d[acf2d.shape[0]//2:, acf2d.shape[1]//2:]
-
-        # Reorder time-frequency axes and normalise
-        acf2d = np.flip(acf2d, axis=1).T
-        acf2d /= np.nanmax(acf2d)
-
+        acf2d = self.acf(stokes)
+        
         # Plot 2D ACF
         acf_fig, acf_ax = plt.subplots(figsize=(7, 5))
 
@@ -558,6 +571,8 @@ class DynamicSpectrum:
         acfz_ax.set_ylabel('ACF')
 
         if self.save:
+            acf2d.dump(f'{self.ds_path}/{self.src.lower()}_{stokes.lower()}_acf.npy')
+
             acf_fig.savefig(f'{self.ds_path}/{self.src.lower()}_acf.png')
             acfz_fig.savefig(f'{self.ds_path}/{self.src.lower()}_f0_acf.png')
 
