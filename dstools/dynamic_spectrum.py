@@ -508,13 +508,17 @@ class DynamicSpectrum:
 
     def plot_acf(self, stokes='I', contrast=0.4):
 
+        # Replace NaN with zeros to calculate auto-correlation
+        data = self.data[stokes].real
+        data[np.isnan(data)] = 0.
+
         # Compute auto-correlation and select upper-right quadrant
-        acf2d = correlate(self.data[stokes].real, self.data[stokes].real)
+        acf2d = correlate(data, data)
         acf2d = acf2d[acf2d.shape[0]//2:, acf2d.shape[1]//2:]
 
         # Reorder time-frequency axes and normalise
         acf2d = np.flip(acf2d, axis=1).T
-        acf2d /= acf2d.max()
+        acf2d /= np.nanmax(acf2d)
 
         # Plot 2D ACF
         acf_fig, acf_ax = plt.subplots(figsize=(7, 5))
