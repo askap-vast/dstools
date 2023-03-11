@@ -27,11 +27,12 @@ class DynamicSpectrum:
     mintime: float=None
     maxtime: float=None
 
+    fold: bool=False
     period: float=None
     period_offset: float=0.
+    fold_periods: int=2
 
     calscans: bool=True
-    fold: bool=False
     trim: bool=True
     save: bool=False
 
@@ -60,14 +61,14 @@ class DynamicSpectrum:
         pixel_duration = self.avg_scan_dt * self.tavg
         chunk_length = min(int(self.period // pixel_duration), len(data))
 
-        # Create left-padded zeros, derived from period phase offset
-        offset = (0.5 + self.period_offset) * self.period 
-        leftpad_length = int(offset // self.avg_scan_dt)
-        leftpad_chunk = np.zeros((leftpad_length, data.shape[1]))
+        # Create left-padded nans, derived from period phase offset
+        offset = (0.5 + self.period_offset) * self.period
+        leftpad_length = int(offset // pixel_duration)
+        leftpad_chunk = np.full((leftpad_length, data.shape[1]), np.nan)
 
-        # Create right-padded zeros
+        # Create right-padded nans
         rightpad_length = chunk_length - (leftpad_length + len(data)) % chunk_length
-        rightpad_chunk = np.zeros((rightpad_length, data.shape[1]))
+        rightpad_chunk = np.full((rightpad_length, data.shape[1]), np.nan)
 
         # Stack and split data
         data = np.vstack((leftpad_chunk, data, rightpad_chunk))
@@ -77,7 +78,7 @@ class DynamicSpectrum:
         # Compute average along stack axis
         data = np.nanmean(arrays, axis=0)
 
-        return data
+        return np.tile(data, (self.fold_periods, 1))
 
     def _get_scan_intervals(self):
         '''Find indices of start/end of each calibrator scan cycle.'''
@@ -265,7 +266,8 @@ class DynamicSpectrum:
         # Set plot parameters for either lightcurve or 1D spectrum
         if axis == 0:
             plottype = 'lc'
-            valmin, valmax = (-0.5, 0.5) if self.fold else (self.tmin, self.tmax)
+            phasemax = 0.5 * self.fold_periods
+            valmin, valmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
             ax.set_xlabel('Time (hours)')
         else:
             plottype = 'spectrum'
@@ -484,7 +486,8 @@ class DynamicSpectrum:
 
         data = self.data[stokes].imag if imag else self.data[stokes].real
 
-        tmin, tmax = (-0.5, 0.5) if self.fold else (self.tmin, self.tmax)
+        phasemax = 0.5 * self.fold_periods
+        tmin, tmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
         cmin = -2 if stokes == 'I' else -cmax
         cmax = cmax
