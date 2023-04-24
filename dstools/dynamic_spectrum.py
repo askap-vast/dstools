@@ -18,6 +18,17 @@ COLORS = {
     'U': 'cornflowerblue',
     'V': 'darkorange',
 }
+
+def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
+    """Slice 1D or 2D array with variable lower and upper boundaries."""
+
+    if ax2_min and ax2_max:
+        a = a[ax1_min:, :] if ax1_max == 0 else a[ax1_min:ax1_max, :]
+        a = a[:, ax2_min:] if ax2_max == 0 else a[:, ax2_min:ax2_max]
+    else:
+        a = a[ax1_min:] if ax1_max == 0 else a[ax1_min:ax1_max]
+
+    return a
 @dataclass
 class DynamicSpectrum:
 
@@ -167,16 +178,16 @@ class DynamicSpectrum:
         if self.maxtime:
             maxtime = -np.argmax((time - time[0] < self.maxtime)[::-1]) + 1
         else:
-            maxtime = -1
+            maxtime = 0
 
         # Make data selection
-        self.XX = XX[mintime:maxtime, minchan:maxchan]
-        self.XY = XY[mintime:maxtime, minchan:maxchan]
-        self.YX = YX[mintime:maxtime, minchan:maxchan]
-        self.YY = YY[mintime:maxtime, minchan:maxchan]
+        self.XX = slice_array(XX, mintime, maxtime, minchan, maxchan)
+        self.XY = slice_array(XY, mintime, maxtime, minchan, maxchan)
+        self.YX = slice_array(YX, mintime, maxtime, minchan, maxchan)
+        self.YY = slice_array(YY, mintime, maxtime, minchan, maxchan)
 
-        self.freq = freq[minchan:maxchan]
-        self.time = time[mintime:maxtime]
+        self.freq = slice_array(freq, minchan, maxchan)
+        self.time = slice_array(time, mintime, maxtime)
 
         # Identify start time and set observation start to t=0
         self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
