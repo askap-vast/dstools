@@ -61,8 +61,8 @@ class DynamicSpectrum:
 
         self.tmin = self.time[0]
         self.tmax = self.time[-1]
-        self.fmin = self.freq[-1]
-        self.fmax = self.freq[0]
+        self.fmin = self.freq[0]
+        self.fmax = self.freq[-1]
 
     def _fold(self, data):
         '''Average chunks of data folding at specified period.'''
@@ -134,6 +134,15 @@ class DynamicSpectrum:
             time /= 60
             self.scantime /= 60
 
+        # Flip ATCA L-band frequency axis to intuitive order
+        if self.band == 'L':
+            XX = np.flip(XX, axis=1)
+            XY = np.flip(XY, axis=1)
+            YX = np.flip(YX, axis=1)
+            YY = np.flip(YY, axis=1)
+
+            freq = np.flip(freq)
+
         # Optionally remove flagged channels at top/bottom of band
         if self.trim:
             allpols = np.isfinite(np.nansum((XX + XY + YX + YY), axis=0))
@@ -141,19 +150,13 @@ class DynamicSpectrum:
             maxchan = -np.argmax(allpols[::-1]) + 1
         else:
             minchan = 0
-            maxchan = -1
+            maxchan = 0
 
         # Select channel range
-        if self.maxfreq:
-            if self.band == 'L':
-                minchan = np.argmax(freq < self.maxfreq)
-            else:
-                minchan = np.argmax(freq > self.minfreq)
         if self.minfreq:
-            if self.band == 'L':
-                maxchan = -np.argmax((freq > self.minfreq)[::-1]) + 1
-            else:
-                maxchan = -np.argmax((freq < self.maxfreq)[::-1]) + 1
+            minchan = -np.argmax((freq < self.minfreq)[::-1]) + 1
+        if self.maxfreq:
+            maxchan = np.argmax(freq > self.maxfreq)
 
         # Select time range
         if self.mintime:
@@ -245,12 +248,6 @@ class DynamicSpectrum:
         Q = (self.XX - self.YY) / 2
         U = (self.XY + self.YX) / 2
         V = 1j * (self.XY - self.YX) / 2
-
-        # Flip frequency axis of data to intuitive order
-        I = np.flip(I, axis=1)
-        Q = np.flip(Q, axis=1)
-        U = np.flip(U, axis=1)
-        V = np.flip(V, axis=1)
 
         # Set masked values to NaN (chunk stacking causes these to be complex zeros)
         I[I == 0.0 + 0.0j] = np.nan
