@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
               help='Selection of minimum time in hours.')
 @click.option('--tmax', default=None, type=float,
               help='Selection of maximum time in hours.')
+@click.option('-u', '--tunit', default='hours', type=click.Choice(['hours', 'min', 's']),
+              help='Selection of time axis unit.')
 @click.option('-I', '--cmax_i', default=50, type=float,
               help='Maximum colormap normalisation in Stokes I.')
 @click.option('-Q', '--cmax_qu', default=10, type=float,
@@ -66,6 +68,7 @@ def main(
     fmax,
     tmin,
     tmax,
+    tunit,
     cmax_i,
     cmax_qu,
     cmax_v,
@@ -110,6 +113,7 @@ def main(
         maxfreq=fmax,
         mintime=tmin,
         maxtime=tmax,
+        tunit=tunit,
         prefix=prefix,
         fold=fold,
         trim=trim,

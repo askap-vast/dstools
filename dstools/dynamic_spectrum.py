@@ -27,6 +27,9 @@ class DynamicSpectrum:
     mintime: float=None
     maxtime: float=None
 
+    tunit: str='hours'
+    scantime: float=10.1
+
     fold: bool=False
     period: float=None
     period_offset: float=0.
@@ -40,6 +43,7 @@ class DynamicSpectrum:
         self.src = self.project.split('/')[-1]
 
         self.ds_path = f'{self.project}/dynamic_spectra/{self.band}'
+        self._timelabel = 'Phase' if self.fold else f'Time ({self.tunit})'
 
         self._load_data()
         self.avg_scan_dt, scan_start_indices, scan_end_indices = self._get_scan_intervals()
@@ -88,7 +92,7 @@ class DynamicSpectrum:
         dts = np.array(dts)
 
         # Locate indices signaling beginning of cal-scan (scan intervals longer than ~10 seconds)
-        scan_start_indices = np.where(np.abs(dts) > 10.1 / 3600)[0]
+        scan_start_indices = np.where(np.abs(dts) > self.scantime)[0]
 
         # End indices are just prior to the next start index, then 
         scan_end_indices = scan_start_indices - 1
@@ -114,7 +118,15 @@ class DynamicSpectrum:
         YY = np.load(f'{file_prefix}dynamic_spectra_YY.npy', allow_pickle=True) * 1e3
 
         freq = np.load(f'{file_prefix}freq.npy', allow_pickle=True) / 1e6
-        time = np.load(f'{file_prefix}time.npy', allow_pickle=True) / 3600
+        time = np.load(f'{file_prefix}time.npy', allow_pickle=True)
+
+        # Set timescale
+        if self.tunit == 'hours':
+            time /= 3600
+            self.scantime /= 3600
+        elif self.tunit == 'min':
+            time /= 60
+            self.scantime /= 60
 
         # Optionally remove flagged channels at top/bottom of band
         if self.trim:
@@ -268,7 +280,9 @@ class DynamicSpectrum:
             plottype = 'lc'
             phasemax = 0.5 * self.fold_periods
             valmin, valmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
-            ax.set_xlabel('Time (hours)')
+            
+            _timelabel = 'Phase' if self.fold else f'Time ({self.tunit})'
+            ax.set_xlabel(self._timelabel)
         else:
             plottype = 'spectrum'
             valmin, valmax = self.fmin, self.fmax
@@ -451,7 +465,7 @@ class DynamicSpectrum:
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label('Flux Density (mJy)')
-        ax.set_xlabel('Time (hours)')
+        ax.set_xlabel(self._timelabel)
         ax.set_ylabel('Frequency (MHz)')
 
         if self.save:
@@ -514,8 +528,7 @@ class DynamicSpectrum:
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label('Flux Density (mJy)')
 
-        xlabel = 'Phase' if self.fold else 'Time (hours)'
-        ax.set_xlabel(xlabel)
+        ax.set_xlabel(self._timelabel)
         ax.set_ylabel('Frequency (MHz)')
 
         if self.save:
