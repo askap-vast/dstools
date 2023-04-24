@@ -12,6 +12,12 @@ from scipy.signal import correlate
 
 logger = logging.getLogger(__name__)
 
+COLORS = {
+    'I': 'firebrick',
+    'Q': 'lightgreen',
+    'U': 'cornflowerblue',
+    'V': 'darkorange',
+}
 @dataclass
 class DynamicSpectrum:
 
