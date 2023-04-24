@@ -65,8 +65,7 @@ class DynamicSpectrum:
         self._load_data()
         self.avg_scan_dt, scan_start_indices, scan_end_indices = self._get_scan_intervals()
 
-        if self.calscans:
-            self._stack_cal_scans(scan_start_indices, scan_end_indices)
+        self._stack_cal_scans(scan_start_indices, scan_end_indices)
 
         self._make_stokes()
 
@@ -236,16 +235,21 @@ class DynamicSpectrum:
             YX_chunk = self.rebin2D(YX_chunk, (tbins, fbins))
             YY_chunk = self.rebin2D(YY_chunk, (tbins, fbins))
 
+
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
-            nan_chunk = np.full((int(num_scans) // self.tavg, fbins), np.nan + np.nan * 1j)
+            if self.calscans:
+                nan_chunk = np.full((int(num_scans) // self.tavg, fbins), np.nan + np.nan * 1j)
+                XX_chunk = np.vstack([XX_chunk, nan_chunk])
+                XY_chunk = np.vstack([XY_chunk, nan_chunk])
+                YX_chunk = np.vstack([YX_chunk, nan_chunk])
+                YY_chunk = np.vstack([YY_chunk, nan_chunk])
+                
+            new_data_XX = np.vstack([new_data_XX, XX_chunk])
+            new_data_XY = np.vstack([new_data_XY, XY_chunk])
+            new_data_YX = np.vstack([new_data_YX, YX_chunk])
+            new_data_YY = np.vstack([new_data_YY, YY_chunk])
 
-            new_data_XX = np.vstack([new_data_XX, np.vstack([XX_chunk, nan_chunk])])
-            new_data_XY = np.vstack([new_data_XY, np.vstack([XY_chunk, nan_chunk])])
-            new_data_YX = np.vstack([new_data_YX, np.vstack([YX_chunk, nan_chunk])])
-            new_data_YY = np.vstack([new_data_YY, np.vstack([YY_chunk, nan_chunk])])
-
-        # Mask out NaN values
         self.XX = new_data_XX[1:]
         self.XY = new_data_XY[1:]
         self.YX = new_data_YX[1:]
