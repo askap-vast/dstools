@@ -297,8 +297,19 @@ class DynamicSpectrum:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 y = np.nanmean(self.data[pol], axis=avg_axis)
-
-            ax.plot(x, y.real, label=pol)
+                sqrtn = np.sqrt(self.data[pol].shape[1]) 
+                yerr = np.nanstd(self.data[pol].imag, axis=avg_axis) / sqrtn
+            
+            ax.errorbar(
+                x,
+                y.real,
+                yerr=yerr,
+                lw=1,
+                color=COLORS[pol],
+                marker='o',
+                markersize=1,
+                label=pol,
+            )
 
             # Record to csv
             if axis == 0:
@@ -310,21 +321,12 @@ class DynamicSpectrum:
             
             df = pd.DataFrame({
                 label: values,
-                'flux_density': y.real.reshape(1, -1)[0]
+                'flux_density': y.real.reshape(1, -1)[0],
+                'flux_density_err': yerr.imag,
             })
             df.dropna().to_csv(
                 f'{self.ds_path}/{self.src.lower()}_{plottype}_stokes{pol.lower()}.csv'
             )
-
-
-        # Calculate rms from imaginary Stokes I data
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            v = np.nanmean(self.data['I'], axis=avg_axis)
-            rms = np.nanstd(v.imag)
-
-        ax.axhline(rms, ls=':', color='r', label=f'rms={rms:.1f} mJy')
-        ax.axhline(-rms, ls=':', color='r')
 
         ax.legend()
         
