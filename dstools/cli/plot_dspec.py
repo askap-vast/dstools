@@ -1,8 +1,13 @@
 import click
 import logging
+import warnings
 import matplotlib.pyplot as plt
+from astropy.utils.exceptions import ErfaWarning
+
 from dstools.utils import setupLogger
 from dstools.dynamic_spectrum import DynamicSpectrum
+
+warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
 
 logger = logging.getLogger(__name__)
 
