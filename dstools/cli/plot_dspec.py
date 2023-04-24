@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
               help='Plot time-averaged spectrum.')
 @click.option('-x', '--crosspols', is_flag=True, default=False,
               help='Plot quadrature sum of cross-polarisations as a diagnostic for RFI and leakage.')
+@click.option('-X', '--polangle', is_flag=True, default=False,
+              help='Plot polarisation angle spectrum.')
 @click.option('-a', '--acf', is_flag=True, default=False,
               help='Plot 2D auto-correlation function.')
 @click.option('-R', '--trim', is_flag=True, default=True,
@@ -79,6 +81,7 @@ def main(
     lightcurve,
     spectrum,
     crosspols,
+    polangle,
     acf,
     fold,
     trim,
@@ -151,6 +154,9 @@ def main(
         for s in stokes:
             ds.plot_acf(stokes=s, contrast=0.2)
 
+    # 1D and Dynamic Spectrum of Polarisation Angle
+    if polangle:
+        ds.plot_polangle()
     plt.show()
 
 

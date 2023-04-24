@@ -1,5 +1,6 @@
 import logging
 import warnings
+import astropy.constants as c
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
@@ -9,6 +10,8 @@ from astropy.time import Time
 from astropy.visualization import ZScaleInterval, ImageNormalize
 from dataclasses import dataclass
 from scipy.signal import correlate
+
+from dstools.rm import PolObservation
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +458,124 @@ class DynamicSpectrum:
 
         return result
 
+    def plot_polangle(self):
+        
+        I = self.data['I']
+        Q = self.data['Q']
+        U = self.data['U']
+
+        angle = 0.5 * np.arctan2(U.real, Q.real)
+
+        # Mask based on Stokes I RMS
+        mask = I.real < 1.5*np.std(I.imag)
+        angle[mask] = np.nan
+
+        # RM synthesis
+        I[np.isnan(I)] = 0
+        Q[np.isnan(Q)] = 0
+        U[np.isnan(U)] = 0
+        
+        tslice = np.argmax(np.nanmean(I.real, axis=1))
+        stokes_arrays = (
+            I[tslice, :].real,
+            Q[tslice, :].real,
+            U[tslice, :].real
+        )
+        phi_axis = np.arange(-2000., 2000.1, 0.1)
+        p = PolObservation(
+            self.freq*1e6,
+            stokes_arrays,
+            verbose=False,
+        )
+        p.rmsynthesis(
+            phi_axis,
+            verbose=False
+        )
+        p.rmclean(
+            cutoff=1.,
+            verbose=False,
+        )
+
+        RM = p.phi[np.argmax(abs(p.fdf))]
+        logger.info(f"Peak RM of {RM:.1f} rad/m2")
+        
+        # Correct for Faraday Rotation
+        for chan in range(angle.shape[1]):
+            lam = (c.c / ((self.fmin+chan)*u.MHz)).to(u.m).value
+            angle[:, chan] -= RM * lam**2
+
+            # Clamp to -pi/2 to pi/2
+            angle = np.arctan(np.tan(angle))
+
+
+        bins = self.data['I'].shape[0]
+
+        # Frequency-averaged polarisation angle lightcurve
+        chi_lc_fig, chi_lc_ax = plt.subplots(figsize=(7, 5))
+
+        # Calculate lambda 
+        interval = (self.tmax - self.tmin) / bins
+        time = np.array([self.tmin + i*interval for i in range(bins)])
+        angle_lc = np.nanmean(angle, axis=1)
+
+        # Take time slice at Stokes I peak
+        chi_lc_ax.scatter(
+            time,
+            angle_lc,
+            color='k',
+            s=2,
+        )
+
+        chi_lc_ax.set_xlabel('Time (min)')
+        chi_lc_ax.set_ylabel('PA')
+
+        # Polarisation angle DS
+        chi_ds_fig, chi_ds_ax = plt.subplots(figsize=(7, 5))
+
+        norm = ImageNormalize(angle, interval=ZScaleInterval(contrast=0.2))
+
+        im = chi_ds_ax.imshow(
+            angle.T,
+            extent=[self.tmin, self.tmax, self.fmin, self.fmax],
+            aspect='auto',
+            origin='lower',
+            norm=norm,
+            cmap='coolwarm',
+        )
+
+        # Colorbar and labels
+        chi_ds_ax.set_xlabel(f'Time ({self.tunit})')
+        chi_ds_ax.set_ylabel('Frequency (MHz)')
+        cb = chi_ds_fig.colorbar(im, ax=chi_ds_ax, fraction=0.05, pad=0.02)
+        cb.set_label('PA')
+
+        if self.save:
+            df = pd.DataFrame({
+                'time': time,
+                'pol_angle': angle_lc,
+            })
+            df.dropna().to_csv(
+                f'{self.ds_path}/{self.src.lower()}_polangle_lc.csv'
+            )
+            angle.dump(f'{self.ds_path}/{self.src.lower()}_polangle_ds.npy')
+
+            path_template = '{}/{}_polangle_ds_favg{}-tavg{}.png'
+            chi_ds_fig.savefig(
+                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
+                bbox_inches='tight',
+                format='png',
+                dpi=300,
+            )
+
+            path_template = '{}/{}_polangle_spec_favg{}-tavg{}.png'
+            chi_lc_fig.savefig(
+                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
+                bbox_inches='tight',
+                format='png',
+                dpi=300,
+            )
+
+        return chi_lc_fig, chi_lc_ax
     def plot_crosspol_ds(self, cmax=20, cmin=0):
         '''Plot quadrature sum of cross-polarisations: sqrt(U^2 + V^2).'''
 
