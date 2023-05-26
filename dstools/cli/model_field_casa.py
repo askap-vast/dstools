@@ -1,8 +1,9 @@
 import click
+import subprocess
 import os
-import sys
 import glob
-from dstools.utils import colored, prompt, nearest_power, resolve_array_config, update_param
+
+from dstools.utils import BANDS, CONFIGS, Array, colored, prompt, update_param
 
 
 def import_data(input_file, proj_dir, msname):
@@ -27,9 +28,9 @@ def import_data(input_file, proj_dir, msname):
 
 
 @click.command()
-@click.option('-C', '--config', type=click.Choice(['6km', '750_no6', '750_6', 'H168']), default='6km',
+@click.option('-C', '--config', type=click.Choice(CONFIGS), default='6km',
               help='Array configuration, used to calculate image and pixel sizes. ASKAP is equivalent to 6km.')
-@click.option('-B', '--band', type=click.Choice(['low', 'mid', 'L', 'C', 'X']), default='L',
+@click.option('-B', '--band', default='AT_L', type=click.Choice(BANDS),
               help='Observing band, used to calculate image and pixel sizes.')
 @click.option('-N', '--iterations', default=10000,
               help='Maximum number of clean iterations.')
@@ -80,9 +81,12 @@ def main(
         source = proj_dir.split('/')[-2].lower()
     else:
         source = 'source'
-    freq, imradius, cell = resolve_array_config(band, config)
 
-    imsize = nearest_power(imradius * 3600 / cell)
+    array = Array(band, config)
+    freq = array.frequency
+    cell = array.cell
+    imradius = array.imradius
+    imsize = array.imsize
 
     field = '0'
     cellsize = '{}arcsec'.format(cell)
@@ -121,8 +125,7 @@ def main(
         cellsize = '{}arcsec'.format(cell)
 
         imradius = update_param('imradius', imradius, float)
-        imsize = nearest_power(imradius * 3600 / cell)
-
+        imsize = update_param('imsize', imsize, int)
         nterms = update_param('nterms', nterms, int)
 
     os.system('mkdir -p {}'.format(proj_dir))

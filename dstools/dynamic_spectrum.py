@@ -32,12 +32,14 @@ def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
         a = a[ax1_min:] if ax1_max == 0 else a[ax1_min:ax1_max]
 
     return a
+
+
 @dataclass
 class DynamicSpectrum:
 
     project: str
     prefix: str=''
-    band: str='L'
+    band: str='AT_L'
 
     favg: int=1
     tavg: int=1
@@ -148,7 +150,7 @@ class DynamicSpectrum:
             self.scantime /= 60
 
         # Flip ATCA L-band frequency axis to intuitive order
-        if self.band == 'L':
+        if self.band == 'AT_L':
             XX = np.flip(XX, axis=1)
             XY = np.flip(XY, axis=1)
             YX = np.flip(YX, axis=1)

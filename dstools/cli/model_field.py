@@ -6,7 +6,7 @@ from dstools.utils import parse_casa_args
 @click.command()
 @click.option('-C', '--config', type=click.Choice(['6km', '750_no6', '750_6', 'H168']), default='6km',
               help='Array configuration, used to calculate image and pixel sizes. ASKAP is equivalent to 6km.')
-@click.option('-B', '--band', type=click.Choice(['low', 'mid', 'L', 'C', 'X']), default='L',
+@click.option('-B', '--band', default='AT_L', type=click.Choice(['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']),
               help='Observing band, used to calculate image and pixel sizes.')
 @click.option('-N', '--iterations', default=2000,
               help='Maximum number of clean iterations.')

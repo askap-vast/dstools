@@ -1,7 +1,12 @@
 import dstools
 import colorlog
 import logging
+import astropy.units as u
 
+from dataclasses import dataclass
+
+CONFIGS = ['6km', '750_no6', '750_6', 'H168']
+BANDS = ['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']
 
 def parse_casa_args(func, module, kwargs, args=None):
     path = dstools.__path__[0]
@@ -46,20 +51,6 @@ def prompt(msg):
     return True if resp == 'y' else False
 
 
-def nearest_power(number):
-
-    # Ensure number is even
-    number = number // 2 * 2
-
-    # Get nearest multiple of 5
-    number = number // 5 * 5
-
-    if number == 4090:
-        number = 4096
-
-    return int(number)
-
-
 def update_param(name, val, dtype):
     while True:
         newval = input('Enter new {} (currently {}): '.format(name, val))
@@ -77,51 +68,94 @@ def update_param(name, val, dtype):
 
     return val
 
+@dataclass
+class Array:
 
-def resolve_array_config(band, config):
-    '''Determine reffreq, primary beam and cell sizes from array parameters.'''
+    band: str='AT_L'
+    config: str='6km'
 
-    wavelengths = {
-        'low': 0.4026,
-        'mid': 0.2450,
-        'L': 0.0967,
-        'C': 0.0461,
-        'X': 0.0200,
-    }
-    frequencies = {
-        'low': '888.49',
-        'mid': '1367.49',
-        'L': '2100',
-        'C': '5500',
-        'X': '9000',
-    }
-    primary_beams = {
-        'low': 1,
-        'mid': 0.8,
-        'L': 0.75,
-        'C': 0.25,
-        'X': 0.25,
-    }
-    max_baselines = {
-        '6km': 6000,
-        '750_no6': 750,
-        '750_6': 5020,
-        'H168': 185,
-    }
+    def __post_init__(self):
+        
+        telescope = self.band.split('_')[0]
+        self.config = self.config if telescope == 'AT' else telescope
 
-    freq = frequencies[band]
+        # Wavelengths are taken at top of the band to calculate resolution
+        wavelengths = {
+            'AK_low': 0.4026,  
+            'AK_mid': 0.2450,
+            'AK_high': -1,
+            'AT_L': 0.0967,
+            'AT_C': 0.0461,
+            'AT_X': 0.0300,
+            'MKT_UHF': 0.2954,
+            'MKT_L': 0.1795,
+        }
+        max_baselines = {
+            'MKT': 8000,
+            'AK': 6000,
+            '6km': 6000,
+            '750_no6': 750,
+            '750_6': 5020,
+            'H168': 185,
+        }
 
-    wavelength = wavelengths[band]
-    baseline = max_baselines[config]
+        # Frequencies are taken at centre of band for Taylor expansion
+        frequencies = {
+            'AK_low': '888.49',
+            'AK_mid': '1367.49',
+            'AK_high': '',
+            'AT_L': '2100',
+            'AT_C': '5500',
+            'AT_X': '9000',
+            'MKT_UHF': '797.5',
+            'MKT_L': '1285',
+        }
 
-    # Convert to resolution in arcsec
-    resolution = wavelength / baseline * 206264.8
+        # Primary beam taken as half-power at bottom of the band,
+        # though ATCA C/X band are narrower as the source density is low
+        primary_beams = {
+            'AK_low': 1.111,
+            'AK_mid': 0.84,
+            'AK_high': -1,
+            'AT_L': 0.825,
+            'AT_C': 0.2225,
+            'AT_X': 0.1460,
+            'MKT_UHF': 2.56,
+            'MKT_L': 2.56,
+        }
 
-    imradius = primary_beams[band]
-    cell = round(resolution / 5, 2)
+        cellsize = {
+            'AK_low': 2.5,
+            'AK_mid': 1.5,
+            'AK_high': -1,
+            'AT_L': 0.66,
+            'AT_C': 0.32,
+            'AT_X': 0.21,
+            'MKT_UHF': 1.5,
+            'MKT_L': 1,
+        }
+        
+       
+        self.frequency = frequencies[self.band]
 
-    return freq, imradius, cell
+        # resolution = wavelengths[self.band] /  max_baselines[self.config] * u.rad.to(u.arcsec)
+        self.cell = cellsize[self.band]
 
+        self.imradius = primary_beams[self.band]
+        self.imsize = int(round(self.imradius / (self.cell*u.arcsec.to(u.deg)), 0))
+
+    def __str__(self):
+
+        return str({
+            'band': self.band,
+            'config': self.config,
+            'frequency': self.frequency,
+            'cell': self.cell,
+            'imradius': self.imradius,
+            'imsize': self.imsize,
+        })
+
+    
 def setupLogger(verbose, filename=None):
 
     level = logging.DEBUG if verbose else logging.INFO
