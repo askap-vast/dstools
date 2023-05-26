@@ -460,16 +460,17 @@ class DynamicSpectrum:
 
         return result
 
-    def plot_polangle(self):
+    def plot_rmsynth(self):
         
         I = self.data['I']
         Q = self.data['Q']
         U = self.data['U']
+        V = self.data['V']
 
         angle = 0.5 * np.arctan2(U.real, Q.real)
 
         # Mask based on Stokes I RMS
-        mask = I.real < 1.5*np.std(I.imag)
+        mask = np.abs(I.real) < 1*np.nanstd(I.imag)
         angle[mask] = np.nan
 
         # RM synthesis
@@ -500,7 +501,7 @@ class DynamicSpectrum:
 
         RM = p.phi[np.argmax(abs(p.fdf))]
         logger.info(f"Peak RM of {RM:.1f} rad/m2")
-        
+
         # Correct for Faraday Rotation
         for chan in range(angle.shape[1]):
             lam = (c.c / ((self.fmin+chan)*u.MHz)).to(u.m).value
@@ -508,7 +509,6 @@ class DynamicSpectrum:
 
             # Clamp to -pi/2 to pi/2
             angle = np.arctan(np.tan(angle))
-
 
         bins = self.data['I'].shape[0]
 
@@ -520,7 +520,37 @@ class DynamicSpectrum:
         time = np.array([self.tmin + i*interval for i in range(bins)])
         angle_lc = np.nanmean(angle, axis=1)
 
-        # Take time slice at Stokes I peak
+        # RM Synthesis FDF
+        fdf_fig, fdf_ax = plt.subplots(figsize=(7, 5))
+        fdf_ax.plot(
+            p.rmsf_phi,
+            np.abs(p.rmsf),
+            color='k',
+            label='RMSF'
+        )
+        fdf_ax.plot(
+            p.phi,
+            np.abs(p.fdf),
+            color='r',
+            label='FDF'
+        )
+        fdf_ax.plot(
+            p.phi,
+            np.abs(p.rm_cleaned),
+            color='b',
+            label='Clean'
+        )
+        fdf_ax.plot(
+            p.phi,
+            np.abs(p.rm_comps),
+            color='g',
+            label='Model'
+        )
+        fdf_ax.set_xlabel(r'RM ($rad/m^2$)')
+        fdf_ax.set_ylabel('Amplitude')
+        fdf_ax.legend()
+
+        # Polarisation angle LC
         chi_lc_ax.scatter(
             time,
             angle_lc,
@@ -561,6 +591,15 @@ class DynamicSpectrum:
             )
             angle.dump(f'{self.ds_path}/{self.src.lower()}_polangle_ds.npy')
 
+
+            path_template = '{}/{}_fdf.png'
+            fdf_fig.savefig(
+                path_template.format(self.ds_path, self.src.lower()),
+                bbox_inches='tight',
+                format='png',
+                dpi=300,
+            )
+
             path_template = '{}/{}_polangle_ds_favg{}-tavg{}.png'
             chi_ds_fig.savefig(
                 path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
@@ -578,6 +617,8 @@ class DynamicSpectrum:
             )
 
         return chi_lc_fig, chi_lc_ax
+
+
     def plot_crosspol_ds(self, cmax=20, cmin=0):
         '''Plot quadrature sum of cross-polarisations: sqrt(U^2 + V^2).'''
 

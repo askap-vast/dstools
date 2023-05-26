@@ -46,11 +46,11 @@ logger = logging.getLogger(__name__)
               help='Plot time-averaged spectrum.')
 @click.option('-x', '--crosspols', is_flag=True, default=False,
               help='Plot quadrature sum of cross-polarisations as a diagnostic for RFI and leakage.')
-@click.option('-X', '--polangle', is_flag=True, default=False,
-              help='Plot polarisation angle spectrum.')
+@click.option('-R', '--rmsynth', is_flag=True, default=False,
+              help='Plot RM synthesis spectrum.')
 @click.option('-a', '--acf', is_flag=True, default=False,
               help='Plot 2D auto-correlation function.')
-@click.option('-R', '--trim', is_flag=True, default=True,
+@click.option('-k', '--trim', is_flag=True, default=True,
               help='Remove flagged channels at top/bottom of band.')
 @click.option('-F', '--fold', is_flag=True, default=False,
               help='Toggle to enable folding of data. Must also provide period with -T.')
@@ -86,7 +86,7 @@ def main(
     lightcurve,
     spectrum,
     crosspols,
-    polangle,
+    rmsynth,
     acf,
     fold,
     trim,
@@ -159,9 +159,11 @@ def main(
         for s in stokes:
             ds.plot_acf(stokes=s, contrast=0.2)
 
-    # 1D and Dynamic Spectrum of Polarisation Angle
-    if polangle:
-        ds.plot_polangle()
+    # RM FDF and Lightcurve/Dynamic Spectrum of Polarisation Angle
+    # --------------------------------------
+    if rmsynth:
+        ds.plot_rmsynth()
+
     plt.show()
 
 
