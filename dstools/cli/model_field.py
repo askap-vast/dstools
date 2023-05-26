@@ -1,4 +1,5 @@
 import click
+import os
 import subprocess
 
 from dstools.utils import parse_casa_args
@@ -32,6 +33,8 @@ from dstools.utils import parse_casa_args
               help='Run tclean in interactive mode')
 @click.option('--log2term/--no-log2term', default=True,
               help='Disable CASA logger GUI and log straight to terminal.')
+@click.option('-m', '--mpinodes', default=1,
+              help='Set greater than 1 to run casa in mpi mode with mpinodes available nodes.')
 @click.argument('data')
 def main(**kwargs):
 
@@ -45,11 +48,20 @@ def main(**kwargs):
     phasecenter = kwargs.pop('phasecenter')
     phasecenter = ['-p', phasecenter] if phasecenter is not None else []
 
+    mpinodes = kwargs.pop('mpinodes')
+
     # Construct string call signature to pass on to CASA
     path, argstr, kwargstr = parse_casa_args(main, 'model_field_casa.py', kwargs, args=['data'])
     kwargstr += ''.join(scaleargs)
 
-    call = f'casa{logconfig} -c {path} {argstr} {kwargstr}'.split(' ') + phasecenter
+    if mpinodes > 1:
+        casa_bin = os.environ.get('CASA')
+        casa_cmd = f'mpicasa -n {mpinodes} {casa_bin}/bin/casa'
+        argstr += ' --mpi'
+    else:
+        casa_cmd = 'casa'
+
+    call = f'{casa_cmd}{logconfig} -c {path} {argstr} {kwargstr}'.split(' ') + phasecenter
     subprocess.run(call)
 
 if __name__ == '__main__':

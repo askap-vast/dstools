@@ -54,6 +54,8 @@ def import_data(input_file, proj_dir, msname):
               help='Run tclean in interactive mode')
 @click.option('-a', '--automask/--no-automask', default=False,
               help='Use auto-multithresh mode to automatically generate clean mask.')
+@click.option('-m', '--mpi', is_flag=True, default=False,
+              help='Use parallel processing with mpi.')
 @click.argument('data')
 def main(
         data,
@@ -70,6 +72,7 @@ def main(
         proj_dir,
         interactive,
         automask,
+        mpi,
 ):
 
     # PARAMETER SETTINGS
@@ -193,6 +196,7 @@ def main(
                     interactive=interactive,
                     phasecenter=phasecenter,
                     pblimit=pblim,
+                    parallel=mpi,
                 )
                 os.system('rm -r {}/test_params/test_im*'.format(proj_dir))
 
@@ -304,6 +308,7 @@ def main(
                 phasecenter=phasecenter,
                 mask=init_mask,
                 pblimit=pblim,
+                parallel=mpi,
             )
 
             # Trial self-cal solution intervals
@@ -480,6 +485,7 @@ def main(
                 phasecenter=phasecen,
                 interactive=interactive,
                 pblimit=pblim,
+                parallel=mpi,
             )
 
             cont = prompt('Continue with further cleaning?')
@@ -527,6 +533,7 @@ def main(
                 interactive=interactive,
                 phasecenter=phasecen,
                 pblimit=pblim,
+                parallel=mpi,
             )
             source_mask = '{}/{}.source.mask'.format(field_model_path, source)
             os.system(
@@ -576,6 +583,7 @@ def main(
             wprojplanes=wprojplanes,
             phasecenter=phasecenter,
             pblimit=pblim,
+            parallel=mpi,
         )
         os.system('rm -r {}/{}.im_presub*'.format(field_model_path, source))
 
@@ -604,6 +612,7 @@ def main(
         wprojplanes=wprojplanes,
         phasecenter=phasecenter,
         pblimit=pblim,
+        parallel=mpi,
     )
 
     # Export to FITS format.
