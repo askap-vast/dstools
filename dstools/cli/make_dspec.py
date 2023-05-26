@@ -45,14 +45,9 @@ def main(noflag, band, versionname, datacolumn, ms):
         datacolumn = 'CORRECTED_DATA' if datacolumn == 'corrected' else 'DATA'
         waterfall = t.getcol(datacolumn)[:, :, polidx]
 
-        vis_flag = t.getcol('FLAG')[:, :, polidx]
         if not noflag:
+            vis_flag = t.getcol('FLAG')[:, :, polidx]
             waterfall = np.ma.masked_where(vis_flag, waterfall)
-
-        # Multiply any ASKAP visibilities by 2 to convert
-        # from average to total flux density
-        if band in ['low', 'mid']:
-            waterfall *= 2
 
         waterfall.dump(outfile)
         t.close()

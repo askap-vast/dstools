@@ -28,6 +28,7 @@ dstools-make-dspec = "dstools.cli.make_dspec:main"
 dstools-plot-dspec = "dstools.cli.plot_dspec:main"
 dstools-remove-offaxis = "dstools.cli.remove_offaxis:main"
 dstools-diagnostics = "dstools.cli.plot_diagnostics:main"
+dstools-quickds = "dstools.cli.quickds:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
