@@ -267,7 +267,7 @@ class DynamicSpectrum:
         I = (self.XX + self.YY) / 2
         Q = (self.XX - self.YY) / 2
         U = (self.XY + self.YX) / 2
-        V = 1j * (self.XY - self.YX) / 2
+        V = 1j * (self.YX - self.XY) / 2
 
         # Set masked values to NaN (chunk stacking causes these to be complex zeros)
         I[I == 0.0 + 0.0j] = np.nan
