@@ -11,14 +11,14 @@ def import_data(input_file, proj_dir, msname):
     os.system(f'mv {proj_dir}/{msname} {proj_dir}/{msname}.bak')
     os.system(f'rm -r {proj_dir}/{msname}.flagversions')
 
+    # Convert Miriad visibilities to UVFITS format for reliable import
+    if input_file.endswith('.cal'):
+        os.system(f'fits in={input_file} out={input_file}.fits op=uvout')
+        input_file = f'{input_file}.fits'
+
     if input_file.endswith('.fits'):
         importuvfits(
             fitsfile=input_file,
-            vis=f'{proj_dir}/{msname}',
-        )
-    elif input_file.endswith('.cal'):
-        importmiriad(
-            mirfile=input_file,
             vis=f'{proj_dir}/{msname}',
         )
     elif input_file.endswith('.ms'):
