@@ -31,6 +31,31 @@ case $reload in
 
 	atlod in=$infiles out=$pcode.uv options=birdie,rfiflag,noauto,xycorr
 	uvflag vis=$pcode.uv edge=40 flagval=flag
+
+	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
+	# during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
+	# errors. Correction would be to shift by +120 arcsec here.
+	print "Shift phasecenter?"
+	read fix_phasecenter
+	case $fix_phasecenter in
+
+	    [Yy]* )
+		print "Shift in right ascension (arcsec):"
+		read shiftra
+		print "Shift in declination (arcsec):"
+		read shiftdec
+
+		uvedit vis=$pcode.uv ra=$shiftra dec=$shiftdec out=$pcode.fix.uv
+		rm -r $pcode.uv
+		mv $pcode.fix.uv $pcode.uv
+
+		;;
+
+	    [Nn]* )
+	        ;;
+
+	esac
+
 	uvsplit vis=$pcode.uv ;;
 
     [Nn]* )
