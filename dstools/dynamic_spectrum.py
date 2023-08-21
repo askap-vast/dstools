@@ -597,7 +597,7 @@ class DynamicSpectrum:
     def plot_lightcurve(self, stokes):
         '''Plot channel-averaged lightcurve.'''
 
-        lc = LightCurve(self, stokes)
+        lc = LightCurve(self, stokes, save=self.save)
         return lc.fig, lc.ax
 
     def plot_spectrum(self, stokes):
@@ -614,6 +614,7 @@ class DynamicSpectrum:
         phasemax = 0.5 * self.fold_periods
         tmin, tmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
         norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
+        cmap = 'plasma' if stokes == 'I' else 'coolwarm'
         cmin = -2 if stokes == 'I' else -cmax
         cmax = cmax
 
@@ -625,7 +626,7 @@ class DynamicSpectrum:
             origin='lower',
             norm=norm,
             clim=(cmin, cmax),
-            cmap='plasma',
+            cmap=cmap,
         )
         ax.text(
             0.05,
