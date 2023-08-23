@@ -598,13 +598,21 @@ class DynamicSpectrum:
         '''Plot channel-averaged lightcurve.'''
 
         lc = LightCurve(self, stokes, save=self.save)
-        return lc.fig, lc.ax
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = lc.plot(fig, ax)
+
+        return fig, ax
 
     def plot_spectrum(self, stokes):
         '''Plot time-averaged spectrum.'''
 
         sp = Spectrum(self, stokes, save=self.save)
-        return sp.fig, sp.ax
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = sp.plot(fig, ax)
+
+        return fig, ax
 
     def plot_ds(self, stokes, cmax=20, imag=False):
         '''Plot dynamic spectrum.'''
@@ -781,23 +789,22 @@ class LightCurve(TimeFreqSeries):
         resolution = f"{self.ds.time_resolution.to(u.minute).value:.0f}s"
         self.path_template = f"{self.ds.ds_path}/{self.ds.src.lower()}_lc{rangelabel}.{resolution}"
 
-        self._plot()
-        
-    def _plot(self):
-
-        # Set up Figure and time axis label
-        self.fig, self.ax = plt.subplots(figsize=(7, 5))
-        self.ax.set_xlabel(self.ds._timelabel)
-
-        # Create labels for frequency-averaged lightcurve data
-        # and set time/phase axis limits if folded
+        # Set time/phase axis limits if folded
         phasemax = 0.5 * self.ds.fold_periods
         valmin, valmax = (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
-
+        
         # Construct time axis
         bins = self.ds.data['I'].shape[0]
         interval = (valmax - valmin) / bins
         self.x = np.array([valmin + i*interval for i in range(bins)])
+
+    def plot(self, fig, ax):
+
+        self.fig = fig
+        self.ax = ax
+
+        # Set frequency axis label
+        self.ax.set_xlabel(self.ds._timelabel)
 
         # Plot with lightcurve/spectrum independent parameters
         super().plot(avg_axis=1)
@@ -822,17 +829,18 @@ class Spectrum(TimeFreqSeries):
         resolution = f"{self.ds.freq_resolution.to(u.MHz).value:.0f}MHz"
         self.path_template = f"{self.ds.ds_path}/{self.ds.src.lower()}_spectrum{rangelabel}.{resolution}"
 
-        self._plot()
-
-    def _plot(self):
-        # Set up Figure and frequency axis label
-        self.fig, self.ax = plt.subplots(figsize=(7, 5))
-        self.ax.set_xlabel('Frequency (MHz)')
-
         # Construct frequency axis
         bins = self.ds.data['I'].shape[1]
         interval = (self.ds.fmax - self.ds.fmin) / bins
         self.x = np.array([self.ds.fmin + i*interval for i in range(bins)])
+
+    def plot(self, fig, ax):
+
+        self.fig = fig
+        self.ax = ax
+
+        # Set frequency axis label
+        ax.set_xlabel('Frequency (MHz)')
 
         # Plot with lightcurve/spectrum independent parameters
         super().plot(avg_axis=0)
