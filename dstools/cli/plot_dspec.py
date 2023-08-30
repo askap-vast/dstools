@@ -128,7 +128,6 @@ def main(
         trim=trim,
         period=period,
         period_offset=period_offset,
-        save=save,
     )
 
     # Dynamic Spectrum

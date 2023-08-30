@@ -60,7 +60,6 @@ class DynamicSpectrum:
 
     calscans: bool=True
     trim: bool=True
-    save: bool=False
 
     def __post_init__(self):
         self.src = self.project.split('/')[-1]
@@ -510,42 +509,7 @@ class DynamicSpectrum:
         cb = chi_ds_fig.colorbar(im, ax=chi_ds_ax, fraction=0.05, pad=0.02)
         cb.set_label('PA')
 
-        if self.save:
-            df = pd.DataFrame({
-                'time': time,
-                'pol_angle': angle_lc,
-            })
-            df.dropna().to_csv(
-                f'{self.ds_path}/{self.src.lower()}_polangle_lc.csv'
-            )
-            angle.dump(f'{self.ds_path}/{self.src.lower()}_polangle_ds.npy')
-
-
-            path_template = '{}/{}_fdf.png'
-            fdf_fig.savefig(
-                path_template.format(self.ds_path, self.src.lower()),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-            path_template = '{}/{}_polangle_ds_favg{}-tavg{}.png'
-            chi_ds_fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-            path_template = '{}/{}_polangle_spec_favg{}-tavg{}.png'
-            chi_lc_fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
-        return chi_lc_fig, chi_lc_ax
+        return chi_ds_ax, chi_ds_fig, chi_lc_fig, chi_lc_ax, fdf_ax, fdf_fig
 
     def plot_crosspol_ds(self, cmax=20, cmin=0):
         '''Plot quadrature sum of cross-polarisations: sqrt(U^2 + V^2).'''
@@ -580,23 +544,12 @@ class DynamicSpectrum:
         ax.set_xlabel(self._timelabel)
         ax.set_ylabel('Frequency (MHz)')
 
-        if self.save:
-            data.dump(f'{self.ds_path}/{self.src.lower()}_crosspol_ds.npy')
-
-            path_template = '{}/{}_crosspol_subbed_ds_favg{}-tavg{}.png'
-            fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), self.favg, self.tavg),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
-
         return fig, ax
 
     def plot_lightcurve(self, stokes):
         '''Plot channel-averaged lightcurve.'''
 
-        lc = LightCurve(self, stokes, save=self.save)
+        lc = LightCurve(self, stokes)
 
         fig, ax = plt.subplots(figsize=(7, 5))
         fig, ax = lc.plot(fig, ax)
@@ -606,7 +559,7 @@ class DynamicSpectrum:
     def plot_spectrum(self, stokes):
         '''Plot time-averaged spectrum.'''
 
-        sp = Spectrum(self, stokes, save=self.save)
+        sp = Spectrum(self, stokes)
 
         fig, ax = plt.subplots(figsize=(7, 5))
         fig, ax = sp.plot(fig, ax)
@@ -649,17 +602,6 @@ class DynamicSpectrum:
 
         ax.set_xlabel(self._timelabel)
         ax.set_ylabel('Frequency (MHz)')
-
-        if self.save:
-            data.dump(f'{self.ds_path}/{self.src.lower()}_{stokes.lower()}_ds.npy')
-
-            path_template = '{}/{}_stokes{}_subbed_ds_favg{}-tavg{}.png'
-            fig.savefig(
-                path_template.format(self.ds_path, self.src.lower(), stokes.lower(), self.favg, self.tavg),
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
 
         return fig, ax
 
@@ -705,69 +647,64 @@ class DynamicSpectrum:
         acfz_ax.set_xlabel('Time Lag (h)')
         acfz_ax.set_ylabel('ACF')
 
-        if self.save:
-            acf2d.dump(f'{self.ds_path}/{self.src.lower()}_{stokes.lower()}_acf.npy')
-
-            acf_fig.savefig(f'{self.ds_path}/{self.src.lower()}_acf.png')
-            acfz_fig.savefig(f'{self.ds_path}/{self.src.lower()}_f0_acf.png')
-
         return acf_fig, acf_ax, acfz_fig, acfz_ax
 
 
 
 class TimeFreqSeries(ABC):
 
+    def _construct_yaxis(self, avg_axis):
+        """Construct y-axis averaging flux over x-axis."""
+
+        # Catch RuntimeWarning that occurs when averaging empty time/freq slices
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            y = {
+                stokes: np.nanmean(self.ds.data[stokes], axis=avg_axis)
+                for stokes in self.stokes
+            }
+            sqrtn = np.sqrt(self.ds.data['I'].shape[1]) 
+            yerr = {
+                stokes: np.nanstd(self.ds.data[stokes].imag, axis=avg_axis) / sqrtn
+                for stokes in self.stokes
+            }
+
+        return y, yerr
+
     def plot(self, avg_axis):
 
         # Overplot each specified polarisation
-        for pol in self.stokes:
-
-            # Catch RuntimeWarning that occurs when averaging empty time/freq slices
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                self.y = np.nanmean(self.ds.data[pol], axis=avg_axis)
-                sqrtn = np.sqrt(self.ds.data[pol].shape[1]) 
-                self.yerr = np.nanstd(self.ds.data[pol].imag, axis=avg_axis) / sqrtn
+        for stokes in self.stokes:
             
             # Plot time/frequency series
             self.ax.errorbar(
                 self.x,
-                self.y.real,
-                yerr=self.yerr,
+                self.y[stokes].real,
+                yerr=self.yerr[stokes],
                 lw=1,
-                color=COLORS[pol],
+                color=COLORS[stokes],
                 marker='o',
                 markersize=1,
-                label=pol,
+                label=stokes,
             )
 
-            # Save data to CSV
-            if self.save:
-                values = self.valstart + self.x * self.unit
-
-                df = pd.DataFrame({
-                    self.column: values,
-                    'flux_density': self.y.real.reshape(1, -1)[0],
-                    'flux_density_err': self.yerr.imag,
-                })
-                df.dropna().to_csv(
-                    f'{self.path_template}.stokes{pol.lower()}.csv'
-                )
-
-        self.ax.legend()
-        
         self.ax.set_ylabel('Flux Density (mJy)')
-
-        # Save plot to file
-        if self.save:
-            self.fig.savefig(
-                f'{self.path_template}.png',
-                bbox_inches='tight',
-                format='png',
-                dpi=300,
-            )
+        self.ax.legend()
 
         return
+
+    def save(self, savepath):
+        values = self.valstart + self.x * self.unit
+        
+        df = pd.DataFrame({self.column: values})
+        for stokes in self.stokes:
+            df[f'flux_density_{stokes}'] = self.y[stokes].real.reshape(1, -1)[0]
+            df[f'flux_density_{stokes}_err'] = self.yerr[stokes]
+
+        df.dropna().to_csv(savepath, index=False)
+
+        return
+
 
 
 @dataclass
@@ -775,34 +712,30 @@ class LightCurve(TimeFreqSeries):
 
     ds: DynamicSpectrum
     stokes: str
-    save: bool=False
 
     def __post_init__(self):
 
-        self.plottype = 'lc'
         self.column = 'time'
-        self.unit = u.hour
+        self.unit = self.ds.tunit
         self.valstart = self.ds.time_start
-
-        rangelabel = f'.{self.ds.tmin:.1f}-{self.ds.tmax:.1f}{self.ds.tunit}' if self.ds.mintime or self.ds.maxtime else ''
-        resolution = f"{self.ds.time_resolution.to(u.minute).value:.0f}s"
-        self.path_template = f"{self.ds.ds_path}/{self.ds.src.lower()}_lc{rangelabel}.{resolution}"
 
         # Set time/phase axis limits if folded
         phasemax = 0.5 * self.ds.fold_periods
-        valmin, valmax = (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
+        almin, valmax = (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
         
-        # Construct time axis
+        # Construct time and flux axes
         bins = self.ds.data['I'].shape[0]
-        interval = (valmax - valmin) / bins
-        self.x = np.array([valmin + i*interval for i in range(bins)])
+        interval = (valmax - almin) / bins
+        self.x = np.array([almin + i*interval for i in range(bins)])
+        self.y, self.yerr = self._construct_yaxis(avg_axis=1)
+
 
     def plot(self, fig, ax):
 
         self.fig = fig
         self.ax = ax
 
-        # Set frequency axis label
+        # Set time axis label
         self.ax.set_xlabel(self.ds._timelabel)
 
         # Plot with lightcurve/spectrum independent parameters
@@ -815,7 +748,6 @@ class Spectrum(TimeFreqSeries):
 
     ds: DynamicSpectrum
     stokes: str
-    save: bool=False
 
     def __post_init__(self):
 
@@ -823,15 +755,11 @@ class Spectrum(TimeFreqSeries):
         self.unit = u.MHz
         self.valstart = 0
 
-        # Create save path structure for time-averaged spectrum data
-        rangelabel = f'.{self.ds.fmin:.0f}-{self.ds.fmax:.0f}MHz' if self.ds.minfreq or self.ds.maxfreq else ''
-        resolution = f"{self.ds.freq_resolution.to(u.MHz).value:.0f}MHz"
-        self.path_template = f"{self.ds.ds_path}/{self.ds.src.lower()}_spectrum{rangelabel}.{resolution}"
-
         # Construct frequency axis
         bins = self.ds.data['I'].shape[1]
         interval = (self.ds.fmax - self.ds.fmin) / bins
         self.x = np.array([self.ds.fmin + i*interval for i in range(bins)])
+        self.y, self.yerr = self._construct_yaxis(avg_axis=0)
 
     def plot(self, fig, ax):
 
