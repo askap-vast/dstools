@@ -393,7 +393,6 @@ class DynamicSpectrum:
         I = self.data['I']
         Q = self.data['Q']
         U = self.data['U']
-        V = self.data['V']
 
         angle = 0.5 * np.arctan2(U.real, Q.real)
 
@@ -402,9 +401,9 @@ class DynamicSpectrum:
         angle[mask] = np.nan
 
         # RM synthesis
-        I[np.isnan(I)] = 0
-        Q[np.isnan(Q)] = 0
-        U[np.isnan(U)] = 0
+        I[np.isnan(I)] = 0 + 0j
+        Q[np.isnan(Q)] = 0 + 0j
+        U[np.isnan(U)] = 0 + 0j
         
         tslice = np.argmax(np.nanmean(I.real, axis=1))
         stokes_arrays = (
