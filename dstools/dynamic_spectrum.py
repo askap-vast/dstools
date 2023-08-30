@@ -163,7 +163,10 @@ class DynamicSpectrum:
 
         # Optionally remove flagged channels at top/bottom of band
         if self.trim:
-            allpols = np.isfinite(np.nansum((XX + XY + YX + YY), axis=0))
+            full = np.nansum((XX + XY + YX + YY), axis=0)
+            full[full == 0.0 + 0.0j] = np.nan
+
+            allpols = np.isfinite(full)
             minchan = np.argmax(allpols)
             maxchan = -np.argmax(allpols[::-1]) + 1
         else:
@@ -215,11 +218,9 @@ class DynamicSpectrum:
         num_break_cycles = np.append((time_end_break - time_start_break), 0) / self.avg_scan_dt
         num_channels = self.XX.shape[1]
 
-        fbins = num_channels // self.favg
-
         # Create initial time-slice to start stacking target and calibrator scans together
         new_data_XX = new_data_XY = new_data_YX = new_data_YY = np.zeros(
-            (1, fbins), dtype=complex
+            (1, num_channels), dtype=complex
         )
 
         # Check that data is not being truncated by stacking insufficient time chunks together
@@ -233,25 +234,18 @@ class DynamicSpectrum:
             scan_start_indices, scan_end_indices, num_break_cycles
         ):
 
-            tbins = (end_index - start_index) // self.tavg
-
             # Select each contiguous on-target chunk of data
             XX_chunk = self.XX[start_index:end_index+1, :]
             XY_chunk = self.XY[start_index:end_index+1, :]
             YX_chunk = self.YX[start_index:end_index+1, :]
             YY_chunk = self.YY[start_index:end_index+1, :]
             
-            # Rebin data with selected time and frequency averaging factors
-            XX_chunk = self.rebin2D(XX_chunk, (tbins, fbins))
-            XY_chunk = self.rebin2D(XY_chunk, (tbins, fbins))
-            YX_chunk = self.rebin2D(YX_chunk, (tbins, fbins))
-            YY_chunk = self.rebin2D(YY_chunk, (tbins, fbins))
-
-
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
             if self.calscans:
-                nan_chunk = np.full((int(num_scans) // self.tavg, fbins), np.nan + np.nan * 1j)
+                num_nans = (int(round(num_scans)), num_channels)
+                nan_chunk = np.full(num_nans, np.nan + np.nan * 1j)
+
                 XX_chunk = np.vstack([XX_chunk, nan_chunk])
                 XY_chunk = np.vstack([XY_chunk, nan_chunk])
                 YX_chunk = np.vstack([YX_chunk, nan_chunk])
@@ -262,10 +256,18 @@ class DynamicSpectrum:
             new_data_YX = np.vstack([new_data_YX, YX_chunk])
             new_data_YY = np.vstack([new_data_YY, YY_chunk])
 
-        self.XX = new_data_XX[1:]
-        self.XY = new_data_XY[1:]
-        self.YX = new_data_YX[1:]
-        self.YY = new_data_YY[1:]
+        new_data_XX = new_data_XX[1:]
+        new_data_XY = new_data_XY[1:]
+        new_data_YX = new_data_YX[1:]
+        new_data_YY = new_data_YY[1:]
+
+        tbins = len(new_data_XX) // self.tavg
+        fbins = num_channels // self.favg
+
+        self.XX = self.rebin2D(new_data_XX, (tbins, fbins))
+        self.YX = self.rebin2D(new_data_YX, (tbins, fbins))
+        self.XY = self.rebin2D(new_data_XY, (tbins, fbins))
+        self.YY = self.rebin2D(new_data_YY, (tbins, fbins))
 
     def _make_stokes(self):
         '''Convert instrumental polarisations to Stokes products.'''
@@ -275,12 +277,6 @@ class DynamicSpectrum:
         Q = (self.XX - self.YY) / 2
         U = (self.XY + self.YX) / 2
         V = 1j * (self.YX - self.XY) / 2
-
-        # Set masked values to NaN (chunk stacking causes these to be complex zeros)
-        I[I == 0.0 + 0.0j] = np.nan
-        Q[Q == 0.0 + 0.0j] = np.nan
-        U[U == 0.0 + 0.0j] = np.nan
-        V[V == 0.0 + 0.0j] = np.nan
 
         # Fold data to selected period
         if self.fold:
@@ -299,7 +295,7 @@ class DynamicSpectrum:
         '''Generate a 2D auto-correlation of the dynamic spectrum.'''
 
         # Replace NaN with zeros to calculate auto-correlation
-        data = self.data[stokes].real
+        data = self.data[stokes].real.copy()
         data[np.isnan(data)] = 0.
 
         # Compute auto-correlation and select upper-right quadrant
@@ -379,6 +375,7 @@ class DynamicSpectrum:
         '''Re-bin along time / frequency axes conserving flux.'''
 
         if new_shape == array.shape:
+            array[array == 0 + 0j] = np.nan
             return array
 
         if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
@@ -386,7 +383,9 @@ class DynamicSpectrum:
 
         time_comp = self.rebin(array.shape[0], new_shape[0], axis=0)
         freq_comp = self.rebin(array.shape[1], new_shape[1], axis=1)
+        array[np.isnan(array)] = 0 + 0j
         result = time_comp @ np.array(array) @ freq_comp
+        result[result == 0 + 0j] = np.nan
 
         return result
 
