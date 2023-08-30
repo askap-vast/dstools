@@ -50,7 +50,7 @@ class DynamicSpectrum:
     mintime: float=None
     maxtime: float=None
 
-    tunit: str='hours'
+    tunit: u.Quantity=u.hour
     scantime: float=10.1
 
     fold: bool=False
@@ -82,8 +82,7 @@ class DynamicSpectrum:
 
         tbins = self.data['I'].shape[0]
         fbins = self.data['I'].shape[1]
-        tunit = u.minute if self.tunit == 'min' else u.hour
-        self.time_resolution = (self.tmax - self.tmin) * tunit / tbins
+        self.time_resolution = (self.tmax - self.tmin) * self.tunit / tbins
         self.freq_resolution = (self.fmax - self.fmin) * u.MHz / fbins
 
     def _fold(self, data):
@@ -149,12 +148,9 @@ class DynamicSpectrum:
         time = np.load(f'{file_prefix}time.npy', allow_pickle=True)
 
         # Set timescale
-        if self.tunit == 'hours':
-            time /= 3600
-            self.scantime /= 3600
-        elif self.tunit == 'min':
-            time /= 60
-            self.scantime /= 60
+        time_scale_factor = self.tunit.to(u.s)
+        time /= time_scale_factor
+        self.scantime /= time_scale_factor
 
         # Flip ATCA L-band frequency axis to intuitive order
         if self.band == 'AT_L':
@@ -201,7 +197,11 @@ class DynamicSpectrum:
         self.time = slice_array(time, mintime, maxtime)
 
         # Identify start time and set observation start to t=0
-        self.time_start = Time(self.time[0] / 24.0, format='mjd', scale='utc')
+        self.time_start = Time(
+            self.time[0] * time_scale_factor / 3600 / 24,
+            format='mjd',
+            scale='utc',
+        )
         self.time_start.format = 'iso'
 
         self.time -= time[0]

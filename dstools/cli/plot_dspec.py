@@ -1,6 +1,7 @@
 import click
 import logging
 import warnings
+import astropy.units as u
 import matplotlib.pyplot as plt
 from astropy.utils.exceptions import ErfaWarning
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
               help='Selection of minimum time in hours.')
 @click.option('--tmax', default=None, type=float,
               help='Selection of maximum time in hours.')
-@click.option('-u', '--tunit', default='hours', type=click.Choice(['hours', 'min', 's']),
+@click.option('-u', '--tunit', default=u.hour, type=click.Choice([u.hour, u.minute, u.s]),
               help='Selection of time axis unit.')
 @click.option('-I', '--cmax_i', default=50, type=float,
               help='Maximum colormap normalisation in Stokes I.')
