@@ -2,6 +2,7 @@ import click
 import subprocess
 import os
 import glob
+import astropy.units as u
 
 from dstools.utils import BANDS, CONFIGS, Array, colored, prompt, update_param
 
@@ -88,8 +89,8 @@ def main(
     array = Array(band, config)
     freq = array.frequency
     cell = array.cell
-    imradius = array.imradius
     imsize = array.imsize
+    imradius = array.imradius
 
     field = '0'
     cellsize = '{}arcsec'.format(cell)
@@ -115,10 +116,8 @@ def main(
 
     while True:
         accept_params = prompt(
-            'Imaging with properties:\n  cell  : {}\n  radius: {} deg\n  pixels: {}\n  nterms: {}\n\nProceed?'.format(
-                cellsize, imradius, imsize, nterms
+            f'Imaging with properties:\n  cell: {cell} arcsec\n  pixels: {imsize}\n  imradius: {imradius:.2f} deg\n  nterms: {nterms}\n\nProceed?'
             )
-        )
 
         if accept_params:
             break
@@ -127,15 +126,14 @@ def main(
         cell = update_param('cell', cell, float)
         cellsize = '{}arcsec'.format(cell)
 
-        imradius = update_param('imradius', imradius, float)
         imsize = update_param('imsize', imsize, int)
+        imradius = imsize * cell*u.arcsec.to(u.deg) / 2
         nterms = update_param('nterms', nterms, int)
 
     os.system('mkdir -p {}'.format(proj_dir))
 
     # Data Import.
     # ------------
-
     msname = '{}.{}.ms'.format(source, band)
     calibrated_ms = '{}/{}.{}.selfcal.ms'.format(proj_dir, source, band)
 
@@ -228,17 +226,10 @@ def main(
 
                     flagtime = prompt('Flag time ranges?')
 
-                rflag = prompt('Run rflag?')
-                if rflag:
+                autoflag = prompt('Run automatic flagging?')
+                if autoflag:
                     flagdata(vis=proj_dir + msname, mode='rflag')
-
-                tfcrop = prompt('Run tfcrop?')
-                if tfcrop:
                     flagdata(vis=proj_dir + msname, mode='tfcrop')
-
-                flag45 = prompt('Flag baseline 4-5?')
-                if flag45:
-                    flagdata(vis=proj_dir + msname, mode='manual', antenna='3&4')
 
             # Update parameters
             imsize = update_param('imsize', imsize, int)
@@ -307,6 +298,8 @@ def main(
                 wprojplanes=wprojplanes,
                 phasecenter=phasecenter,
                 mask=init_mask,
+                usemask=usemask,
+                cycleniter=cycleniter,
                 pblimit=pblim,
                 parallel=mpi,
             )

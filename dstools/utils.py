@@ -123,6 +123,16 @@ class Array:
             'MKT_UHF': 2.56,
             'MKT_L': 2.56,
         }
+        imsize = {
+            'AK_low': 4000,
+            'AK_mid': 3600,
+            'AK_high': 3600,
+            'AT_L': 4500,
+            'AT_C': 2044,
+            'AT_X': 2044,
+            'MKT_UHF': 4500,
+            'MKT_L': 6144,
+        }
 
         cellsize = {
             'AK_low': 2.5,
@@ -135,14 +145,14 @@ class Array:
             'MKT_L': 1,
         }
         
-       
         self.frequency = frequencies[self.band]
-
-        # resolution = wavelengths[self.band] /  max_baselines[self.config] * u.rad.to(u.arcsec)
         self.cell = cellsize[self.band]
+        self.imsize = imsize[self.band]
 
-        self.imradius = primary_beams[self.band]
-        self.imsize = int(round(self.imradius / (self.cell*u.arcsec.to(u.deg)), 0))
+    @property
+    def imradius(self):
+        return self.imsize * self.cell*u.arcsec.to(u.deg) / 2
+        
 
     def __str__(self):
 
