@@ -9,8 +9,8 @@ from dstools.utils import BANDS, CONFIGS, Array, colored, prompt, update_param
 
 def import_data(input_file, proj_dir, msname):
 
-    os.system(f'mv {proj_dir}/{msname} {proj_dir}/{msname}.bak')
-    os.system(f'rm -r {proj_dir}/{msname}.flagversions')
+    os.system(f'mv {proj_dir}/{msname} {proj_dir}/{msname}.bak >/dev/null 2>&1')
+    os.system(f'rm -r {proj_dir}/{msname}.flagversions >/dev/null 2>&1')
 
     # Convert Miriad visibilities to UVFITS format for reliable import
     if input_file.endswith('.cal'):
@@ -23,7 +23,7 @@ def import_data(input_file, proj_dir, msname):
             vis=f'{proj_dir}/{msname}',
         )
     elif input_file.endswith('.ms'):
-        os.system(f'cp -r {input_file} {proj_dir}/{msname}')
+        os.system(f'cp -r {input_file} {proj_dir}/{msname} >/dev/null 2>&1')
 
     return
 
@@ -59,21 +59,21 @@ def import_data(input_file, proj_dir, msname):
               help='Use parallel processing with mpi.')
 @click.argument('data')
 def main(
-        data,
-        config,
-        band,
-        iterations,
-        threshold,
-        nterms,
-        scale,
-        widefield,
-        robust,
-        phasecenter,
-        pblim,
-        proj_dir,
-        interactive,
-        automask,
-        mpi,
+    data,
+    config,
+    band,
+    iterations,
+    threshold,
+    nterms,
+    scale,
+    widefield,
+    robust,
+    phasecenter,
+    pblim,
+    proj_dir,
+    interactive,
+    automask,
+    mpi,
 ):
 
     # PARAMETER SETTINGS
@@ -93,8 +93,8 @@ def main(
     imradius = array.imradius
 
     field = '0'
-    cellsize = '{}arcsec'.format(cell)
-    reffreq = '{}MHz'.format(freq)
+    cellsize = f'{cell}arcsec'
+    reffreq = f'{freq}MHz'
     clean_scales = list(scale)
 
     if widefield:
@@ -104,8 +104,7 @@ def main(
         gridder = 'standard'
         wprojplanes = 1
 
-    clean_mask = '{}/{}.{}.mask'.format(proj_dir, source, band)
-    outlierfile = ''
+    clean_mask = f'{proj_dir}/{source}.{band}.mask'
 
     # Set cycleniter=niter if using both automasking and interactive mode
     # to ensure major cycles trigger at expected times
@@ -124,20 +123,20 @@ def main(
 
         # Update parameters
         cell = update_param('cell', cell, float)
-        cellsize = '{}arcsec'.format(cell)
+        cellsize = f'{cell}arcsec'
 
         imsize = update_param('imsize', imsize, int)
         imradius = imsize * cell*u.arcsec.to(u.deg) / 2
         nterms = update_param('nterms', nterms, int)
 
-    os.system('mkdir -p {}'.format(proj_dir))
+    os.system(f'mkdir -p {proj_dir}')
 
     # Data Import.
     # ------------
-    msname = '{}.{}.ms'.format(source, band)
-    calibrated_ms = '{}/{}.{}.selfcal.ms'.format(proj_dir, source, band)
+    msname = f'{source}.{band}.ms'
+    calibrated_ms = f'{proj_dir}/{source}.{band}.selfcal.ms'
 
-    if os.path.exists(proj_dir + msname):
+    if os.path.exists(f'{proj_dir}/{msname}'):
         reimport = prompt('Redo data import?')
     else:
         reimport = True
@@ -155,14 +154,14 @@ def main(
     test_params = prompt('Experiment with imsize / cellsize / nterms / flagging?')
 
     if test_params:
-        os.system('rm -r {}/test_params'.format(proj_dir))
-        os.system('mkdir {}/test_params'.format(proj_dir))
-        testms = '{}/test_params/testms.ms'.format(proj_dir)
-        os.system('cp -r {} {}'.format(proj_dir + msname, testms))
+        os.system(f'rm -r {proj_dir}/test_params >/dev/null 2>&1')
+        os.system(f'mkdir {proj_dir}/test_params')
+        testms = f'{proj_dir}/test_params/testms.ms'
+        os.system(f'cp -r {proj_dir}/{msname} {testms} >/dev/null 2>&1')
 
         while True:
 
-            test_image = prompt("Make test image?")
+            test_image = prompt('Make test image?')
             if test_image:
 
                 # Optionally specify low-res and short timerange for quicker test imaging
@@ -182,7 +181,7 @@ def main(
                     imsize=[testimsize],
                     threshold=threshold,
                     niter=2000,
-                    imagename='{}/test_params/test_im'.format(proj_dir),
+                    imagename=f'{proj_dir}/test_params/test_im',
                     nterms=nterms,
                     deconvolver='mtmfs',
                     scales=clean_scales,
@@ -196,11 +195,7 @@ def main(
                     pblimit=pblim,
                     parallel=mpi,
                 )
-                os.system('rm -r {}/test_params/test_im*'.format(proj_dir))
-
-            accept_params = prompt('Finished experimenting?')
-            if accept_params:
-                break
+                os.system(f'rm -r {proj_dir}/test_params/test_im*')
 
             # Run some additional flagging
             reflag = prompt('Perform flagging?')
@@ -237,7 +232,11 @@ def main(
             cellsize = update_param('cellsize', cellsize, str)
             nterms = update_param('nterms', nterms, int)
 
-    os.system('rm -rf {}/test_params'.format(proj_dir))
+            accept_params = prompt('Finished experimenting?')
+            if accept_params:
+                break
+
+    os.system(f'rm -rf {proj_dir}/test_params >/dev/null 2>&1')
 
     # Self calibration.
     # -----------------
@@ -246,11 +245,9 @@ def main(
 
     if selfcal:
 
-        os.system('mkdir -p {}/selfcal/{}'.format(proj_dir, band))
+        os.system(f'mkdir -p {proj_dir}/selfcal/{band}')
 
-        files = glob.glob(
-            '{}/selfcal/{}/{}.{}.selfcal.[0-9].ms'.format(proj_dir, band, source, band)
-        )
+        files = glob.glob(f'{proj_dir}/selfcal/{band}/{source}.{band}.selfcal.[0-9].ms')
         i = len(files)
         cont = 'y'
         while cont:
@@ -261,8 +258,8 @@ def main(
             # Use freshly split ms each iteration after first loop
             selfcal_ms = (
                 proj_dir
-                + 'selfcal/{}/'.format(band)
-                + msname.replace('.ms', '.selfcal.{}.ms'.format(i - 1))
+                + f'selfcal/{band}/'
+                + msname.replace('.ms', f'.selfcal.{i-1}.ms')
             )
             selfcal_ms = selfcal_ms if os.path.exists(selfcal_ms) else proj_dir + msname
 
@@ -315,11 +312,8 @@ def main(
                     continue
 
                 # Save self-cal plots
-                cal_file = '{}/selfcal/{}/{}.phase_selfcal_{}.{}'.format(
-                    proj_dir, band, source, interval, i
-                )
+                cal_file = f'{proj_dir}/selfcal/{band}/{source}.phase_selfcal_{interval}.{i}'
                 cal_table = cal_file + '.cal'
-                cal_plot = cal_file + '.png'
                 gaincal(
                     vis=selfcal_ms,
                     caltable=cal_table,
@@ -333,7 +327,6 @@ def main(
                     xaxis='time',
                     yaxis='phase',
                     plotrange=[0, 0, -30, 30],
-                    plotfile=cal_plot,
                     showgui=True,
                 )
 
@@ -341,17 +334,18 @@ def main(
                 cal_good = prompt('Is self-cal a good solution?')
 
                 if cal_good:
+                    subprocess.run(f'ragavi-gains -t {cal_table} -o {cal_file}', shell=True)
                     applycal(vis=selfcal_ms, gaintable=[cal_table], interp='linear')
                     split(
                         vis=selfcal_ms,
                         outputvis=proj_dir
-                        + 'selfcal/{}/'.format(band)
-                        + msname.replace('.ms', '.selfcal.{}.ms'.format(i)),
+                        + f'selfcal/{band}/'
+                        + msname.replace('.ms', f'.selfcal.{i}.ms'),
                         datacolumn='corrected',
                     )
                     break
                 else:
-                    os.system('rm -r {} {}'.format(cal_table, cal_plot))
+                    os.system(f'rm -r {cal_table}')
 
             # Break from loop once solution is sufficient
             cont = prompt('Proceed with more selfcal?')
@@ -362,23 +356,21 @@ def main(
             replace_mask = prompt('Update the existing clean mask with current mask?')
 
             if replace_mask:
-                os.system('rm -r {}'.format(clean_mask))
-                os.system('cp -r {} {}'.format(backup_mask, clean_mask))
+                os.system(f'rm -r {clean_mask}')
+                os.system(f'cp -r {backup_mask} {clean_mask}')
         else:
-            os.system('cp -r {} {}'.format(backup_mask, clean_mask))
+            os.system(f'cp -r {backup_mask} {clean_mask}')
 
         # Copy calibrated MS to root folder
-        os.system('rm -r {}'.format(calibrated_ms))
-        os.system('cp -r {} {}'.format(selfcal_ms, calibrated_ms))
+        os.system(f'rm -r {calibrated_ms} >/dev/null 2>&1')
+        os.system(f'cp -r {selfcal_ms} {calibrated_ms}')
 
     else:
 
         # If restarting a run with selfcal already complete, use existing calibrated MS.
         # Otherwise use the most up-to-date selfcal version
         if not os.path.exists(calibrated_ms):
-            selfcal_path = '{}/selfcal/{}/{}.{}.selfcal.[0-9].ms'.format(
-                proj_dir, band, source, band
-            )
+            selfcal_path = f'{proj_dir}/selfcal/{band}/{source}.{band}.selfcal.[0-9].ms'
             files = glob.glob(selfcal_path)
             i = len(files)
             if i == 0:
@@ -387,7 +379,7 @@ def main(
             else:
                 selfcal_ms = sorted(files)[-1]
 
-            os.system('cp -r {} {}'.format(selfcal_ms, calibrated_ms))
+            os.system(f'cp -r {selfcal_ms} {calibrated_ms}')
 
             # Check for existing clean mask
             if not os.path.exists(clean_mask):
@@ -396,7 +388,7 @@ def main(
     # Preparation for Deep Clean
     # --------------------------
 
-    field_model_path = '{}/field_model/{}/'.format(proj_dir, band)
+    field_model_path = f'{proj_dir}/field_model/{band}/'
     deep_mask = clean_mask
 
     if os.path.exists(field_model_path):
@@ -405,14 +397,13 @@ def main(
         # the mask parameter to ensure the existing clean mask is used
         clear_model = prompt('Start from fresh field model?')
         if clear_model:
-            os.system('mv {} {}_backup'.format(field_model_path, field_model_path[:-1]))
+            os.system(f'mv {field_model_path} {field_model_path[:-1]}_backup')
 
         keep_mask = prompt('Continue with existing clean mask?')
         if keep_mask:
             deep_mask = ''
 
-    os.system('mkdir -p {}'.format(field_model_path))
-
+    os.system(f'mkdir -p {field_model_path}')
 
     # Deep clean to produce field model.
     # ----------------------------------
@@ -424,11 +415,9 @@ def main(
     if os.path.exists(field_model_path):
         deep_clean = prompt('Perform deep clean?')
 
-
-
     work_ms = calibrated_ms.replace('.ms', '.subbed.ms')
     if not os.path.exists(work_ms):
-        os.system("cp -r {} {}".format(calibrated_ms, work_ms))
+        os.system(f'cp -r {calibrated_ms} {work_ms}')
 
     clean_round = len(glob.glob(f'{field_model_path}/*im_deep*.image.tt0'))
     imname = f'im_deep{clean_round}'
@@ -558,7 +547,7 @@ def main(
         uvsub(vis=work_ms)
 
     # Reimage to confirm field subtraction
-    os.system('rm -r {}/{}im_subbed*'.format(field_model_path, source))
+    os.system(f'rm -r {field_model_path}/{source}im_subbed* >/dev/null 2>&1')
     tclean(
         vis=work_ms,
         field=field,
@@ -567,7 +556,7 @@ def main(
         imsize=[imsize],
         threshold=threshold,
         niter=iterations // 4,
-        imagename='{}/{}.im_subbed'.format(field_model_path, source),
+        imagename=f'{field_model_path}/{source}.im_subbed',
         nterms=nterms,
         deconvolver='mtmfs',
         scales=clean_scales,
@@ -593,21 +582,10 @@ def main(
         for stokes in stokes_params:
             for imtype in imtypes:
 
-                os.system(
-                    'rm -r {}/{}.im_{}.{}.image*'.format(
-                        field_model_path, source, imtype, stokes
-                    )
-                )
-
-                imagename = '{}/{}.im_{}.image.{}/'.format(
-                    field_model_path, source, imtype, tt
-                )
-                subimagename = '{}/{}.im_{}.{}.image.{}'.format(
-                    field_model_path, source, imtype, stokes, tt
-                )
-                fitsname = '{}/{}.im_{}.{}.{}.fits'.format(
-                    field_model_path, source, stokes, imtype, tt
-                )
+                os.system(f'rm -r {field_model_path}/{source}.im_{imtype}.{stokes}.image* >/dev/null 2>&1')
+                imagename = f'{field_model_path}/{source}.im_{imtype}.image.{tt}/'
+                subimagename = f'{field_model_path}/{source}.im_{imtype}.{stokes}.image.{tt}'
+                fitsname = f'{field_model_path}/{source}.im_{stokes}.{imtype}.{tt}.fits'
 
                 imsubimage(
                     imagename=imagename,
