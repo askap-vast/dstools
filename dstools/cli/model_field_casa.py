@@ -413,19 +413,6 @@ def main(
 
     os.system('mkdir -p {}'.format(field_model_path))
 
-    # Optionally specify outlier sources to remove
-    kill_offaxis = prompt('Clean off-axis sources separately?')
-    outliers = []
-    if kill_offaxis:
-
-        # Interactively specify offaxis source coordinates
-        while True:
-            killcoords = input('Enter source coordinates (J2000 hms dms): ')
-
-            if killcoords == '':
-                break
-
-            outliers.append(killcoords)
 
     # Deep clean to produce field model.
     # ----------------------------------
@@ -437,60 +424,53 @@ def main(
     if os.path.exists(field_model_path):
         deep_clean = prompt('Perform deep clean?')
 
-    imnames = ['im_outlier' for _ in outliers] + ['im_deep']
-    imsizes = [200 for _ in outliers] + [imsize]
-    masktypes = ['user' for _ in outliers] + [usemask]
-    outliers += [phasecenter]
 
 
     work_ms = calibrated_ms.replace('.ms', '.subbed.ms')
     if not os.path.exists(work_ms):
         os.system("cp -r {} {}".format(calibrated_ms, work_ms))
 
-    for size, imname, masktype, phasecen in zip(imsizes, imnames, masktypes, outliers):
+    clean_round = len(glob.glob(f'{field_model_path}/*im_deep*.image.tt0'))
+    imname = f'im_deep{clean_round}'
 
-        clean_round = len(glob.glob('{}/*{}*.image.tt0'.format(field_model_path, imname)))
-        imname = f'{imname}{clean_round}'
+    while deep_clean:
+        tclean(
+            vis=work_ms,
+            field=field,
+            cell=[cellsize],
+            imsize=[imsize],
+            threshold=threshold,
+            niter=iterations,
+            imagename=f'{field_model_path}/{source}.{imname}',
+            nterms=nterms,
+            deconvolver='mtmfs',
+            scales=clean_scales,
+            reffreq=reffreq,
+            weighting='briggs',
+            stokes='IQUV',
+            robust=robust,
+            mask=deep_mask,
+            usemask=usemask,
+            pbmask=0.0,
+            cycleniter=cycleniter,
+            gridder=gridder,
+            wprojplanes=wprojplanes,
+            phasecenter=phasecenter,
+            interactive=interactive,
+            pblimit=pblim,
+            parallel=mpi,
+        )
 
-        while deep_clean:
-            tclean(
-                vis=work_ms,
-                field=field,
-                cell=[cellsize],
-                imsize=[size],
-                threshold=threshold,
-                niter=iterations,
-                imagename='{}/{}.{}'.format(field_model_path, source, imname),
-                nterms=nterms,
-                deconvolver='mtmfs',
-                scales=clean_scales,
-                reffreq=reffreq,
-                weighting='briggs',
-                stokes='IQUV',
-                robust=robust,
-                mask=deep_mask,
-                usemask=masktype,
-                pbmask=0.0,
-                cycleniter=cycleniter,
-                outlierfile=outlierfile,
-                gridder=gridder,
-                wprojplanes=wprojplanes,
-                phasecenter=phasecen,
-                interactive=interactive,
-                pblimit=pblim,
-                parallel=mpi,
-            )
+        cont = prompt('Continue with further cleaning?')
+        if not cont:
 
-            cont = prompt('Continue with further cleaning?')
-            if not cont:
+            deep_mask = f'{field_model_path}/{source}.{imname}.mask'
+            os.system(f'rm -r {clean_mask} >/dev/null 2>&1')
+            os.system(f'cp -r {deep_mask} {clean_mask} >/dev/null 2>&1')
 
-                deep_mask = '{}/{}.{}.mask'.format(field_model_path, source, imname)
-                os.system('rm -r {}'.format(clean_mask))
-                os.system('cp -r {} {}'.format(deep_mask, clean_mask))
-
-                break
-            else:
-                deep_mask = ''
+            break
+        else:
+            deep_mask = ''
 
         # Mask out the source.
         # --------------------
@@ -500,19 +480,13 @@ def main(
         bgmodel = '{}/{}.{}.bgmodel'.format(field_model_path, source, imname)
 
         if not prompt('Mask out region of field model?'):
-            source_mask = 'circle[[{}pix, {}pix], {}pix]'.format(
-                size-1, size-1, 1
-            )
-        elif prompt('Automatically generate source mask?'):
-            source_mask = 'circle[[{}pix, {}pix], {}pix]'.format(
-                size // 2, size // 2, 10 * 3
-            )
+            source_mask = 'circle[[{imsize-1}pix, {imsize-1}pix], {1}pix]'
         else:
             tclean(
                 vis=work_ms,
                 field=field,
                 cell=[cellsize],
-                imsize=[size],
+                imsize=[imsize],
                 threshold=threshold,
                 niter=1,
                 imagename='{}/{}.maskgen'.format(field_model_path, source),
