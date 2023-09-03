@@ -204,15 +204,15 @@ def decs_rad(dec_string):
 
 
 if len(sys.argv) != 2:
-    sys.exit("Usage {} <ms_file>".format(sys.argv[0]))
+    sys.exit("Usage %s <ms_file>" %(sys.argv[0]))
 
 ms = sys.argv[1]
 
 # Check that the observation wasn't in pol_fixed mode
-ta = table("{}/ANTENNA".format(ms), readonly=True, ack=False)
+ta = table("%s/ANTENNA" %(ms), readonly=True, ack=False)
 ant_mount = ta.getcol("MOUNT", 0, 1)
 if ant_mount[0] != 'equatorial':
-    sys.exit("{} doesn't support pol_fixed mode".format(sys.argv[0]))
+    sys.exit("%s doesn't support pol_fixed mode" %(sys.argv[0]))
 ta.close()
 
 # Work out which beam is in this MS
@@ -220,28 +220,27 @@ t = table(ms, readonly=True, ack=False)
 vis_feed = t.getcol('FEED1', 0, 1)
 beam = vis_feed[0]
 
-if tableexists("{}/FIELD_OLD".format(ms)) == False:
+if tableexists("%s/FIELD_OLD" %(ms)) == False:
     print("This is the first time fix_dir has been run on this measurement set")
     print("Making copy of original FIELD table")
-    tablecopy(tablename="{}/FIELD".format(ms), newtablename="{}/FIELD_OLD".format(ms))
+    tablecopy(tablename="%s/FIELD" %(ms), newtablename="%s/FIELD_OLD" %(ms))
 else:
     print("fix_dir has already been run on this measurement set")
     print("Original copy of FIELD table is being used")
 
 print("Reading phase directions")
-tp = table("{}/FIELD_OLD".format(ms), readonly=True, ack=False)
+tp = table("%s/FIELD_OLD" %(ms), readonly=True, ack=False)
 ms_phase = tp.getcol('PHASE_DIR')
 tp.close()
 
 # Work out how many fields are in the MS.
 n_fields = ms_phase.shape[0]
-print("Found {} fields in FIELD table".format(n_fields))
+print("Found %d fields in FIELD table" %(n_fields))
 
 # Open up the MS FIELD table so it can be updated.
-tp = table("{}/FIELD".format(ms), readonly=False, ack=False)
+tp = table("%s/FIELD" %(ms), readonly=False, ack=False)
 # Open up the MS FEED table so we can work out what the offset is for the beam.
-tf = table("{}/FEED".format(ms), readonly=True, ack=False)
-
+tf = table("%s/FEED" %(ms), readonly=True, ack=False)
 # The offsets are assumed to be the same for all antennas so get a list of all
 # the offsets for one antenna and for the current beam. This should return offsets
 # required for each field.
@@ -249,30 +248,24 @@ t1 = taql("select from $tf where ANTENNA_ID==0 and FEED_ID==$beam")
 n_offsets = t1.getcol("BEAM_OFFSET").shape[0]
 offset_times = t1.getcol("TIME")
 offset_intervals = t1.getcol("INTERVAL")
-print("Found {} offsets in FEED table for beam {}".format(n_offsets, beam))
-
+print("Found %d offsets in FEED table for beam %d" %(n_offsets, beam))
 for offset_index in range(n_offsets):
     offset = t1.getcol("BEAM_OFFSET")[offset_index]
-    print("Offset {} : t={:.2f}-{:.2f} : ({:.2f},{:.2f})".format(
-        offset_index,
-        offset_times[offset_index]-offset_intervals[offset_index]/2.0,
-        offset_times[offset_index]+offset_intervals[offset_index]/2.0,
-        -offset[0][0]*180.0/np.pi,
-        offset[0][1]*180.0/np.pi))
-    
+    print("Offset %d : t=%f-%f : (%fd,%fd)" %(offset_index, offset_times[offset_index]-offset_intervals[offset_index]/2.0,offset_times[offset_index]+offset_intervals[offset_index]/2.0, -offset[0][0]*180.0/np.pi, offset[0][1]*180.0/np.pi))
+
 # Update the beam position for each field
 for field in range(n_fields):
     t = table(ms, readonly=True, ack=False)
-    tfdata = taql("select from $t where FIELD_ID==$field and FEED1==$beam and ANTENNA1=0 and ANTENNA2=1 and sumsqr(UVW[:2])>1.0")
+    # Get times for the specified field
+    tfdata = taql("select from $t where FIELD_ID==$field and FEED1==$beam and ANTENNA1==0 and ANTENNA2==0")
     time_data = tfdata.getcol("TIME")
-    
-    # Check if there is data for this field in the measurement set
     if len(time_data) == 0:
+        print("Warning: Couldn't find valid data for field %d" %(field))
         continue
+    
     offset_index = -1
     for offset in range(n_offsets):
-        if (time_data[0] > offset_times[offset]-offset_intervals[offset]/2.0) and \
-           (time_data[0] < offset_times[offset]+offset_intervals[offset]/2.0):
+        if (time_data[0] > offset_times[offset]-offset_intervals[offset]/2.0) and (time_data[0] < offset_times[offset]+offset_intervals[offset]/2.0):
             offset_index = offset
             break
 
@@ -288,10 +281,8 @@ for field in range(n_fields):
     new_pos = phase.shift(-offset[0][0], offset[0][1])
     new_pos.rn = 15
     new_pos.dn = 15
-    new_pos_str = "{}".format(new_pos)
-    print("Setting position of beam {}, field {} to {} (t={:.2f}-{:.2f}, offset={})".format(
-        beam, field, new_pos_str, time_data[0], time_data[-1], offset_index))
-    
+    new_pos_str = "%s" %(new_pos)
+    print("Setting position of beam %d, field %d to %s (t=%f-%f, offset=%d)" %(beam, field, new_pos_str, time_data[0], time_data[-1], offset_index))
     # Update the FIELD table with the beam position
     new_ra = new_pos.ra
     if new_ra > np.pi:
