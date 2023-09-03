@@ -411,18 +411,17 @@ def main(
     # Set a conservative clean mask and let it run until stopping criteria met,
     # then assess whether further cleaning is required with an updated mask.
 
-    deep_clean = True
-    if os.path.exists(field_model_path):
-        deep_clean = prompt('Perform deep clean?')
+    deep_clean = prompt('Perform deep clean?')
 
     work_ms = calibrated_ms.replace('.ms', '.subbed.ms')
     if not os.path.exists(work_ms):
         os.system(f'cp -r {calibrated_ms} {work_ms}')
 
-    clean_round = len(glob.glob(f'{field_model_path}/*im_deep*.image.tt0'))
-    imname = f'im_deep{clean_round}'
-
     while deep_clean:
+
+        clean_round = len(glob.glob(f'{field_model_path}/*im_deep*.image.tt0'))
+        imname = f'im_deep{clean_round}'
+
         tclean(
             vis=work_ms,
             field=field,
@@ -461,73 +460,28 @@ def main(
         else:
             deep_mask = ''
 
-        # Mask out the source.
-        # --------------------
-        # Either use a generic circular mask at image center or specify via a custom tclean mask
+    # Use latest image / model for remaining processing
+    clean_round = len(glob.glob(f'{field_model_path}/*im_deep*.image.tt0')) - 1
+    imname = f'im_deep{clean_round}'
 
-        model = '{}/{}.{}.model'.format(field_model_path, source, imname)
-        bgmodel = '{}/{}.{}.bgmodel'.format(field_model_path, source, imname)
+    # Mask out the source.
+    # --------------------
+    # Either use a generic circular mask at image center or specify via a custom tclean mask
 
-        if not prompt('Mask out region of field model?'):
-            source_mask = 'circle[[{imsize-1}pix, {imsize-1}pix], {1}pix]'
-        else:
-            tclean(
-                vis=work_ms,
-                field=field,
-                cell=[cellsize],
-                imsize=[imsize],
-                threshold=threshold,
-                niter=1,
-                imagename='{}/{}.maskgen'.format(field_model_path, source),
-                nterms=nterms,
-                deconvolver='mtmfs',
-                scales=clean_scales,
-                reffreq=reffreq,
-                weighting='briggs',
-                stokes='IQUV',
-                robust=robust,
-                interactive=interactive,
-                phasecenter=phasecen,
-                pblimit=pblim,
-                parallel=mpi,
-            )
-            source_mask = '{}/{}.source.mask'.format(field_model_path, source)
-            os.system(
-                'mv {}/{}.maskgen.mask {}'.format(field_model_path, source, source_mask)
-            )
-            os.system('rm -r {}/{}.maskgen*'.format(field_model_path, source))
+    model = f'{field_model_path}/{source}.{imname}.model'
+    bgmodel = f'{field_model_path}/{source}.{imname}.bgmodel'
 
-        os.system('rm -r {}*'.format(bgmodel))
-        for tt in ['tt{}'.format(i) for i in range(nterms)]:
-            mask = '{}/{}.{}.mask.{}'.format(field_model_path, source, imname, tt)
-            modelfile = '{}.{}'.format(model, tt)
-            bgmodelfile = bgmodel + '.' + tt
-
-            # Remove target source from field model
-            makemask(
-                mode='copy',
-                inpimage=modelfile,
-                output=mask,
-                inpmask=source_mask,
-                overwrite=True,
-            )
-            immath(
-                imagename=[modelfile, mask],
-                outfile=bgmodelfile,
-                expr='IM0*(1-IM1)',
-            )
-                
-
-        # Insert masked background model into visibilities and subtract
+    if not prompt('Mask out region of field model?'):
+        source_mask = 'circle[[{imsize-1}pix, {imsize-1}pix], {1}pix]'
+    else:
         tclean(
             vis=work_ms,
             field=field,
             cell=[cellsize],
             imsize=[imsize],
-            startmodel=[bgmodel + '.tt{}'.format(i) for i in range(nterms)],
-            savemodel='modelcolumn',
-            niter=0,
-            imagename='{}/{}.im_presub'.format(field_model_path, source),
+            threshold=threshold,
+            niter=1,
+            imagename=f'{field_model_path}/{source}.maskgen',
             nterms=nterms,
             deconvolver='mtmfs',
             scales=clean_scales,
@@ -535,19 +489,66 @@ def main(
             weighting='briggs',
             stokes='IQUV',
             robust=robust,
-            gridder=gridder,
-            wprojplanes=wprojplanes,
+            interactive=interactive,
             phasecenter=phasecenter,
             pblimit=pblim,
             parallel=mpi,
         )
-        os.system('rm -r {}/{}.im_presub*'.format(field_model_path, source))
+        source_mask = f'{field_model_path}/{source}.source.mask'
+        os.system(f'mv {field_model_path}/{source}.maskgen.mask {source_mask} >/dev/null 2>&1')
+        os.system(f'rm -r {field_model_path}/*maskgen* >/dev/null 2>&1')
 
-        # Perform UV-subtraction.
-        uvsub(vis=work_ms)
+    os.system(f'rm -r {bgmodel}* >/dev/null 2>&1')
+
+    for tt in [f'tt{i}' for i in range(nterms)]:
+        mask = f'{field_model_path}/{source}.{imname}.mask.{tt}'
+        modelfile = f'{model}.{tt}'
+        bgmodelfile = f'{bgmodel}.{tt}'
+
+        # Remove target source from field model
+        makemask(
+            mode='copy',
+            inpimage=modelfile,
+            output=mask,
+            inpmask=source_mask,
+            overwrite=True,
+        )
+        immath(
+            imagename=[modelfile, mask],
+            outfile=bgmodelfile,
+            expr='IM0*(1-IM1)',
+        )
+
+    # Insert masked background model into visibilities and subtract
+    tclean(
+        vis=work_ms,
+        field=field,
+        cell=[cellsize],
+        imsize=[imsize],
+        startmodel=[f'{bgmodel}.tt{i}' for i in range(nterms)],
+        savemodel='modelcolumn',
+        niter=0,
+        imagename=f'{field_model_path}/{source}.im_presub',
+        nterms=nterms,
+        deconvolver='mtmfs',
+        scales=clean_scales,
+        reffreq=reffreq,
+        weighting='briggs',
+        stokes='IQUV',
+        robust=robust,
+        gridder=gridder,
+        wprojplanes=wprojplanes,
+        phasecenter=phasecenter,
+        pblimit=pblim,
+        parallel=mpi,
+    )
+    os.system(f'rm -r {field_model_path}/{source}.im_presub* >/dev/null 2>&1')
+
+    # Perform UV-subtraction.
+    uvsub(vis=work_ms)
 
     # Reimage to confirm field subtraction
-    os.system(f'rm -r {field_model_path}/{source}im_subbed* >/dev/null 2>&1')
+    os.system(f'rm -r {field_model_path}/{source}.im_subbed* >/dev/null 2>&1')
     tclean(
         vis=work_ms,
         field=field,
