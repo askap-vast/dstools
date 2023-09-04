@@ -29,6 +29,7 @@ dstools-plot-dspec = "dstools.cli.plot_dspec:main"
 dstools-remove-offaxis = "dstools.cli.remove_offaxis:main"
 dstools-diagnostics = "dstools.cli.plot_diagnostics:main"
 dstools-quickds = "dstools.cli.quickds:main"
+dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
