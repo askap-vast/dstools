@@ -720,12 +720,12 @@ class LightCurve(TimeFreqSeries):
 
         # Set time/phase axis limits if folded
         phasemax = 0.5 * self.ds.fold_periods
-        almin, valmax = (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
+        valmin, valmax = (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
         
         # Construct time and flux axes
         bins = self.ds.data['I'].shape[0]
-        interval = (valmax - almin) / bins
-        self.x = np.array([almin + i*interval for i in range(bins)])
+        interval = (valmax - valmin) / bins
+        self.x = np.array([valmin + i*interval for i in range(bins)])
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
 
 
