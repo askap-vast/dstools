@@ -5,7 +5,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 from astropy.utils.exceptions import ErfaWarning
 
-from dstools.utils import setupLogger
+from dstools.utils import setupLogger, BANDS
 from dstools.dynamic_spectrum import DynamicSpectrum
 
 warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
               help='Period phase offset to use when folding data.')
 @click.option('-C', '--calscans', is_flag=True, default=True,
               help='Toggle inclusion of null-valued time chunks while off-source (e.g. calibrator scans, wind stows)')
-@click.option('-B', '--band', default='AT_L', type=click.Choice(['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']),
+@click.option('-B', '--band', default='AT_L', type=click.Choice(BANDS),
               help='Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/')
 @click.option('-S', '--save', is_flag=True, default=False,
               help='Toggle saving of plots and lightcurve data.')

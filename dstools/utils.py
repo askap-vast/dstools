@@ -6,7 +6,7 @@ import astropy.units as u
 from dataclasses import dataclass
 
 CONFIGS = ['6km', '750_no6', '750_6', 'H168']
-BANDS = ['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']
+BANDS = ['AK_low', 'AK_mid', 'AK_high', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']
 
 def parse_casa_args(func, module, kwargs, args=None):
     path = dstools.__path__[0]
@@ -83,7 +83,7 @@ class Array:
         wavelengths = {
             'AK_low': 0.4026,  
             'AK_mid': 0.2450,
-            'AK_high': -1,
+            'AK_high': 0.1983,
             'AT_L': 0.0967,
             'AT_C': 0.0461,
             'AT_X': 0.0300,
@@ -103,7 +103,7 @@ class Array:
         frequencies = {
             'AK_low': '888.49',
             'AK_mid': '1367.49',
-            'AK_high': '',
+            'AK_high': '1655.49',
             'AT_L': '2100',
             'AT_C': '5500',
             'AT_X': '9000',
@@ -116,7 +116,7 @@ class Array:
         primary_beams = {
             'AK_low': 1.111,
             'AK_mid': 0.84,
-            'AK_high': -1,
+            'AK_high':0.84,
             'AT_L': 0.825,
             'AT_C': 0.2225,
             'AT_X': 0.1460,
@@ -137,7 +137,7 @@ class Array:
         cellsize = {
             'AK_low': 2.5,
             'AK_mid': 1.5,
-            'AK_high': -1,
+            'AK_high': 1.25,
             'AT_L': 0.66,
             'AT_C': 0.32,
             'AT_X': 0.21,

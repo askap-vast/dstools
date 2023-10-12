@@ -4,10 +4,11 @@ import os
 import numpy as np
 from casacore.tables import table, taql
 
+from dstools.utils import BANDS
 
 @click.command()
 @click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
-@click.option('-B', '--band', default='AT_L', type=click.Choice(['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']))
+@click.option('-B', '--band', default='AT_L', type=click.Choice(BANDS))
 @click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
 @click.option('-c', '--datacolumn', type=click.Choice(['data', 'corrected']), default='data',
               help='Selection of DATA or CORRECTED_DATA column.')

@@ -2,12 +2,12 @@ import click
 import os
 import subprocess
 
-from dstools.utils import parse_casa_args
+from dstools.utils import parse_casa_args, BANDS, CONFIGS
 
 @click.command()
-@click.option('-C', '--config', type=click.Choice(['6km', '750_no6', '750_6', 'H168']), default='6km',
+@click.option('-C', '--config', type=click.Choice(CONFIGS), default='6km',
               help='Array configuration, used to calculate image and pixel sizes. ASKAP is equivalent to 6km.')
-@click.option('-B', '--band', default='AT_L', type=click.Choice(['AK_low', 'AK_mid', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']),
+@click.option('-B', '--band', default='AT_L', type=click.Choice(BANDS),
               help='Observing band, used to calculate image and pixel sizes.')
 @click.option('-N', '--iterations', default=2000,
               help='Maximum number of clean iterations.')
