@@ -245,15 +245,15 @@ class DynamicSpectrum:
                 num_nans = (int(round(num_scans)), num_channels)
                 nan_chunk = np.full(num_nans, np.nan + np.nan * 1j)
 
-                XX_chunk = np.vstack([XX_chunk, nan_chunk])
-                XY_chunk = np.vstack([XY_chunk, nan_chunk])
-                YX_chunk = np.vstack([YX_chunk, nan_chunk])
-                YY_chunk = np.vstack([YY_chunk, nan_chunk])
+                XX_chunk = np.ma.vstack([XX_chunk, nan_chunk])
+                XY_chunk = np.ma.vstack([XY_chunk, nan_chunk])
+                YX_chunk = np.ma.vstack([YX_chunk, nan_chunk])
+                YY_chunk = np.ma.vstack([YY_chunk, nan_chunk])
                 
-            new_data_XX = np.vstack([new_data_XX, XX_chunk])
-            new_data_XY = np.vstack([new_data_XY, XY_chunk])
-            new_data_YX = np.vstack([new_data_YX, YX_chunk])
-            new_data_YY = np.vstack([new_data_YY, YY_chunk])
+            new_data_XX = np.ma.vstack([new_data_XX, XX_chunk])
+            new_data_XY = np.ma.vstack([new_data_XY, XY_chunk])
+            new_data_YX = np.ma.vstack([new_data_YX, YX_chunk])
+            new_data_YY = np.ma.vstack([new_data_YY, YY_chunk])
 
         new_data_XX = new_data_XX[1:]
         new_data_XY = new_data_XY[1:]
@@ -382,7 +382,7 @@ class DynamicSpectrum:
 
         time_comp = self.rebin(array.shape[0], new_shape[0], axis=0)
         freq_comp = self.rebin(array.shape[1], new_shape[1], axis=1)
-        array[np.isnan(array)] = 0 + 0j
+        array[np.isnan(array) | array.mask] = 0 + 0j
         result = time_comp @ np.array(array) @ freq_comp
         result[result == 0 + 0j] = np.nan
 
