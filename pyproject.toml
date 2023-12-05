@@ -5,16 +5,14 @@ description = "A processing pipeline to produce dynamic spectra from ATCA and AS
 authors = ["Joshua Pritchard <joshua.pritchard@sydney.edu.au>"]
 
 [tool.poetry.dependencies]
-python = ">3.9,<3.12"
+python = ">3.10"
 click = "^8.0.3"
 astropy = "^5.0.1"
 pandas = "^1.4.1"
 matplotlib = "^3.5.1"
-python-casacore = "^3.4.0"
 numpy = "^1.22.2"
 colorlog = "^6.7.0"
 dask = {extras = ["complete"], version = "^2023.2.1"}
-ragavi = "^0.5.2"
 scipy = "^1.9.3"
 
 [tool.poetry.dev-dependencies]
