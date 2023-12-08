@@ -22,6 +22,10 @@ function flag_channels {
 
 	[9000]* )
 	    ;;
+
+	[17000]* )
+	    ;;
+
     esac
 }
 

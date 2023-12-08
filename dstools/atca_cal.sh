@@ -65,7 +65,7 @@ case $reload in
 esac
 
 # Choose frequency
-export freqs=$(ls | grep -E '2100|5500|9000' | sed 's/^[^\.]*\.//g' | sort | uniq)
+export freqs=$(ls | grep -E '2100|5500|9000|17000' | sed 's/^[^\.]*\.//g' | sort | uniq)
 print "Choose frequency / IF"
 select f in $freqs; do
     if [[ "$REPLY" == stop ]]; then break; fi
@@ -75,13 +75,20 @@ select f in $freqs; do
 	continue
     fi
 
+    # TODO: improve this logic
     if [ $(echo $f | grep 2100 | wc -l) -gt 0 ]; then
         export freq=$f
         export spec=2.1
-    else
-        # TODO: add logic here to return 5500 and 9000 MHz files
+    elif [ $(echo $f | grep 5500 | wc -l) -gt 0 ]; then
         export freq=$f
         export spec=5.5
+    elif [ $(echo $f | grep 9000 | wc -l) -gt 0 ]; then
+        export freq=$f
+        export spec=9
+    elif [ $(echo $f | grep 17000 | wc -l) -gt 0 ]; then
+        export freq=$f
+        export spec=17
+
     fi
     break
 done
@@ -214,7 +221,7 @@ esac
 
 # Copy calibration to secondary calibrator
 if [ $pcal != $scal ]; then
-gpcopy vis=$pcal.$freq out=$scal.$freq options=nocal;
+    gpcopy vis=$pcal.$freq out=$scal.$freq options=nocal;
     # flag_extreme $scal.$freq 200;
 else
     print "Using primary as secondary, skipping calibration copy."
