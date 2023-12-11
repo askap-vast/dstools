@@ -6,7 +6,7 @@ import astropy.units as u
 from dataclasses import dataclass
 
 CONFIGS = ['6km', '750_no6', '750_6', 'H168']
-BANDS = ['AK_low', 'AK_mid', 'AK_high', 'AT_L', 'AT_C', 'AT_X', 'MKT_UHF', 'MKT_L']
+BANDS = ['AK_low', 'AK_mid', 'AK_high', 'AT_L', 'AT_C', 'AT_X', 'AT_K', 'MKT_UHF', 'MKT_L']
 
 def parse_casa_args(func, module, kwargs, args=None):
     path = dstools.__path__[0]
@@ -87,6 +87,7 @@ class Array:
             'AT_L': 0.0967,
             'AT_C': 0.0461,
             'AT_X': 0.0300,
+            'AT_K': 0.0167,
             'MKT_UHF': 0.2954,
             'MKT_L': 0.1795,
         }
@@ -107,6 +108,7 @@ class Array:
             'AT_L': '2100',
             'AT_C': '5500',
             'AT_X': '9000',
+            'AT_K': '17000',
             'MKT_UHF': '797.5',
             'MKT_L': '1285',
         }
@@ -120,6 +122,7 @@ class Array:
             'AT_L': 0.825,
             'AT_C': 0.2225,
             'AT_X': 0.1460,
+            'AT_K': 0.0333,
             'MKT_UHF': 2.56,
             'MKT_L': 2.56,
         }
@@ -130,6 +133,7 @@ class Array:
             'AT_L': 4500,
             'AT_C': 2044,
             'AT_X': 2044,
+            'AT_K': 1200,
             'MKT_UHF': 4500,
             'MKT_L': 6144,
         }
@@ -141,6 +145,7 @@ class Array:
             'AT_L': 0.66,
             'AT_C': 0.32,
             'AT_X': 0.21,
+            'AT_K': 0.10,
             'MKT_UHF': 1.5,
             'MKT_L': 1,
         }
