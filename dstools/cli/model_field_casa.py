@@ -1,10 +1,11 @@
-import click
-import subprocess
-import os
 import glob
-import astropy.units as u
+import os
+import subprocess
 
-from dstools.utils import BANDS, CONFIGS, Array, colored, prompt, update_param
+import astropy.units as u
+import click
+
+from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
 
 
 def import_data(input_file, proj_dir, msname):
@@ -306,7 +307,7 @@ def main(
                 interval = input('Select solution interval (in min/s): ')
                 try:
                     unit = 'min' if 'min' in interval else 's' if 's' in interval else ''
-                    num = int(interval.replace(unit, ''))
+                    int(interval.replace(unit, ''))
                 except ValueError:
                     print('Invalid solution interval entered, must be format <int>[min/s].')
                     continue

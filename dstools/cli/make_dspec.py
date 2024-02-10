@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-import click
 import os
+
+import click
 import numpy as np
-from casacore.tables import table, taql
+from casacore.tables import table
 
 from dstools.utils import BANDS
+
 
 @click.command()
 @click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
@@ -40,8 +42,6 @@ def main(noflag, band, versionname, datacolumn, ms):
         times = np.unique(t.getcol('TIME'))
         times.dump(f'{file_prefix}time.npy')
         tf[0]['CHAN_FREQ'].dump(f'{file_prefix}freq.npy')
-
-        val = len(times)
 
         datacolumn = 'CORRECTED_DATA' if datacolumn == 'corrected' else 'DATA'
         waterfall = t.getcol(datacolumn)[:, :, polidx]
