@@ -14,6 +14,7 @@ dask = {extras = ["complete"], version = "^2023.2.1"}
 scipy = "^1.9.3"
 astropy = "^6.0.0"
 pandas = "2.1.4"
+python-casacore = "^3.5.2"
 
 [tool.poetry.dev-dependencies]
 
