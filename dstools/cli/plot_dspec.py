@@ -83,7 +83,11 @@ logger = logging.getLogger(__name__)
     help="Stokes parameters that will be included in each plot.",
 )
 @click.option(
-    "-d", "--dspec", is_flag=True, default=False, help="Plot dynamic spectrum."
+    "-d",
+    "--dspec",
+    is_flag=True,
+    default=False,
+    help="Plot dynamic spectrum.",
 )
 @click.option(
     "-l",
@@ -93,7 +97,11 @@ logger = logging.getLogger(__name__)
     help="Plot channel-averaged lightcurve.",
 )
 @click.option(
-    "-p", "--spectrum", is_flag=True, default=False, help="Plot time-averaged spectrum."
+    "-p",
+    "--spectrum",
+    is_flag=True,
+    default=False,
+    help="Plot time-averaged spectrum.",
 )
 @click.option(
     "-x",
@@ -103,7 +111,11 @@ logger = logging.getLogger(__name__)
     help="Plot quadrature sum of cross-polarisations as a diagnostic for RFI and leakage.",
 )
 @click.option(
-    "-R", "--rmsynth", is_flag=True, default=False, help="Plot RM synthesis spectrum."
+    "-R",
+    "--rmsynth",
+    is_flag=True,
+    default=False,
+    help="Plot RM synthesis spectrum.",
 )
 @click.option(
     "-a",
@@ -127,7 +139,11 @@ logger = logging.getLogger(__name__)
     help="Toggle to enable folding of data. Must also provide period with -T.",
 )
 @click.option(
-    "-T", "--period", default=None, type=float, help="Period to use when folding data."
+    "-T",
+    "--period",
+    default=None,
+    type=float,
+    help="Period to use when folding data.",
 )
 @click.option(
     "-o",
@@ -151,14 +167,10 @@ logger = logging.getLogger(__name__)
     help="Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/",
 )
 @click.option(
-    "-S",
-    "--save",
-    is_flag=True,
-    default=False,
-    help="Toggle saving of plots and lightcurve data.",
-)
-@click.option(
-    "-N", "--versionname", default=None, help="Prefix for different processing versions"
+    "-N",
+    "--versionname",
+    default=None,
+    help="Prefix for different processing versions",
 )
 @click.option("-v", "--verbose", is_flag=True, default=False)
 @click.argument("project")
@@ -188,7 +200,6 @@ def main(
     period_offset,
     calscans,
     band,
-    save,
     versionname,
     verbose,
     project,
