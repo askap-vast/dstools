@@ -28,11 +28,11 @@ COLORS = {
 def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
     """Slice 1D or 2D array with variable lower and upper boundaries."""
 
-    if ax2_min and ax2_max:
+    if ax2_min is None and ax2_max is None:
+        a = a[ax1_min:] if ax1_max == 0 else a[ax1_min:ax1_max]
+    else:
         a = a[ax1_min:, :] if ax1_max == 0 else a[ax1_min:ax1_max, :]
         a = a[:, ax2_min:] if ax2_max == 0 else a[:, ax2_min:ax2_max]
-    else:
-        a = a[ax1_min:] if ax1_max == 0 else a[ax1_min:ax1_max]
 
     return a
 
