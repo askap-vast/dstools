@@ -85,7 +85,18 @@ logger = logging.getLogger(__name__)
     help="Toggle to enable folding of data. Must also provide period with -T.",
 )
 @click.option(
-    "-T", "--period", default=None, type=float, help="Period to use when folding data."
+    "-E",
+    "--derotate",
+    is_flag=True,
+    default=False,
+    help="Toggle RM de-rotation of Stokes Q/U.",
+)
+@click.option(
+    "-T",
+    "--period",
+    default=None,
+    type=float,
+    help="Period to use when folding data.",
 )
 @click.option(
     "-o",
@@ -129,6 +140,7 @@ def main(
     cmax_l,
     cmax_v,
     fold,
+    derotate,
     trim,
     period,
     period_offset,
@@ -160,6 +172,7 @@ def main(
         tunit=tunit,
         prefix=prefix,
         fold=fold,
+        derotate=derotate,
         trim=trim,
         period=period,
         period_offset=period_offset,

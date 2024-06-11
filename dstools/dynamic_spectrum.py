@@ -56,7 +56,7 @@ class DynamicSpectrum:
     tunit: u.Quantity = u.hour
     scantime: float = 10.1
 
-    derotate: bool = True
+    derotate: bool = False
 
     fold: bool = False
     period: float = None

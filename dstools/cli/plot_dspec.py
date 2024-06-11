@@ -175,6 +175,13 @@ stokes_choices = [
     help="Toggle to enable folding of data. Must also provide period with -T.",
 )
 @click.option(
+    "-E",
+    "--derotate",
+    is_flag=True,
+    default=False,
+    help="Toggle RM de-rotation of Stokes Q/U.",
+)
+@click.option(
     "-T",
     "--period",
     default=None,
@@ -232,6 +239,7 @@ def main(
     fdf,
     acf,
     fold,
+    derotate,
     trim,
     period,
     period_offset,
@@ -268,6 +276,7 @@ def main(
         prefix=prefix,
         fold=fold,
         trim=trim,
+        derotate=derotate,
         period=period,
         period_offset=period_offset,
     )
