@@ -123,19 +123,19 @@ class DynamicSpectrum:
         dts = np.array(dts)
 
         # Locate indices signaling beginning of cal-scan (scan intervals longer than ~10 seconds)
-        scan_start_indices = np.where(np.abs(dts) > self.scantime)[0]
+        scan_start_idx = np.where(np.abs(dts) > self.scantime)[0]
 
         # End indices are just prior to the next start index, then
-        scan_end_indices = scan_start_indices - 1
+        scan_end_idx = scan_start_idx - 1
 
         # Insert first scan start index and last scan end index
-        scan_start_indices = np.insert(scan_start_indices, 0, 0)
-        scan_end_indices = np.append(scan_end_indices, len(self.time) - 1)
+        scan_start_idx = np.insert(scan_start_idx, 0, 0)
+        scan_end_idx = np.append(scan_end_idx, len(self.time) - 1)
 
         # Calculate average correlator cycle time from first scan
-        avg_scan_dt = np.median(dts[: scan_end_indices[0]])
+        avg_scan_dt = np.median(dts[: scan_end_idx[0]])
 
-        return avg_scan_dt, scan_start_indices, scan_end_indices
+        return avg_scan_dt, scan_start_idx, scan_end_idx
 
     def _load_data(self):
         """Load instrumental pols and time/freq data, converting to MHz, s, and mJy."""
@@ -213,12 +213,12 @@ class DynamicSpectrum:
 
         self.time -= time[0]
 
-    def _stack_cal_scans(self, scan_start_indices, scan_end_indices):
+    def _stack_cal_scans(self, scan_start_idx, scan_end_idx):
         """Insert null data representing off-source time."""
 
         # Calculate number of cycles in each calibrator/stow break
-        time_end_break = self.time[scan_start_indices[1:]]
-        time_start_break = self.time[scan_end_indices[:-1]]
+        time_end_break = self.time[scan_start_idx[1:]]
+        time_start_break = self.time[scan_end_idx[:-1]]
         num_break_cycles = (
             np.append((time_end_break - time_start_break), 0) / self.avg_scan_dt
         )
@@ -233,12 +233,12 @@ class DynamicSpectrum:
         # Check that data is not being truncated by stacking insufficient time chunks together
         # This is a diagnostic of errors in data combination, where duplicated times are
         # dropped in dstools.make_dspec if data is combined incorrectly.
-        if scan_end_indices[-1] + 1 < self.XX.shape[0]:
+        if scan_end_idx[-1] + 1 < self.XX.shape[0]:
             logger.warning("More time samples in data array than time array")
             logger.warning("Check results with -C to see full data")
 
         for start_index, end_index, num_scans in zip(
-            scan_start_indices, scan_end_indices, num_break_cycles
+            scan_start_idx, scan_end_idx, num_break_cycles
         ):
             # Select each contiguous on-target chunk of data
             XX_chunk = self.XX[start_index : end_index + 1, :]
