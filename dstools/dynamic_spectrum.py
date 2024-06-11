@@ -166,12 +166,17 @@ class DynamicSpectrum:
 
         # Optionally remove flagged channels at top/bottom of band
         if self.trim:
+            # Create binary mask identifying non-nan values across all polarisations
             full = np.nansum((XX + XY + YX + YY), axis=0)
             full[full == 0.0 + 0.0j] = np.nan
-
             allpols = np.isfinite(full)
+
+            # Set minimum and maximum non-nan channel indices
             minchan = np.argmax(allpols)
-            maxchan = -np.argmax(allpols[::-1]) + 1
+            if np.isnan(allpols[-1]):
+                maxchan = -np.argmax(allpols[::-1]) + 1
+            else:
+                maxchan = 0
         else:
             minchan = 0
             maxchan = 0
