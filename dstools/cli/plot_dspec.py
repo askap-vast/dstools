@@ -1,12 +1,13 @@
 import logging
+import sys
 import warnings
+from itertools import chain, combinations
 
 import astropy.units as u
 import click
 import matplotlib.pyplot as plt
 from astropy.utils.exceptions import ErfaWarning
 from astroutils.logger import setupLogger
-
 from dstools.dynamic_spectrum import DynamicSpectrum
 from dstools.utils import BANDS
 
@@ -14,25 +15,52 @@ warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
 
 logger = logging.getLogger(__name__)
 
+stokes_choices = [
+    "".join(stokes)
+    for stokes in chain(
+        *(list(combinations(["I", "Q", "U", "V", "L"], i + 1)) for i in range(5))
+    )
+]
+
 
 @click.command()
 @click.option(
-    "-f", "--favg", default=1, type=int, help="Averaging factor across frequency axis.."
+    "-f",
+    "--favg",
+    default=1,
+    type=int,
+    help="Averaging factor across frequency axis.",
 )
 @click.option(
-    "-t", "--tavg", default=1, type=int, help="Averaging factor across time axis."
+    "-t",
+    "--tavg",
+    default=1,
+    type=int,
+    help="Averaging factor across time axis.",
 )
 @click.option(
-    "--fmin", default=None, type=float, help="Selection of minimum frequency in MHz."
+    "--fmin",
+    default=None,
+    type=float,
+    help="Selection of minimum frequency in MHz.",
 )
 @click.option(
-    "--fmax", default=None, type=float, help="Selection of maximum frequency in MHz."
+    "--fmax",
+    default=None,
+    type=float,
+    help="Selection of maximum frequency in MHz.",
 )
 @click.option(
-    "--tmin", default=None, type=float, help="Selection of minimum time in hours."
+    "--tmin",
+    default=None,
+    type=float,
+    help="Selection of minimum time in hours.",
 )
 @click.option(
-    "--tmax", default=None, type=float, help="Selection of maximum time in hours."
+    "--tmax",
+    default=None,
+    type=float,
+    help="Selection of maximum time in hours.",
 )
 @click.option(
     "-u",
@@ -44,21 +72,21 @@ logger = logging.getLogger(__name__)
 @click.option(
     "-I",
     "--cmax_i",
-    default=50,
+    default=30,
     type=float,
     help="Maximum colormap normalisation in Stokes I.",
 )
 @click.option(
-    "-Q",
-    "--cmax_qu",
-    default=10,
+    "-L",
+    "--cmax_l",
+    default=50,
     type=float,
-    help="Maximum colormap normalisation in Stokes Q and U.",
+    help="Maximum colormap normalisation in linear polarisations.",
 )
 @click.option(
     "-V",
     "--cmax_v",
-    default=50,
+    default=10,
     type=float,
     help="Maximum colormap normalisation in Stokes V.",
 )
@@ -80,7 +108,15 @@ logger = logging.getLogger(__name__)
     "-s",
     "--stokes",
     default="IQUV",
+    type=click.Choice(stokes_choices),
     help="Stokes parameters that will be included in each plot.",
+)
+@click.option(
+    "-P",
+    "--linpols",
+    is_flag=True,
+    default=False,
+    help="Plot linear polarisation fraction and angle dynamic spectra.",
 )
 @click.option(
     "-d",
@@ -105,17 +141,17 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-x",
-    "--crosspols",
+    "--polangle",
     is_flag=True,
     default=False,
-    help="Plot quadrature sum of cross-polarisations as a diagnostic for RFI and leakage.",
+    help="Include polarisation angle in lightcurve plot.",
 )
 @click.option(
     "-R",
-    "--rmsynth",
+    "--fdf",
     is_flag=True,
     default=False,
-    help="Plot RM synthesis spectrum.",
+    help="Plot RM synthesis Faraday dispersion function.",
 )
 @click.option(
     "-a",
@@ -183,16 +219,17 @@ def main(
     tmax,
     tunit,
     cmax_i,
-    cmax_qu,
+    cmax_l,
     cmax_v,
     real,
     imag,
+    linpols,
     stokes,
     dspec,
     lightcurve,
     spectrum,
-    crosspols,
-    rmsynth,
+    polangle,
+    fdf,
     acf,
     fold,
     trim,
@@ -211,9 +248,10 @@ def main(
 
     cmax = {
         "I": cmax_i,
-        "Q": cmax_qu,
-        "U": cmax_qu,
+        "Q": cmax_l,
+        "U": cmax_l,
         "V": cmax_v,
+        "L": cmax_l,
     }
 
     ds = DynamicSpectrum(
@@ -243,9 +281,9 @@ def main(
             if imag:
                 ds.plot_ds(stokes=s, cmax=cmax[s], imag=True)
 
-    # Cross-polarisations sqrt(U^2 + V^2)
-    if crosspols:
-        ds.plot_crosspol_ds(cmax=cmax["I"])
+    if linpols:
+        ds.plot_pol_ds()
+        ds.plot_polangle_ds()
 
     # Spectrum
     # --------------------------------------
@@ -255,7 +293,7 @@ def main(
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        ds.plot_lightcurve(stokes=stokes)
+        ds.plot_lightcurve(stokes=stokes, polangle=polangle)
 
     # Dynamic Spectrum 2D Auto-correlation Function
     # --------------------------------------
@@ -265,8 +303,8 @@ def main(
 
     # RM FDF and Lightcurve/Dynamic Spectrum of Polarisation Angle
     # --------------------------------------
-    if rmsynth:
-        ds.plot_rmsynth()
+    if fdf:
+        ds.plot_fdf()
 
     plt.show()
 
