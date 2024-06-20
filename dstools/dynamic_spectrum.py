@@ -279,12 +279,6 @@ class DynamicSpectrum:
         self.XY = self.rebin2D(new_data_XY, (tbins, fbins))
         self.YY = self.rebin2D(new_data_YY, (tbins, fbins))
 
-        time_comp = self.rebin(self.time.shape[0], self.XX.shape[0], axis=0)
-        freq_comp = self.rebin(self.freq.shape[0], self.XX.shape[1], axis=1)
-
-        self.time = time_comp @ self.time
-        self.freq = self.freq @ freq_comp
-
     def _make_stokes(self):
         """Convert instrumental polarisations to Stokes products."""
 
@@ -589,20 +583,12 @@ class DynamicSpectrum:
     def plot_pol_ds(self, fig=None, ax=None, imag=False, mask_sigma=1):
         """Plot dynamic spectra of polarisation fraction and angle."""
 
-        P = self.data["P"]  # * self.data["I"])
+        P = self.data["P"]
         P = self.snr_mask(
             data=P,
             noise=self.data["I"],
             sigma=mask_sigma,
         )
-        # V = self.data["V"]
-        # V = self.snr_mask(
-        #     data=V,
-        #     noise=self.data["I"],
-        #     sigma=mask_sigma,
-        # )
-
-        # data = V.real / P
 
         fig, ax, im = self._plot_ds(P, 0, 100, "plasma", fig, ax)
 
