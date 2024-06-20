@@ -30,6 +30,7 @@ dstools-remove-offaxis = "dstools.cli.remove_offaxis:main"
 dstools-diagnostics = "dstools.cli.plot_diagnostics:main"
 dstools-quickds = "dstools.cli.quickds:main"
 dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
+dstools-summary-plot = "dstools.cli.summary_plot:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
