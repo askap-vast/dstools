@@ -5,7 +5,6 @@ from functools import partial
 
 import astropy.units as u
 import click
-
 from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
 
 
@@ -342,8 +341,31 @@ def main(
                 parallel=mpi,
             )
 
-            # Trial self-cal solution intervals
+            # Trial selfcal solution intervals
             while True:
+                # Select self calibration mode
+                calmode_prompt = (
+                    "Perform phase only (p) or phase and amplitude (ap) selfcal: "
+                )
+                calmode = input(calmode_prompt)
+                while calmode not in ["p", "ap"]:
+                    print("Selection must be one of either p or ap.")
+                    calmode = input(calmode_prompt)
+
+                # Select gaintype
+                gaintype_prompt = prompt(
+                    "Combine polarisations in each solution interval?"
+                )
+                gaintype = "T" if gaintype_prompt else "G"
+
+                # Select refant
+                flagstats = flagdata(vis=selfcal_ms, mode="summary")
+                refant = input("Select reference antenna: ")
+                while refant not in flagstats["antenna"]:
+                    print(f"Reference antenna must be in: {flagstats['antenna']}")
+                    refant = input("Select reference antenna: ")
+
+                # Select solution interval
                 interval = input("Select solution interval (in min/s): ")
                 try:
                     unit = (
@@ -351,34 +373,35 @@ def main(
                     )
                     int(interval.replace(unit, ""))
                 except ValueError:
-                    print(
-                        "Invalid solution interval entered, must be format <int>[min/s]."
-                    )
+                    print("Solution interval must be in format <int>[min/s].")
                     continue
 
-                # Save self-cal plots
-                cal_file = (
-                    f"{proj_dir}/selfcal/{band}/{source}.phase_selfcal_{interval}.{i}"
-                )
+                # Solve for self calibration solutions
+                cal_file = f"{proj_dir}/selfcal/{band}/{source}.{calmode}_selfcal_{interval}.{i}"
                 cal_table = cal_file + ".cal"
                 gaincal(
                     vis=selfcal_ms,
                     caltable=cal_table,
                     solint=interval,
                     minblperant=3,
-                    calmode="p",
-                    gaintype="G",
+                    refant=refant,
+                    calmode=calmode,
+                    gaintype=gaintype,
                 )
+
+                # Generate phase and amplitude calibration plots
                 plotms(
                     vis=cal_table,
                     xaxis="time",
                     yaxis="phase",
+                    iteraxis="antenna",
+                    coloraxis="corr",
                     plotrange=[0, 0, -30, 30],
                     showgui=True,
                 )
 
                 # Confirm solution is good before applying, else trial another solution
-                cal_good = prompt("Is self-cal a good solution?")
+                cal_good = prompt("Is selfcal a good solution?")
 
                 if cal_good:
                     subprocess.run(
@@ -534,7 +557,7 @@ def main(
             weighting="briggs",
             stokes="IQUV",
             robust=robust,
-            interactive=interactive,
+            interactive=True,
             phasecenter=phasecenter,
             pblimit=pblim,
             parallel=mpi,

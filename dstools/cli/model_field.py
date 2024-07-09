@@ -2,7 +2,6 @@ import os
 import subprocess
 
 import click
-
 from dstools.utils import BANDS, CONFIGS, parse_casa_args
 
 
@@ -103,7 +102,10 @@ def main(**kwargs):
 
     # Construct string call signature to pass on to CASA
     path, argstr, kwargstr = parse_casa_args(
-        main, "model_field_casa.py", kwargs, args=["data"]
+        main,
+        "model_field_casa.py",
+        kwargs,
+        args=["data"],
     )
     kwargstr += "".join(scaleargs)
 
