@@ -37,15 +37,30 @@ import dstools
     default="data",
     help="Path to directory containing raw miriad RPFITS visibilities.",
 )
+@click.option(
+    "-A",
+    "--auto",
+    is_flag=True,
+    default=False,
+)
 @click.argument("project_dir")
 @click.argument("project_code")
 def main(
-    project_dir, project_code, mfinterval, bpinterval, gpinterval, refant, data_dir
+    project_dir,
+    project_code,
+    mfinterval,
+    bpinterval,
+    gpinterval,
+    refant,
+    data_dir,
+    auto,
 ):
     path = dstools.__path__[0]
 
-    call = "{}/atca_cal.sh {} {} {} {} {} {} {} {}".format(
+    script = "atca_quickcal.sh" if auto else "atca_cal.sh"
+    call = "{}/{} {} {} {} {} {} {} {} {}".format(
         path,
+        script,
         path,
         project_dir,
         data_dir,

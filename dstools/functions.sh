@@ -29,6 +29,31 @@ function flag_channels {
     esac
 }
 
+function autoflag {
+
+    vis=$1
+
+    print "Running pgflag on $vis"
+    pgflag vis=$vis command="<b" device=/xs stokes=xx,yy,xy,yx options=nodisp
+    pgflag vis=$vis command="<b" device=/xs stokes=xx,yy,yx,xy options=nodisp
+}
+
+function cal_bandpass {
+
+    vis=$1
+    print "Running mfcal on $vis"
+
+    mfcal vis=$vis interval=$mfinterval,$mfinterval,$bpinterval refant=$refant
+}
+
+function cal_flux {
+
+    vis=$1
+
+    gpcal vis=$vis interval=$gpinterval options=xyvary minants=3 nfbin=16 spec=$spec refant=$refant;
+
+}
+
 function print {
     msg=$1
     msgcolor="\e[38;5;166m"

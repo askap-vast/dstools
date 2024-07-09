@@ -17,7 +17,6 @@ case $reload in
 
     [Yy]* )
 	print "Flushing atlod files and reloading"
-	export reflag="y"
 
 	# Move pre-flagged primary scan back in
 	cp -r $proj_dir/*flagged_backup . 2>/dev/null
@@ -29,7 +28,7 @@ case $reload in
 	# can sit in subdirectories of the data directory without being auto-imported
 	export infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',')
 
-	atlod in=$infiles out=$pcode.uv options=birdie,rfiflag,noauto,xycorr
+	atlod in=$infiles out=$pcode.uv options=birdie,rfiflag,noauto,xycorr,notsys
 	uvflag vis=$pcode.uv edge=40 flagval=flag
 
 	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
@@ -59,7 +58,6 @@ case $reload in
 	uvsplit vis=$pcode.uv ;;
 
     [Nn]* )
-	export reflag="n"
 	print "Skipping data reload"
 	cd $proj_dir ;;
 esac
