@@ -520,11 +520,11 @@ class DynamicSpectrum:
     def plot_lightcurve(self, stokes, polangle, fig=None, ax=None):
         """Plot channel-averaged lightcurve."""
 
-        lc = LightCurve(self, stokes, plot_polangle=polangle)
+        lc = LightCurve(self, stokes)
 
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(7, 5))
-        fig, ax = lc.plot(fig, ax)
+        fig, ax = lc.plot(fig, ax, polangle=polangle)
 
         return fig, ax
 
@@ -767,7 +767,6 @@ class TimeFreqSeries(ABC):
 class LightCurve(TimeFreqSeries):
     ds: DynamicSpectrum
     stokes: str
-    plot_polangle: bool = False
 
     def __post_init__(self):
         self.column = "time"
@@ -786,7 +785,7 @@ class LightCurve(TimeFreqSeries):
         self.x = np.array([valmin + i * interval for i in range(bins)])
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
 
-    def plot(self, fig, ax):
+    def plot(self, fig, ax, polangle=False):
         self.fig = fig
         self.ax = ax
 
@@ -796,16 +795,23 @@ class LightCurve(TimeFreqSeries):
         # Plot with lightcurve/spectrum independent parameters
         super().plot(avg_axis=1)
 
-        if self.plot_polangle:
+        if polangle:
             divider = make_axes_locatable(self.ax)
             ax2 = divider.append_axes("top", size="25%", pad=0.1)
 
             L = self.ds.data["L"]
+            I = self.ds.data["I"]
 
+            signal_I = np.nanmean(I.real, axis=1)
+            rms_I = np.nanstd(I.imag, axis=1) / np.sqrt(I.imag.shape[1])
             Q = np.nanmean(L.real, axis=1)
             U = np.nanmean(L.imag, axis=1)
 
+            # Set PA to 200 degrees for masked values, as masked poitnts at
+            # beginning of obs will plot at incorrect times if set to NaN / masked array
             chi_val = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
+            mask = np.abs(signal_I) < 2 * rms_I
+            chi_val[mask] = 200
 
             ax2.scatter(
                 self.x,
@@ -821,6 +827,7 @@ class LightCurve(TimeFreqSeries):
                 alpha=0.5,
             )
             ax2.set_xticklabels([])
+            ax2.set_ylim(-190, 190)
             ax2.set_yticks([-180, -90, 0, 90, 180])
             ax2.set_ylabel(r"$\chi$ (deg)")
 
