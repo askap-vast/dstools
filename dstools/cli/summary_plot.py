@@ -71,6 +71,13 @@ logger = logging.getLogger(__name__)
     help="Maximum colormap normalisation in Stokes V.",
 )
 @click.option(
+    "-i",
+    "--imag",
+    is_flag=True,
+    help="Maximum colormap normalisation in Stokes I.",
+    default=False,
+)
+@click.option(
     "-k",
     "--trim",
     is_flag=True,
@@ -141,6 +148,7 @@ def main(
     cmax_v,
     fold,
     derotate,
+    imag,
     trim,
     period,
     period_offset,
@@ -188,10 +196,10 @@ def main(
     lc_ax = fig.add_subplot(gs[2, 0])
     sp_ax = fig.add_subplot(gs[2, 1])
 
-    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax_i, fig=fig, ax=I_ax)
-    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax_l, fig=fig, ax=Q_ax)
-    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax_l, fig=fig, ax=U_ax)
-    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax_v, fig=fig, ax=V_ax)
+    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax_i, fig=fig, ax=I_ax, imag=imag)
+    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax_l, fig=fig, ax=Q_ax, imag=imag)
+    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax_l, fig=fig, ax=U_ax, imag=imag)
+    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax_v, fig=fig, ax=V_ax, imag=imag)
 
     fig, sp_ax = ds.plot_spectrum(stokes=stokes, fig=fig, ax=sp_ax)
     fig, lc_ax = ds.plot_lightcurve(stokes=stokes, fig=fig, ax=lc_ax, polangle=False)
