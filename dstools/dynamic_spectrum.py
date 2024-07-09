@@ -291,15 +291,24 @@ class DynamicSpectrum:
         L = Q.real + 1j * U.real
 
         if self.derotate:
-            self.rm_synthesis(I, Q, U)
-            L = self.derotate_faraday(L)
 
-        Q = L.real
-        U = L.imag
+            # Compute RM
+            self.rm_synthesis(I, Q, U)
+
+            # Build L from imaginary components
+            Li = Q.imag + 1j * U.imag
+
+            # Derotate real and imaginary L
+            L = self.derotate_faraday(L)
+            Li = self.derotate_faraday(Li)
+
+            # Compute complex Q and U from L
+            Q = L.real + 1j * Li.real
+            U = L.imag + 1j * Li.imag
 
         P = np.sqrt(Q.real**2 + U.real**2 + V.real**2) / I.real
 
-        PA = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
+        PA = 0.5 * np.arctan2(U.real, Q.real) * u.rad.to(u.deg)
 
         # Fold data to selected period
         if self.fold:
@@ -313,6 +322,7 @@ class DynamicSpectrum:
 
             L = self._fold(L)
             P = self._fold(P)
+            PA = self._fold(PA)
 
         self.data = {
             "I": I,
