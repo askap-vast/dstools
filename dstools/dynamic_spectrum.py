@@ -277,7 +277,7 @@ class DynamicSpectrum:
         num_break_cycles = (
             np.append((time_end_break - time_start_break), 0) / self.avg_scan_dt
         )
-        num_channels = self.XX.shape[1]
+        num_tsamples, num_channels = self.XX.shape
 
         # Create initial time-slice to start stacking target and calibrator scans together
         new_data_XX = new_data_XY = new_data_YX = new_data_YY = np.zeros(
@@ -322,13 +322,16 @@ class DynamicSpectrum:
         new_data_YX = new_data_YX[1:]
         new_data_YY = new_data_YY[1:]
 
-        tbins = len(new_data_XX) // self.tavg
+        tbins = num_tsamples // self.tavg
         fbins = num_channels // self.favg
 
         self.XX = self.rebin2D(new_data_XX, (tbins, fbins))
         self.YX = self.rebin2D(new_data_YX, (tbins, fbins))
         self.XY = self.rebin2D(new_data_XY, (tbins, fbins))
         self.YY = self.rebin2D(new_data_YY, (tbins, fbins))
+
+        self.time = self.rebin(num_tsamples, tbins, axis=0) @ self.time
+        self.freq = self.freq @ self.rebin(num_channels, fbins, axis=1)
 
     def _make_stokes(self):
         """Convert instrumental polarisations to Stokes products."""
