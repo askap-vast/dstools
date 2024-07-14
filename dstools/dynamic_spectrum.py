@@ -52,6 +52,10 @@ class DynamicSpectrum:
     maxfreq: float = None
     mintime: float = None
     maxtime: float = None
+    minuvdist: float = 0
+    maxuvdist: float = np.inf
+    minuvwave: float = 0
+    maxuvwave: float = np.inf
 
     tunit: u.Quantity = u.hour
     scantime: float = 10.1
@@ -133,11 +137,31 @@ class DynamicSpectrum:
 
         return avg_scan_dt, scan_start_idx, scan_end_idx
 
+    def _validate(self, datafile):
+
+        # Check if baselines have been pre-averaged and disable uvdist selection if so
+        made_uvdist_selection = not all(
+            [p is None for p in [self.minuvdist, self.maxuvdist]]
+        )
+        baseline_averaged = len(datafile["uvdist"][:]) == 1
+        if baseline_averaged and made_uvdist_selection:
+            logger.warning(
+                f"DS is already baseline averaged, disabling uvdist selection."
+            )
+            self.minuvdist = 0
+            self.maxuvdist = np.inf
+            self.minuvwave = 0
+            self.maxuvwave = np.inf
+
+        return
+
     def _load_data(self):
         """Load instrumental pols and uvdist/time/freq data, converting to MHz, s, and mJy."""
 
         # Import instrumental polarisations and time/frequency/uvdist arrays
         with h5py.File(self.ds_path, "r") as f:
+
+            self._validate(f)
 
             # Read uvdist, time, frequency, and flux arrays
             uvdist = f["uvdist"][:]
@@ -145,7 +169,25 @@ class DynamicSpectrum:
             freq = f["frequency"][:] / 1e6
             flux = f["flux"][:] * 1e3
 
-            flux = flux[:, :, :, :]
+            # Make baseline selection using UV distance
+            blmask = (uvdist >= self.minuvdist) & (uvdist <= self.maxuvdist)
+            uvdist = uvdist[blmask]
+            flux = flux[blmask, :, :, :]
+
+            # Construct array of UV distance in units of wavelength
+            wavelength = (freq * u.MHz).to(u.m, equivalencies=u.spectral()).value
+            uvdist_expanded = uvdist[:, np.newaxis, np.newaxis, np.newaxis]
+            wavelength_expanded = wavelength[np.newaxis, np.newaxis, :, np.newaxis]
+            uvwave = np.tile(
+                uvdist_expanded / wavelength_expanded,
+                (1, len(time), 1, 4),
+            )
+
+            uvwave_mask = (uvwave <= self.minuvwave) | (uvwave >= self.maxuvwave)
+
+            # Apply uvwave limit mask
+            flux[uvwave_mask] = np.nan
+            uvwave[uvwave_mask] = np.nan
 
             # Average over baseline axis
             with warnings.catch_warnings():

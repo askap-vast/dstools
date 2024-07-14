@@ -6,6 +6,7 @@ from itertools import chain, combinations
 import astropy.units as u
 import click
 import matplotlib.pyplot as plt
+import numpy as np
 from astroutils.logger import setupLogger
 from erfa import ErfaWarning
 
@@ -50,6 +51,30 @@ stokes_choices = [
     default=None,
     type=float,
     help="Selection of maximum frequency in MHz.",
+)
+@click.option(
+    "--uvmin",
+    default=0,
+    type=float,
+    help="Selection of minimum projected baseline distance in m.",
+)
+@click.option(
+    "--uvmax",
+    default=np.inf,
+    type=float,
+    help="Selection of maximum projected baseline distance in m.",
+)
+@click.option(
+    "--uvwavemin",
+    default=0,
+    type=float,
+    help="Selection of minimum frequency-dependent projected baseline distance in units of wavelengths.",
+)
+@click.option(
+    "--uvwavemax",
+    default=np.inf,
+    type=float,
+    help="Selection of maximum frequency-dependent projected baseline distance in units of wavelengths.",
 )
 @click.option(
     "--tmin",
@@ -217,6 +242,10 @@ def main(
     tavg,
     fmin,
     fmax,
+    uvmin,
+    uvmax,
+    uvwavemin,
+    uvwavemax,
     tmin,
     tmax,
     tunit,
@@ -263,6 +292,10 @@ def main(
         favg=favg,
         minfreq=fmin,
         maxfreq=fmax,
+        minuvdist=uvmin,
+        maxuvdist=uvmax,
+        minuvwave=uvwavemin,
+        maxuvwave=uvwavemax,
         mintime=tmin,
         maxtime=tmax,
         tunit=tunit,
