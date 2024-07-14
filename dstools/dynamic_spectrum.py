@@ -772,6 +772,7 @@ class TimeFreqSeries(ABC):
 
             for stokes in self.stokes:
                 if stokes == "L":
+                    # Compute L as complex magnitude of averaged DS
                     y[stokes] = np.abs(np.nanmean(self.ds.data[stokes], axis=avg_axis))
                     yerr[stokes] = (
                         np.abs(np.nanstd(self.ds.data[stokes], axis=avg_axis)) / sqrtn
@@ -839,7 +840,7 @@ class LightCurve(TimeFreqSeries):
         self.x = np.array([valmin + i * interval for i in range(bins)])
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
 
-    def plot(self, fig, ax, polangle=False):
+    def plot(self, fig, ax, polangle=False, pa_sigma=2):
         self.fig = fig
         self.ax = ax
 
@@ -853,18 +854,21 @@ class LightCurve(TimeFreqSeries):
             divider = make_axes_locatable(self.ax)
             ax2 = divider.append_axes("top", size="25%", pad=0.1)
 
+            Q = self.ds.data["Q"]
+            U = self.ds.data["U"]
             L = self.ds.data["L"]
-            I = self.ds.data["I"]
 
-            signal_I = np.nanmean(I.real, axis=1)
-            rms_I = np.nanstd(I.imag, axis=1) / np.sqrt(I.imag.shape[1])
-            Q = np.nanmean(L.real, axis=1)
-            U = np.nanmean(L.imag, axis=1)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                signal_L = np.abs(np.nanmean(L, axis=1))
+                rms_L = np.abs(np.nanstd(L, axis=1)) / np.sqrt(L.shape[1])
+                Q = np.nanmean(Q.real, axis=1)
+                U = np.nanmean(U.real, axis=1)
 
             # Set PA to 200 degrees for masked values, as masked poitnts at
             # beginning of obs will plot at incorrect times if set to NaN / masked array
             chi_val = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
-            mask = np.abs(signal_I) < 2 * rms_I
+            mask = signal_L < pa_sigma * rms_L
             chi_val[mask] = 200
 
             ax2.scatter(
