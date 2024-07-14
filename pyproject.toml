@@ -16,6 +16,7 @@ astropy = "^6.0.0"
 pandas = "2.1.4"
 astroutils = {git = "https://joshoewahp@github.com/joshoewahp/astroutils.git", rev = "main"}
 python-casacore = "3.5.1"
+h5py = "^3.11.0"
 
 [tool.poetry.dev-dependencies]
 

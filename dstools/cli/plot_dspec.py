@@ -6,8 +6,9 @@ from itertools import chain, combinations
 import astropy.units as u
 import click
 import matplotlib.pyplot as plt
-from astropy.utils.exceptions import ErfaWarning
 from astroutils.logger import setupLogger
+from erfa import ErfaWarning
+
 from dstools.dynamic_spectrum import DynamicSpectrum
 from dstools.utils import BANDS
 
@@ -209,14 +210,8 @@ stokes_choices = [
     type=click.Choice(BANDS),
     help="Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/",
 )
-@click.option(
-    "-N",
-    "--versionname",
-    default=None,
-    help="Prefix for different processing versions",
-)
 @click.option("-v", "--verbose", is_flag=True, default=False)
-@click.argument("project")
+@click.argument("ds_path")
 def main(
     favg,
     tavg,
@@ -245,14 +240,12 @@ def main(
     period_offset,
     calscans,
     band,
-    versionname,
     verbose,
-    project,
+    ds_path,
 ):
     setupLogger(verbose)
 
     tunit = u.Unit(tunit)
-    prefix = f"{versionname}_" if versionname else ""
 
     cmax = {
         "I": cmax_i,
@@ -263,7 +256,7 @@ def main(
     }
 
     ds = DynamicSpectrum(
-        project=project,
+        ds_path=ds_path,
         band=band,
         calscans=calscans,
         tavg=tavg,
@@ -273,7 +266,6 @@ def main(
         mintime=tmin,
         maxtime=tmax,
         tunit=tunit,
-        prefix=prefix,
         fold=fold,
         trim=trim,
         derotate=derotate,

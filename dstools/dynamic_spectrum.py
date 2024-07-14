@@ -1,4 +1,5 @@
 import logging
+import h5py
 import warnings
 from abc import ABC
 from collections import defaultdict
@@ -41,8 +42,7 @@ def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
 
 @dataclass
 class DynamicSpectrum:
-    project: str
-    prefix: str = ""
+    ds_path: str
     band: str = "AT_L"
 
     favg: int = 1
@@ -67,9 +67,6 @@ class DynamicSpectrum:
     trim: bool = True
 
     def __post_init__(self):
-        self.src = self.project.split("/")[-1]
-
-        self.ds_path = f"{self.project}/dynamic_spectra/{self.band}"
         self._timelabel = "Phase" if self.fold else f"Time ({self.tunit})"
 
         self._load_data()
@@ -137,18 +134,29 @@ class DynamicSpectrum:
         return avg_scan_dt, scan_start_idx, scan_end_idx
 
     def _load_data(self):
-        """Load instrumental pols and time/freq data, converting to MHz, s, and mJy."""
+        """Load instrumental pols and uvdist/time/freq data, converting to MHz, s, and mJy."""
 
-        # Import instrumental polarisations and time/frequency arrays
-        file_prefix = f"{self.ds_path}/{self.prefix}"
+        # Import instrumental polarisations and time/frequency/uvdist arrays
+        with h5py.File(self.ds_path, "r") as f:
 
-        XX = np.load(f"{file_prefix}dynamic_spectra_XX.npy", allow_pickle=True) * 1e3
-        XY = np.load(f"{file_prefix}dynamic_spectra_XY.npy", allow_pickle=True) * 1e3
-        YX = np.load(f"{file_prefix}dynamic_spectra_YX.npy", allow_pickle=True) * 1e3
-        YY = np.load(f"{file_prefix}dynamic_spectra_YY.npy", allow_pickle=True) * 1e3
+            # Read uvdist, time, frequency, and flux arrays
+            uvdist = f["uvdist"][:]
+            time = f["time"][:]
+            freq = f["frequency"][:] / 1e6
+            flux = f["flux"][:] * 1e3
 
-        freq = np.load(f"{file_prefix}freq.npy", allow_pickle=True) / 1e6
-        time = np.load(f"{file_prefix}time.npy", allow_pickle=True)
+            flux = flux[:, :, :, :]
+
+            # Average over baseline axis
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                flux = np.nanmean(flux, axis=0)
+
+            # Read out instrumental polarisations
+            XX = flux[:, :, 0]
+            XY = flux[:, :, 1]
+            YX = flux[:, :, 2]
+            YY = flux[:, :, 3]
 
         # Set timescale
         time_scale_factor = self.tunit.to(u.s)
@@ -206,6 +214,7 @@ class DynamicSpectrum:
 
         self.freq = slice_array(freq, minchan, maxchan)
         self.time = slice_array(time, mintime, maxtime)
+        self.uvdist = uvdist
 
         # Identify start time and set observation start to t=0
         self.time_start = Time(

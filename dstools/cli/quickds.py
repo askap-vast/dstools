@@ -5,7 +5,6 @@ import click
 from astroutils.logger import setupLogger
 
 import dstools
-from dstools.utils import BANDS
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,6 @@ logger = logging.getLogger(__name__)
     type=click.Choice(["data", "corrected"]),
     help="Use DATA or CORRECTED_DATA column.",
 )
-@click.option("-B", "--band", default="AT_L", type=click.Choice(BANDS))
 @click.option(
     "-a",
     "--askap",
@@ -27,15 +25,16 @@ logger = logging.getLogger(__name__)
     help="Apply beam direction and flux scale corrections to ASKAPsoft visibilities.",
 )
 @click.option("-v", "--verbose", is_flag=True, default=False)
-@click.argument("ms")
 @click.argument("target_coord")
+@click.argument("ms")
+@click.argument("outfile")
 def main(
-    ms,
-    target_coord,
     datacolumn,
-    band,
     askap,
     verbose,
+    target_coord,
+    ms,
+    outfile,
 ):
     setupLogger(False)
 
@@ -59,7 +58,7 @@ def main(
     ms = ms.replace(".ms", ".baseavg.ms")
 
     # Create DS arrays
-    os.system(f"dstools-make-dspec -c data {ms} -B {band}")
+    os.system(f"dstools-make-dspec -d data {ms} {outfile}")
 
 
 if __name__ == "__main__":

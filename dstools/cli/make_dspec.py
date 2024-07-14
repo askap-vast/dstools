@@ -1,58 +1,84 @@
-#!/usr/bin/env python
-import os
-
 import click
+import h5py
 import numpy as np
 from casacore.tables import table
-
-from dstools.utils import BANDS
+import itertools as it
 
 
 @click.command()
-@click.option('-F', '--noflag', is_flag=True, default=False, help='Remove flagging mask.')
-@click.option('-B', '--band', default='AT_L', type=click.Choice(BANDS))
-@click.option('-N', '--versionname', default=None, help='Prefix for different processing versions')
-@click.option('-c', '--datacolumn', type=click.Choice(['data', 'corrected']), default='data',
-              help='Selection of DATA or CORRECTED_DATA column.')
-@click.argument('ms')
-def main(noflag, band, versionname, datacolumn, ms):
+@click.option(
+    "-F",
+    "--noflag",
+    is_flag=True,
+    default=False,
+    help="Remove flagging mask.",
+)
+@click.option(
+    "-d",
+    "--datacolumn",
+    type=click.Choice(["data", "corrected"]),
+    default="data",
+    help="Selection of DATA or CORRECTED_DATA column.",
+)
+@click.argument("ms")
+@click.argument("outfile")
+def main(noflag, datacolumn, ms, outfile):
 
-    # Parse path into target directory to create dynamic spectra products
-    if ms[-1] == '/':
-        ms = ms[:-1]
-   
-    project = '/'.join(ms.split('/')[:-1])
-    project = project if len(project) > 0 else '.'
-
-    prefix = f'{versionname}_' if versionname else ''
-    ds_path = f'{project}/dynamic_spectra/{band}'
-    os.system(f'mkdir -p {ds_path}')
-
-    pols = ['XX', 'XY', 'YX', 'YY']
-
-    for polidx, pol in enumerate(pols):
-
-        file_prefix = f'{ds_path}/{prefix}'
-        outfile = f'{file_prefix}dynamic_spectra_{pol}.npy'
+    with h5py.File(outfile, "w") as f:
 
         t = table(ms)
-        tf = table(f'{ms}/SPECTRAL_WINDOW')
+
+        # Throw away autocorrelations
+        t = t.query("ANTENNA1 != ANTENNA2")
+
+        # Get time, frequency, and baseline axes
+        tf = table(f"{ms}/SPECTRAL_WINDOW")
+        times = np.unique(t.getcol("TIME"))
+        freqs = tf[0]["CHAN_FREQ"]
+        antennas = np.unique(
+            np.append(
+                t.getcol("ANTENNA1"),
+                t.getcol("ANTENNA2"),
+            ),
+        )
+        nbaselines = len(antennas) * (len(antennas) - 1) // 2
+
+        # Calculate UVrange for each baseline
+        uvw = t.getcol("UVW")
+        uvdist = np.sqrt(np.sum(np.square(uvw), axis=1))
+        uvdist = np.mean(uvdist.reshape(-1, nbaselines), axis=0)
 
         # Write time and frequency arrays, discarding duplicate timesamples
-        times = np.unique(t.getcol('TIME'))
-        times.dump(f'{file_prefix}time.npy')
-        tf[0]['CHAN_FREQ'].dump(f'{file_prefix}freq.npy')
+        datacolumn = "CORRECTED_DATA" if datacolumn == "corrected" else "DATA"
+        bl_waterfall = t.getcol(datacolumn)
 
-        datacolumn = 'CORRECTED_DATA' if datacolumn == 'corrected' else 'DATA'
-        waterfall = t.getcol(datacolumn)[:, :, polidx]
-
+        # Apply flags
         if not noflag:
-            vis_flag = t.getcol('FLAG')[:, :, polidx]
-            waterfall = np.ma.masked_where(vis_flag, waterfall)
+            vis_flag = t.getcol("FLAG")
+            bl_waterfall[vis_flag] = np.nan
 
-        waterfall.dump(outfile)
+        # Reshape data into <NPOL,NFREQ,NTIME,NBL> shape array
+        waterfall = bl_waterfall.T.reshape((4, len(freqs), -1, nbaselines)).T
+
+        # Trim array to start/end time of data
+        timeaxis = np.nansum(waterfall, axis=(0, 2, 3))
+        timeaxis[timeaxis == 0 + 0j] = np.nan
+        nonnan_vals = np.isfinite(timeaxis)
+
+        mintime = np.argmax(nonnan_vals)
+        maxtime = nonnan_vals.size - np.argmax(nonnan_vals[::-1])
+
+        waterfall = waterfall[:, mintime:maxtime, :, :]
+        times = times[mintime:maxtime]
+
+        # Write all data to file
+        f.create_dataset("time", data=times)
+        f.create_dataset("frequency", data=freqs)
+        f.create_dataset("uvdist", data=uvdist)
+        f.create_dataset("flux", data=waterfall)
+
         t.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

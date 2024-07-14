@@ -5,8 +5,8 @@ import warnings
 import astropy.units as u
 import click
 import matplotlib.pyplot as plt
-from astropy.utils.exceptions import ErfaWarning
 from astroutils.logger import setupLogger
+from erfa import ErfaWarning
 from matplotlib.gridspec import GridSpec
 
 from dstools.dynamic_spectrum import DynamicSpectrum
@@ -126,14 +126,11 @@ logger = logging.getLogger(__name__)
     type=click.Choice(BANDS),
     help="Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/",
 )
-@click.option(
-    "-N", "--versionname", default=None, help="Prefix for different processing versions"
-)
 @click.option("-D", "--title", default="", type=str)
 @click.option("-P", "--show_plot", default=True, is_flag=True)
 @click.option("-v", "--verbose", is_flag=True, default=False)
 @click.option("-S", "--savepath", type=click.Path(), default=None)
-@click.argument("project")
+@click.argument("ds_path")
 def main(
     favg,
     tavg,
@@ -154,21 +151,19 @@ def main(
     period_offset,
     calscans,
     band,
-    versionname,
     title,
     show_plot,
     verbose,
     savepath,
-    project,
+    ds_path,
 ):
 
     setupLogger(verbose)
 
     tunit = u.Unit(tunit)
-    prefix = f"{versionname}_" if versionname else ""
 
     ds = DynamicSpectrum(
-        project=project,
+        ds_path=ds_path,
         band=band,
         calscans=calscans,
         tavg=tavg,
@@ -178,7 +173,6 @@ def main(
         mintime=tmin,
         maxtime=tmax,
         tunit=tunit,
-        prefix=prefix,
         fold=fold,
         derotate=derotate,
         trim=trim,
