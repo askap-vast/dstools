@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astroutils.logger import setupLogger
 from erfa import ErfaWarning
+from matplotlib.gridspec import GridSpec
 
 from dstools.dynamic_spectrum import DynamicSpectrum
 from dstools.utils import BANDS
@@ -23,6 +24,36 @@ stokes_choices = [
         *(list(combinations(["I", "Q", "U", "V", "L"], i + 1)) for i in range(5))
     )
 ]
+
+
+def make_summary_plot(ds, stokes, cmax, imag):
+
+    fig = plt.figure(figsize=(14, 15))
+    gs = GridSpec(3, 2, figure=fig)
+
+    I_ax = fig.add_subplot(gs[0, 0])
+    Q_ax = fig.add_subplot(gs[0, 1])
+    U_ax = fig.add_subplot(gs[1, 0])
+    V_ax = fig.add_subplot(gs[1, 1])
+    lc_ax = fig.add_subplot(gs[2, 0])
+    sp_ax = fig.add_subplot(gs[2, 1])
+
+    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax["I"], fig=fig, ax=I_ax, imag=imag)
+    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax["Q"], fig=fig, ax=Q_ax, imag=imag)
+    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax["U"], fig=fig, ax=U_ax, imag=imag)
+    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax["V"], fig=fig, ax=V_ax, imag=imag)
+
+    fig, sp_ax = ds.plot_spectrum(stokes=stokes, fig=fig, ax=sp_ax)
+    fig, lc_ax = ds.plot_lightcurve(stokes=stokes, fig=fig, ax=lc_ax, polangle=False)
+
+    fig.subplots_adjust(
+        left=0.06,
+        top=0.94,
+        right=0.96,
+        bottom=0.05,
+    )
+
+    return fig
 
 
 @click.command()
@@ -235,6 +266,13 @@ stokes_choices = [
     type=click.Choice(BANDS),
     help="Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/",
 )
+@click.option(
+    "-Y",
+    "--summary",
+    is_flag=True,
+    default=False,
+    help="Plot all Stokes dynamic spectrum, lightcurve, and time-averaged spectrum.",
+)
 @click.option("-v", "--verbose", is_flag=True, default=False)
 @click.argument("ds_path")
 def main(
@@ -269,6 +307,7 @@ def main(
     period_offset,
     calscans,
     band,
+    summary,
     verbose,
     ds_path,
 ):
@@ -328,6 +367,16 @@ def main(
     # --------------------------------------
     if lightcurve:
         ds.plot_lightcurve(stokes=stokes, polangle=polangle)
+
+    # Summary plot
+    # --------------------------------------
+    if summary:
+        make_summary_plot(
+            ds,
+            stokes,
+            cmax,
+            imag,
+        )
 
     # Dynamic Spectrum 2D Auto-correlation Function
     # --------------------------------------

@@ -5,7 +5,7 @@ description = "A processing pipeline to produce dynamic spectra from ATCA and AS
 authors = ["Joshua Pritchard <joshua.pritchard@sydney.edu.au>"]
 
 [tool.poetry.dependencies]
-python = ">3.9,<4.0"
+python = ">3.10,<4.0"
 click = "^8.0.3"
 matplotlib = "^3.8.2"
 numpy = "^1.22.2"
@@ -22,16 +22,12 @@ h5py = "^3.11.0"
 
 [tool.poetry.scripts]
 dstools-cal = "dstools.cli.cal:main"
+dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
+dstools-remove-source = "dstools.cli.remove_source:main"
 dstools-model-field = "dstools.cli.model_field:main"
 dstools-rotate = "dstools.cli.fix_phasecentre:main"
-dstools-avg-baselines = "dstools.cli.avg_baselines:main"
-dstools-make-dspec = "dstools.cli.make_dspec:main"
-dstools-plot-dspec = "dstools.cli.plot_dspec:main"
-dstools-remove-offaxis = "dstools.cli.remove_offaxis:main"
-dstools-diagnostics = "dstools.cli.plot_diagnostics:main"
-dstools-quickds = "dstools.cli.quickds:main"
-dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
-dstools-summary-plot = "dstools.cli.summary_plot:main"
+dstools-extract-ds = "dstools.cli.extract_ds:main"
+dstools-plot-ds = "dstools.cli.plot_ds:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

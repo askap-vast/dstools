@@ -1,6 +1,5 @@
-from dataclasses import dataclass
-
 import astropy.units as u
+from dataclasses import dataclass
 
 import dstools
 

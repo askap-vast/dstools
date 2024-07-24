@@ -140,11 +140,16 @@ class DynamicSpectrum:
     def _validate(self, datafile):
 
         # Check if baselines have been pre-averaged and disable uvdist selection if so
-        made_uvdist_selection = not all(
-            [p is None for p in [self.minuvdist, self.maxuvdist]]
-        )
+        default_uv_params = [
+            self.minuvdist == 0,
+            self.maxuvdist == np.inf,
+            self.minuvwave == 0,
+            self.maxuvwave == np.inf,
+        ]
+        made_uvdist_selection = not all(default_uv_params)
         baseline_averaged = len(datafile["uvdist"][:]) == 1
-        if baseline_averaged and made_uvdist_selection:
+
+        if made_uvdist_selection and baseline_averaged:
             logger.warning(
                 f"DS is already baseline averaged, disabling uvdist selection."
             )
