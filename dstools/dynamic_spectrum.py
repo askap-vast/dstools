@@ -290,13 +290,6 @@ class DynamicSpectrum:
             dtype=complex,
         )
 
-        # Check that data is not being truncated by stacking insufficient time chunks together
-        # This is a diagnostic of errors in data combination, where duplicated times are
-        # dropped in dstools.make_dspec if data is combined incorrectly.
-        if scan_end_idx[-1] + 1 < self.XX.shape[0]:
-            logger.warning("More time samples in data array than time array")
-            logger.warning("Check results with -C to see full data")
-
         for start_index, end_index, num_scans in zip(
             scan_start_idx, scan_end_idx, num_break_cycles
         ):
