@@ -9,6 +9,7 @@ export refant=$5
 export mfinterval=$6
 export bpinterval=$7
 export gpinterval=$8
+export noflag=$9
 
 # Load data
 prompt "Reload data?"
@@ -18,18 +19,20 @@ case $reload in
     [Yy]* )
 	print "Flushing atlod files and reloading"
 
-	# Move pre-flagged primary scan back in
-	cp -r $proj_dir/*flagged_backup . 2>/dev/null
-	rm -rf $proj_dir/ 2>/dev/null
 	mkdir -p $proj_dir/
 	cd $proj_dir
+
+	if [[ $noflag ]]; then
+	    atlod_options=noauto,xycorr,notsys
+	else
+	    atlod_options=birdie,rfiflag,noauto,xycorr,notsys;
+	fi
 
 	# Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
 	# can sit in subdirectories of the data directory without being auto-imported
 	export infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',')
 
-	atlod in=$infiles out=$pcode.uv options=birdie,rfiflag,noauto,xycorr,notsys
-	uvflag vis=$pcode.uv edge=40 flagval=flag
+	atlod in=$infiles out=$pcode.uv options=$atlod_options
 
 	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
 	# during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
@@ -132,12 +135,6 @@ case $reflag in
 
     [Yy]* )
 
-	# Flag initial extreme values
-	# flag_extreme $pcal.$freq 200
-	
-	# Flag known bad channels for this band
-	flag_channels $pcal.$freq $freq
-
 	# Solve for initial bandpass on primary calibrator
 	print "Running mfcal on $pcal.$freq"
 	mfcal vis=$pcal.$freq interval=$mfinterval,$mfinterval,$bpinterval refant=$refant
@@ -179,9 +176,7 @@ case $reflag in
 	    read flagmore
 	    case $flagmore in
 		[Yy]* ) : ;;
-		[Nn]* )
-		    cp -r $pcal.$freq $pcal.$freq.flagged_backup
-		    break ;;
+		[Nn]* ) break ;;
 	    esac
 
 	done ;;

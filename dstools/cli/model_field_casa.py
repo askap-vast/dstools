@@ -1,7 +1,7 @@
 import glob
 import os
 import subprocess
-from functools import partial
+from pathlib import Path
 
 import astropy.units as u
 import click
@@ -78,13 +78,6 @@ def import_data(input_file, proj_dir, msname):
     help="Primary beam fractional power cutoff, default is no cutoff.",
 )
 @click.option(
-    "-P",
-    "--proj_dir",
-    type=click.Path(),
-    default=None,
-    help="Project namespace / sub-directory, default is to infer from data path",
-)
-@click.option(
     "-I",
     "--interactive/--no-interactive",
     default=True,
@@ -112,7 +105,6 @@ def main(
     robust,
     phasecenter,
     pblim,
-    proj_dir,
     interactive,
     automask,
     mpi,
@@ -120,12 +112,9 @@ def main(
     # PARAMETER SETTINGS
     # ------------------
 
-    # If no project directory provided, use directory containing supplied data
-    if proj_dir is None:
-        proj_dir = "/".join(data.split("/")[:-1]) + "/"
-        source = proj_dir.split("/")[-2].lower()
-    else:
-        source = "source"
+    datapath = Path(data)
+    proj_dir = str(datapath.parent.absolute()) + "/"
+    source = str(data.split(".")[0])
 
     array = Array(band, config)
     freq = array.frequency

@@ -25,6 +25,13 @@ import dstools
     help="Time interval to solve for antenna gains in gain calibration",
 )
 @click.option(
+    "-F",
+    "--noflag",
+    is_flag=True,
+    default=False,
+    help="Disable birdie and rfiflag options in atlod",
+)
+@click.option(
     "-r",
     "--refant",
     type=click.Choice(["1", "2", "3", "4", "5", "6"]),
@@ -51,6 +58,7 @@ def main(
     mfinterval,
     bpinterval,
     gpinterval,
+    noflag,
     refant,
     data_dir,
     auto,
@@ -58,7 +66,7 @@ def main(
     path = dstools.__path__[0]
 
     script = "atca_quickcal.sh" if auto else "atca_cal.sh"
-    call = "{}/{} {} {} {} {} {} {} {} {}".format(
+    call = "{}/{} {} {} {} {} {} {} {} {} {}".format(
         path,
         script,
         path,
@@ -69,6 +77,7 @@ def main(
         mfinterval,
         bpinterval,
         gpinterval,
+        noflag,
     )
 
     os.system(call)
