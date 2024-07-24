@@ -139,6 +139,8 @@ def main(
     # Set cycleniter=niter if using both automasking and interactive mode
     # to ensure major cycles trigger at expected times
     usemask = "auto-multithresh" if automask else "user"
+    lownoisethreshold = 2
+    sidelobethreshold = 1.25
     cycleniter = iterations if automask and interactive else -1
 
     # -------------------------------------------------
@@ -325,8 +327,11 @@ def main(
                 phasecenter=phasecenter,
                 mask=init_mask,
                 usemask=usemask,
+                sidelobethreshold=sidelobethreshold,
+                lownoisethreshold=lownoisethreshold,
                 cycleniter=cycleniter,
                 pblimit=pblim,
+                pbmask=0.0,
                 parallel=mpi,
             )
 
@@ -497,13 +502,15 @@ def main(
             robust=robust,
             mask=deep_mask,
             usemask=usemask,
-            pbmask=0.0,
+            sidelobethreshold=sidelobethreshold,
+            lownoisethreshold=lownoisethreshold,
             cycleniter=cycleniter,
             gridder=gridder,
             wprojplanes=wprojplanes,
             phasecenter=phasecenter,
             interactive=interactive,
             pblimit=pblim,
+            pbmask=0.0,
             parallel=mpi,
         )
 
