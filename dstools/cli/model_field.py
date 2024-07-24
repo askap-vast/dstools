@@ -1,4 +1,4 @@
-import os
+import shutil
 import subprocess
 
 import click
@@ -109,12 +109,12 @@ def main(**kwargs):
     )
     kwargstr += "".join(scaleargs)
 
+    casa_bin = shutil.which("casa")
     if mpinodes > 1:
-        casa_bin = os.environ.get("CASA")
-        casa_cmd = f"mpicasa -n {mpinodes} {casa_bin}/bin/casa"
+        casa_cmd = f"mpicasa -n {mpinodes} {casa_bin}"
         argstr += " --mpi"
     else:
-        casa_cmd = "casa"
+        casa_cmd = casa_bin
 
     call = (
         f"{casa_cmd}{logconfig} -c {path} {argstr} {kwargstr}".split(" ") + phasecenter
