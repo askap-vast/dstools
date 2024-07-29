@@ -26,6 +26,7 @@ dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
 dstools-remove-source = "dstools.cli.remove_source:main"
 dstools-model-field = "dstools.cli.model_field:main"
 dstools-rotate = "dstools.cli.fix_phasecentre:main"
+dstools-avg-baselines = "dstools.cli.avg_baselines:main"
 dstools-extract-ds = "dstools.cli.extract_ds:main"
 dstools-plot-ds = "dstools.cli.plot_ds:main"
 
