@@ -173,7 +173,7 @@ class DynamicSpectrum:
     maxuvwave: float = np.inf
 
     tunit: u.Quantity = u.hour
-    scantime: float = 10.1
+    corr_dumptime: float = 10.1
 
     derotate: bool = False
 
@@ -186,18 +186,13 @@ class DynamicSpectrum:
     trim: bool = True
 
     def __post_init__(self):
-        self._timelabel = "Phase" if self.fold else f"Time ({self.tunit})"
 
-        self._load_data()
-        self.avg_scan_dt, scan_start_idx, scan_end_idx = self._get_scan_intervals()
+        # Load instrumental polarisation time/frequency/uvdist arrays
+        XX, XY, YX, YY = self._load_data()
 
-        self._stack_cal_scans(scan_start_idx, scan_end_idx)
-        self._make_stokes()
+        # Insert calibrator scan breaks
+        XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
 
-        self.tmin = self.time[0]
-        self.tmax = self.time[-1]
-        self.fmin = self.freq[0]
-        self.fmax = self.freq[-1]
         # Store time and frequency resolution
         self.time_res = (
             (self.tmax - self.tmin) * self.tunit / len(self.time) * self.tavg
@@ -210,10 +205,24 @@ class DynamicSpectrum:
             }
         )
 
-        tbins = self.data["I"].shape[0]
-        fbins = self.data["I"].shape[1]
-        self.time_resolution = (self.tmax - self.tmin) * self.tunit / tbins
-        self.freq_resolution = (self.fmax - self.fmin) * u.MHz / fbins
+        # Fold data to selected period
+        if self.fold:
+            if not self.period:
+                raise ValueError("Must pass period argument when folding.")
+
+            XX = self._fold(XX)
+            XY = self._fold(XY)
+            YX = self._fold(YX)
+            YY = self._fold(YY)
+
+            self.time = rebin(len(self.time), len(XX), axis=0) @ self.time
+
+        # Average data in time and frequency
+        XX, XY, YX, YY = self.rebin(XX, XY, YX, YY)
+
+        # Compute Stokes products and store in data attribute
+        self._make_stokes(XX, XY, YX, YY)
+
     def __str__(self):
         str_rep = ""
         for attr in self.header:
@@ -224,7 +233,7 @@ class DynamicSpectrum:
         """Average chunks of data folding at specified period."""
 
         # Calculate number of pixels in each chunk
-        pixel_duration = self.avg_scan_dt * self.tavg
+        pixel_duration = self.time[1] - self.time[0]
         chunk_length = min(int(self.period // pixel_duration), len(data))
 
         # Create left-padded nans, derived from period phase offset
@@ -242,7 +251,9 @@ class DynamicSpectrum:
         arrays = np.split(data, numsplits)
 
         # Compute average along stack axis
-        data = np.nanmean(arrays, axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            data = np.nanmean(arrays, axis=0)
 
         return np.tile(data, (self.fold_periods, 1))
 
@@ -253,8 +264,9 @@ class DynamicSpectrum:
         dts.extend([self.time[i] - self.time[i - 1] for i in range(1, len(self.time))])
         dts = np.array(dts)
 
-        # Locate indices signaling beginning of cal-scan (scan intervals longer than ~10 seconds)
-        scan_start_idx = np.where(np.abs(dts) > self.scantime)[0]
+        # Locate indices signaling beginning of cal-scan
+        # (scan intervals longer than correlator dump time)
+        scan_start_idx = np.where(np.abs(dts) > self.corr_dumptime)[0]
 
         # End indices are just prior to the next start index, then
         scan_end_idx = scan_start_idx - 1
@@ -263,10 +275,7 @@ class DynamicSpectrum:
         scan_start_idx = np.insert(scan_start_idx, 0, 0)
         scan_end_idx = np.append(scan_end_idx, len(self.time) - 1)
 
-        # Calculate average correlator cycle time from first scan
-        avg_scan_dt = np.median(dts[: scan_end_idx[0]])
-
-        return avg_scan_dt, scan_start_idx, scan_end_idx
+        return scan_start_idx, scan_end_idx
 
     def _validate(self, datafile):
 
@@ -342,7 +351,8 @@ class DynamicSpectrum:
         # Set timescale
         time_scale_factor = self.tunit.to(u.s)
         time /= time_scale_factor
-        self.scantime /= time_scale_factor
+        self.corr_dumptime /= time_scale_factor
+        self._timelabel = "Phase" if self.fold else f"Time ({self.tunit})"
 
         # Flip ATCA L-band frequency axis to intuitive order
         if self.band == "AT_L":
@@ -398,27 +408,40 @@ class DynamicSpectrum:
         time -= time[0]
 
         # Make data selection
-        self.XX = slice_array(XX, mintime, maxtime, minchan, maxchan)
-        self.XY = slice_array(XY, mintime, maxtime, minchan, maxchan)
-        self.YX = slice_array(YX, mintime, maxtime, minchan, maxchan)
-        self.YY = slice_array(YY, mintime, maxtime, minchan, maxchan)
+        XX = slice_array(XX, mintime, maxtime, minchan, maxchan)
+        XY = slice_array(XY, mintime, maxtime, minchan, maxchan)
+        YX = slice_array(YX, mintime, maxtime, minchan, maxchan)
+        YY = slice_array(YY, mintime, maxtime, minchan, maxchan)
 
+        self.uvdist = uvdist
         self.freq = slice_array(freq, minchan, maxchan)
         self.time = slice_array(time, mintime, maxtime)
-        self.uvdist = uvdist
 
+        self.tmin = self.time[0]
+        self.tmax = self.time[-1]
+        self.fmin = self.freq[0]
+        self.fmax = self.freq[-1]
+
+        self.header.update(
+            {
+                "integrations": len(self.time),
+                "channels": len(self.freq),
+            }
         )
 
+        return XX, XY, YX, YY
 
-    def _stack_cal_scans(self, scan_start_idx, scan_end_idx):
+    def _stack_cal_scans(self, XX, XY, YX, YY):
         """Insert null data representing off-source time."""
+
+        scan_start_idx, scan_end_idx = self._get_scan_intervals()
 
         # Calculate number of cycles in each calibrator/stow break
         time_end_break = self.time[scan_start_idx[1:]]
         time_start_break = self.time[scan_end_idx[:-1]]
-        num_break_cycles = (
-            np.append((time_end_break - time_start_break), 0) / self.avg_scan_dt
-        )
+
+        dt = self.time[1] - self.time[0]
+        num_break_cycles = np.append((time_end_break - time_start_break), 0) / dt
         num_tsamples = self.header["integrations"]
         num_channels = self.header["channels"]
 
@@ -427,15 +450,17 @@ class DynamicSpectrum:
             (1, num_channels),
             dtype=complex,
         )
+        new_time = np.zeros(1)
 
         for start_index, end_index, num_scans in zip(
             scan_start_idx, scan_end_idx, num_break_cycles
         ):
             # Select each contiguous on-target chunk of data
-            XX_chunk = self.XX[start_index : end_index + 1, :]
-            XY_chunk = self.XY[start_index : end_index + 1, :]
-            YX_chunk = self.YX[start_index : end_index + 1, :]
-            YY_chunk = self.YY[start_index : end_index + 1, :]
+            XX_chunk = XX[start_index : end_index + 1, :]
+            XY_chunk = XY[start_index : end_index + 1, :]
+            YX_chunk = YX[start_index : end_index + 1, :]
+            YY_chunk = YY[start_index : end_index + 1, :]
+            time_chunk = self.time[start_index : end_index + 1]
 
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
@@ -447,36 +472,46 @@ class DynamicSpectrum:
                 XY_chunk = np.ma.vstack([XY_chunk, nan_chunk])
                 YX_chunk = np.ma.vstack([YX_chunk, nan_chunk])
                 YY_chunk = np.ma.vstack([YY_chunk, nan_chunk])
+                time_chunk = np.append(time_chunk, np.full(num_nans[0], np.nan))
 
             new_data_XX = np.ma.vstack([new_data_XX, XX_chunk])
             new_data_XY = np.ma.vstack([new_data_XY, XY_chunk])
             new_data_YX = np.ma.vstack([new_data_YX, YX_chunk])
             new_data_YY = np.ma.vstack([new_data_YY, YY_chunk])
+            new_time = np.append(new_time, time_chunk)
 
         new_data_XX = new_data_XX[1:]
         new_data_XY = new_data_XY[1:]
         new_data_YX = new_data_YX[1:]
         new_data_YY = new_data_YY[1:]
 
+        self.time = new_time[1:]
+
+        return new_data_XX, new_data_XY, new_data_YX, new_data_YY
+
+    def rebin(self, XX, XY, YX, YY):
+        num_tsamples, num_channels = XX.shape
         tbins = num_tsamples // self.tavg
         fbins = num_channels // self.favg
 
-        self.XX = self.rebin2D(new_data_XX, (tbins, fbins))
-        self.YX = self.rebin2D(new_data_YX, (tbins, fbins))
-        self.XY = self.rebin2D(new_data_XY, (tbins, fbins))
-        self.YY = self.rebin2D(new_data_YY, (tbins, fbins))
+        XX = rebin2D(XX, (tbins, fbins))
+        XY = rebin2D(XY, (tbins, fbins))
+        YX = rebin2D(YX, (tbins, fbins))
+        YY = rebin2D(YY, (tbins, fbins))
 
-        self.time = self.rebin(num_tsamples, tbins, axis=0) @ self.time
-        self.freq = self.freq @ self.rebin(num_channels, fbins, axis=1)
+        self.time = rebin(num_tsamples, tbins, axis=0) @ self.time
+        self.freq = self.freq @ rebin(num_channels, fbins, axis=1)
 
-    def _make_stokes(self):
+        return XX, XY, YX, YY
+
+    def _make_stokes(self, XX, XY, YX, YY):
         """Convert instrumental polarisations to Stokes products."""
 
         # Compute Stokes products from instrumental pols
-        I = (self.XX + self.YY) / 2
-        Q = (self.XX - self.YY) / 2
-        U = (self.XY + self.YX) / 2
-        V = 1j * (self.YX - self.XY) / 2
+        I = (XX + YY) / 2
+        Q = (XX - YY) / 2
+        U = (XY + YX) / 2
+        V = 1j * (YX - XY) / 2
 
         L = Q.real + 1j * U.real
 
@@ -500,21 +535,11 @@ class DynamicSpectrum:
 
         PA = 0.5 * np.arctan2(U.real, Q.real) * u.rad.to(u.deg)
 
-        # Fold data to selected period
-        if self.fold:
-            if not self.period:
-                raise ValueError("Must pass period argument when folding.")
-
-            I = self._fold(I)
-            Q = self._fold(Q)
-            U = self._fold(U)
-            V = self._fold(V)
-
-            L = self._fold(L)
-            P = self._fold(P)
-            PA = self._fold(PA)
-
         self.data = {
+            "XX": XX,
+            "XY": XY,
+            "YX": YX,
+            "YY": YY,
             "I": I,
             "Q": Q,
             "U": U,
@@ -523,6 +548,8 @@ class DynamicSpectrum:
             "P": P,
             "PA": PA,
         }
+
+        return
 
     def acf(self, stokes):
         """Generate a 2D auto-correlation of the dynamic spectrum."""
