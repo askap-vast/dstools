@@ -83,11 +83,27 @@ class DynamicSpectrum:
         self.tmax = self.time[-1]
         self.fmin = self.freq[0]
         self.fmax = self.freq[-1]
+        # Store time and frequency resolution
+        self.time_res = (
+            (self.tmax - self.tmin) * self.tunit / len(self.time) * self.tavg
+        )
+        self.freq_res = (self.fmax - self.fmin) * u.MHz / len(self.freq) * self.favg
+        self.header.update(
+            {
+                "time_resolution": f"{self.time_res.to(u.s):.1f}",
+                "freq_resolution": f"{self.freq_res.to(u.MHz):.1f}",
+            }
+        )
 
         tbins = self.data["I"].shape[0]
         fbins = self.data["I"].shape[1]
         self.time_resolution = (self.tmax - self.tmin) * self.tunit / tbins
         self.freq_resolution = (self.fmax - self.fmin) * u.MHz / fbins
+    def __str__(self):
+        str_rep = ""
+        for attr in self.header:
+            str_rep += f"{attr}: {self.header[attr]}\n"
+        return str_rep
 
     def _fold(self, data):
         """Average chunks of data folding at specified period."""
@@ -167,6 +183,9 @@ class DynamicSpectrum:
         with h5py.File(self.ds_path, "r") as f:
 
             self._validate(f)
+
+            # Read header
+            self.header = dict(f.attrs)
 
             # Read uvdist, time, frequency, and flux arrays
             uvdist = f["uvdist"][:]
@@ -253,6 +272,16 @@ class DynamicSpectrum:
         else:
             maxtime = 0
 
+        # Identify start time and set observation start to t=0
+        time_start = Time(
+            time[0] * time_scale_factor / 3600 / 24,
+            format="mjd",
+            scale="utc",
+        )
+        time_start.format = "iso"
+        self.header["time_start"] = time_start
+        time -= time[0]
+
         # Make data selection
         self.XX = slice_array(XX, mintime, maxtime, minchan, maxchan)
         self.XY = slice_array(XY, mintime, maxtime, minchan, maxchan)
@@ -263,15 +292,8 @@ class DynamicSpectrum:
         self.time = slice_array(time, mintime, maxtime)
         self.uvdist = uvdist
 
-        # Identify start time and set observation start to t=0
-        self.time_start = Time(
-            self.time[0] * time_scale_factor / 3600 / 24,
-            format="mjd",
-            scale="utc",
         )
-        self.time_start.format = "iso"
 
-        self.time -= time[0]
 
     def _stack_cal_scans(self, scan_start_idx, scan_end_idx):
         """Insert null data representing off-source time."""
@@ -282,7 +304,8 @@ class DynamicSpectrum:
         num_break_cycles = (
             np.append((time_end_break - time_start_break), 0) / self.avg_scan_dt
         )
-        num_tsamples, num_channels = self.XX.shape
+        num_tsamples = self.header["integrations"]
+        num_channels = self.header["channels"]
 
         # Create initial time-slice to start stacking target and calibrator scans together
         new_data_XX = new_data_XY = new_data_YX = new_data_YY = np.zeros(

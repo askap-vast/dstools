@@ -13,10 +13,68 @@ from astroutils.logger import setupLogger
 from casacore.tables import table
 from concurrent.futures import ProcessPoolExecutor, wait
 
+import dstools
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
+DSTOOLS_PATH = dstools.__path__[0]
+
 logger = logging.getLogger(__name__)
+
+
+def get_data_dimensions(ms):
+
+    # Get antenna count and time / frequency arrays
+    tab = table(ms, ack=False, lockoptions="autonoread")
+
+    # Throw away autocorrelations
+    tab = tab.query("ANTENNA1 != ANTENNA2")
+
+    # Get time, frequency, and baseline axes
+    times = np.unique(tab.getcol("TIME"))
+    tf = table(f"{ms}::SPECTRAL_WINDOW", ack=False)
+    freqs = tf[0]["CHAN_FREQ"]
+
+    antennas = np.unique(
+        np.append(
+            tab.getcol("ANTENNA1"),
+            tab.getcol("ANTENNA2"),
+        ),
+    )
+
+    tf.close()
+    tab.close()
+
+    # Calculate number of baselines
+    nbaselines = len(antennas) * (len(antennas) - 1) // 2
+
+    return times, freqs, antennas, nbaselines
+
+
+def validate_datacolumn(ms, datacolumn):
+
+    tab = table(ms, ack=False, lockoptions="autonoread")
+    col_exists = datacolumn in tab.colnames()
+    tab.close()
+
+    return col_exists
+
+
+def rotate_phasecentre(ms, phasecentre):
+    # Parse phasecentre
+    ra, dec = phasecentre
+    ra_unit = "hourangle" if ":" in ra or "h" in ra else "deg"
+    position = SkyCoord(ra=ra, dec=dec, unit=(ra_unit, "deg"))
+    c = position.to_string(style="hmsdms", precision=3)
+    logger.debug(f"Rotating phasecentre to {c}")
+
+    # Apply phasecentre rotation
+    os.system(f"dstools-rotate -- {ms} {c} 1>/dev/null")
+
+    # Use rotated MeasurementSet for subsequent processing
+    ms = ms.replace(".ms", ".rotated.target.ms")
+
+    return ms
 
 
 def get_pb_correction(position, primary_beam):
@@ -130,6 +188,13 @@ def process_baseline(ms, times, baseline, datacolumn):
     help="Path to primary beam image with which to correct flux scale. Must also provide phasecentre.",
 )
 @click.option(
+    "-a",
+    "--askap",
+    is_flag=True,
+    default=False,
+    help="Rescale flux and fix beam pointing coordinates (only required for ASKAP beams).",
+)
+@click.option(
     "-v",
     "--verbose",
     is_flag=True,
@@ -145,6 +210,7 @@ def main(
     datacolumn,
     phasecentre,
     primary_beam,
+    askap,
     verbose,
     ms,
     outfile,
@@ -152,7 +218,6 @@ def main(
 
     setupLogger(verbose=verbose)
 
-    # Check that selected column exists in MS
     columns = {
         "data": "DATA",
         "corrected": "CORRECTED_DATA",
@@ -160,64 +225,51 @@ def main(
     }
     datacolumn = columns[datacolumn]
 
-    tab = table(ms, ack=False, lockoptions="autonoread")
-    if not datacolumn in tab.colnames():
+    # Check that selected column exists in MS
+    if not validate_datacolumn(ms, datacolumn):
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
-    tab.close()
+
+    if askap:
+
+        # Fix beam pointing
+        os.system(f"python {DSTOOLS_PATH}/fix_dir.py {ms}")
+
+        # Convert instrumental pol visibilities from average to total flux
+        os.system(f"python {DSTOOLS_PATH}/rescale_askapsoft.py {ms}")
 
     scale = 1
     if phasecentre is not None:
 
-        # Parse phasecentre
-        ra, dec = phasecentre
-        ra_unit = "hourangle" if ":" in ra or "h" in ra else "deg"
-        position = SkyCoord(ra=ra, dec=dec, unit=(ra_unit, "deg"))
-        c = position.to_string(style="hmsdms", precision=3)
-        logger.debug(f"Rotating phasecentre to {c}")
-
-        # Apply phasecentre rotation
-        os.system(f"dstools-rotate -- {ms} {c} 1>/dev/null")
-
-        # Use rotated MeasurementSet for subsequent processing
-        ms = ms.replace(".ms", ".rotated.target.ms")
+        # Rotate phasecentre to target position
+        ms = rotate_phasecentre(ms, phasecentre)
 
         # Correct flux scale for primary beam
         if primary_beam is not None:
             scale = get_pb_correction(position, primary_beam)
 
-    # Get antenna count and time / frequency arrays
-    tab = table(ms, ack=False, lockoptions="autonoread")
-
-    # Throw away autocorrelations
-    tab = tab.query("ANTENNA1 != ANTENNA2")
-
-    # Get time, frequency, and baseline axes
-    times = np.unique(tab.getcol("TIME"))
-    tf = table(f"{ms}::SPECTRAL_WINDOW", ack=False)
-    freqs = tf[0]["CHAN_FREQ"]
-
-    antennas = np.unique(
-        np.append(
-            tab.getcol("ANTENNA1"),
-            tab.getcol("ANTENNA2"),
-        ),
-    )
-
-    tf.close()
-    tab.close()
-
-    # Calculate number of baselines and initialise output data arrays
-    nbaselines = len(antennas) * (len(antennas) - 1) // 2
+    # Calculate data dimensions
+    times, freqs, antennas, nbaselines = get_data_dimensions(ms)
     data_shape = (nbaselines, len(times), len(freqs), 4)
 
+    # Get other observation metadata
+    ta = table(f"{ms}::OBSERVATION", ack=False)
+    telescope = ta.getcol("TELESCOPE_NAME")[0]
+    ta.close()
+
+    ta = table(f"{ms}::FIELD", ack=False)
+    phasecentre_coords = ta.getcol("PHASE_DIR")[0][0]
+    phasecentre = SkyCoord(
+        ra=phasecentre_coords[0],
+        dec=phasecentre_coords[1],
+        unit="rad",
+    )
+    ta.close()
+
+    # Initialise output arrays
     waterfall = np.full(data_shape, np.nan, dtype=complex)
     flags = np.full(data_shape, np.nan, dtype=bool)
     uvdist = np.full(nbaselines, np.nan)
-
-    logger.debug(
-        f"Extracting dynamic spectrum along:\n  {nbaselines} baselines\n  {len(times)} integrations\n  {len(freqs)} channels\n  4 polarisations"
-    )
 
     # Construct 4D data and flag cubes on each baseline separately
     # to verify indices of missing data (e.g. due to correlator dropouts)
@@ -261,23 +313,36 @@ def main(
     # Apply primary beam correction
     waterfall /= scale
 
+    # Create header metadata
+    ncorrelations = nbaselines * len(freqs) * len(times) * 4
+    nflagged = np.sum(flags)
     header = {
+        "telescope": telescope,
+        "antennas": len(antennas),
         "baselines": nbaselines,
-        "channels": len(freqs),
         "integrations": len(times),
-        "correlations": nbaselines * len(freqs) * len(times) * 4,
+        "channels": len(freqs),
+        "polarisations": 4,
+        "datacolumn": datacolumn,
+        "phasecentre": phasecentre.to_string("hmsdms"),
+        "correlations": ncorrelations,
+        "flagged_correlations": f"{nflagged} ({nflagged/ncorrelations:.2%})",
+        "uvdist_range": f"{np.nanmin(uvdist):.1f}-{np.nanmax(uvdist):.1f}m",
+        "pb_scale": scale,
     }
 
     # Write all data to file
-    with h5py.File(outfile, "w") as f:
+    with h5py.File(outfile, "w", track_order=True) as f:
+        for attr in header:
+            f.attrs[attr] = header[attr]
         f.create_dataset("time", data=times)
         f.create_dataset("frequency", data=freqs)
         f.create_dataset("uvdist", data=uvdist)
         f.create_dataset("flux", data=waterfall)
 
     # Clean up intermediate files
-    # if "rotated" in ms:
-    #     os.system(f"rm -r {ms} 2>/dev/null")
+    if "rotated.target.ms" in ms:
+        os.system(f"rm -r {ms} 2>/dev/null")
     os.system("rm *.log *.last 2>/dev/null")
 
 
