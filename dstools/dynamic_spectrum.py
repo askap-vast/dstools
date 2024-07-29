@@ -29,6 +29,90 @@ COLORS = {
 }
 
 
+def rebin(o, n, axis):
+    """Create unitary array compression matrix from o -> n length.
+
+    if rebinning along row axis we want:
+        - (o // n) + 1 entries in each row that sum to unity,
+        - each column to sum to the compression ratio o / n
+        - values distributed along the row in units of o / n until expired
+
+        >>> rebin(5, 3)
+        array([[0.6, 0.4, 0. , 0. , 0. ],
+                [0. , 0.2, 0.6, 0.2, 0. ],
+                [0. , 0. , 0. , 0.4, 0.6]])
+
+        - transpose of this for column rebinning
+
+    The inner product of this compressor with an array will rebin
+    the array conserving the total intensity along the given axis.
+    """
+
+    compressor = np.zeros((n, o))
+
+    # Exit early with empty array if chunk is empty
+    if compressor.size == 0:
+        return compressor
+
+    comp_ratio = n / o
+
+    nrow = 0
+    ncol = 0
+
+    budget = 1
+    overflow = 0
+
+    # While loop to avoid visiting n^2 zero-value cells
+    while nrow < n and ncol < o:
+        # Use overflow if just spilled over from last row
+        if overflow > 0:
+            value = overflow
+            overflow = 0
+            budget -= value
+            row_shift = 0
+            col_shift = 1
+        # Use remaining budget if at end of current row
+        elif budget < comp_ratio:
+            value = budget
+            overflow = comp_ratio - budget
+            budget = 1
+            row_shift = 1
+            col_shift = 0
+        # Otherwise spend n / o and move to next column
+        else:
+            value = comp_ratio
+            budget -= value
+            row_shift = 0
+            col_shift = 1
+
+        compressor[nrow, ncol] = value
+        nrow += row_shift
+        ncol += col_shift
+
+    return compressor if axis == 0 else compressor.T
+
+
+def rebin2D(array, new_shape):
+    """Re-bin along time / frequency axes conserving flux."""
+
+    if new_shape == array.shape:
+        array[array == 0 + 0j] = np.nan
+        return array
+
+    if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
+        raise ValueError(
+            "New shape should not be greater than old shape in either dimension"
+        )
+
+    time_comp = rebin(array.shape[0], new_shape[0], axis=0)
+    freq_comp = rebin(array.shape[1], new_shape[1], axis=1)
+    array[np.isnan(array)] = 0 + 0j
+    result = time_comp @ np.array(array) @ freq_comp
+    result[result == 0 + 0j] = np.nan
+
+    return result
+
+
 def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
     """Slice 1D or 2D array with variable lower and upper boundaries."""
 
@@ -456,88 +540,6 @@ class DynamicSpectrum:
         acf2d /= np.nanmax(acf2d)
 
         return acf2d
-
-    def rebin(self, o, n, axis):
-        """Create unitary array compression matrix from o -> n length.
-
-        if rebinning along row axis we want:
-         - (o // n) + 1 entries in each row that sum to unity,
-         - each column to sum to the compression ratio o / n
-         - values distributed along the row in units of o / n until expired
-
-           >>> rebin(5, 3)
-           array([[0.6, 0.4, 0. , 0. , 0. ],
-                  [0. , 0.2, 0.6, 0.2, 0. ],
-                  [0. , 0. , 0. , 0.4, 0.6]])
-
-         - transpose of this for column rebinning
-
-        The inner product of this compressor with an array will rebin
-        the array conserving the total intensity along the given axis.
-        """
-
-        compressor = np.zeros((n, o))
-
-        # Exit early with empty array if chunk is empty
-        if compressor.size == 0:
-            return compressor
-
-        comp_ratio = n / o
-
-        nrow = 0
-        ncol = 0
-
-        budget = 1
-        overflow = 0
-
-        # While loop to avoid visiting n^2 zero-value cells
-        while nrow < n and ncol < o:
-            # Use overflow if just spilled over from last row
-            if overflow > 0:
-                value = overflow
-                overflow = 0
-                budget -= value
-                row_shift = 0
-                col_shift = 1
-            # Use remaining budget if at end of current row
-            elif budget < comp_ratio:
-                value = budget
-                overflow = comp_ratio - budget
-                budget = 1
-                row_shift = 1
-                col_shift = 0
-            # Otherwise spend n / o and move to next column
-            else:
-                value = comp_ratio
-                budget -= value
-                row_shift = 0
-                col_shift = 1
-
-            compressor[nrow, ncol] = value
-            nrow += row_shift
-            ncol += col_shift
-
-        return compressor if axis == 0 else compressor.T
-
-    def rebin2D(self, array, new_shape):
-        """Re-bin along time / frequency axes conserving flux."""
-
-        if new_shape == array.shape:
-            array[array == 0 + 0j] = np.nan
-            return array
-
-        if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
-            raise ValueError(
-                "New shape should not be greater than old shape in either dimension"
-            )
-
-        time_comp = self.rebin(array.shape[0], new_shape[0], axis=0)
-        freq_comp = self.rebin(array.shape[1], new_shape[1], axis=1)
-        array[np.isnan(array) | array.mask] = 0 + 0j
-        result = time_comp @ np.array(array) @ freq_comp
-        result[result == 0 + 0j] = np.nan
-
-        return result
 
     def rm_synthesis(self, I, Q, U):
         # Zero null values in Stokes arrays
