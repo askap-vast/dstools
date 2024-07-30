@@ -16,7 +16,7 @@ from astropy.visualization import ImageNormalize, ZScaleInterval
 from dstools.rm import PolObservation
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.signal import correlate
+from scipy.signal import correlate, find_peaks
 
 logger = logging.getLogger(__name__)
 
@@ -819,7 +819,7 @@ class DynamicSpectrum:
         cb.formatter.set_powerlimits((0, 0))
         cb.set_label("ACF")
 
-        acf_ax.set_xlabel("Time Lag (h)")
+        acf_ax.set_xlabel(f"Time Lag ({self.tunit})")
         acf_ax.set_ylabel("Frequency Lag (MHz)")
 
         # Plot zero frequency lag trace
@@ -833,8 +833,21 @@ class DynamicSpectrum:
             color="k",
         )
 
-        acfz_ax.set_xlabel("Time Lag (h)")
+        acfz_ax.set_xlabel(f"Time Lag ({self.tunit})")
         acfz_ax.set_ylabel("ACF")
+
+        acf_peaks, props = find_peaks(zero_trace_acf, prominence=(None, None))
+
+        max_prom = np.argsort(props["prominences"])[::-1]
+        self.peak_lags = time_lag[acf_peaks[max_prom]]
+
+        acfz_ax.axvline(
+            self.peak_lags[0],
+            color="darkorange",
+            ls="--",
+        )
+
+        logger.debug(f"Stokes {stokes} ACF peak at {self.peak_lags[0]*self.tunit:.3f}")
 
         return acf_fig, acf_ax, acfz_fig, acfz_ax
 
