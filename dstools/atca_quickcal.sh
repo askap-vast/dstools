@@ -18,7 +18,6 @@ case $reload in
 
     [Yy]* )
 	print "Flushing atlod files and reloading"
-	reflag="y"
 
 	mkdir -p $proj_dir/
 	cd $proj_dir
@@ -62,7 +61,6 @@ case $reload in
 	uvsplit vis=$pcode.uv ;;
 
     [Nn]* )
-	reflag="n"
 	print "Skipping data reload"
 	cd $proj_dir ;;
 esac

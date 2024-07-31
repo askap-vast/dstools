@@ -2,14 +2,14 @@
 
 source $1/functions.sh
 
-export proj_dir=reduced/$2/miriad/
-export data_dir=$(pwd)/$3
-export pcode=$4
-export refant=$5
-export mfinterval=$6
-export bpinterval=$7
-export gpinterval=$8
-export noflag=$9
+proj_dir=reduced/$2/miriad/
+data_dir=$(pwd)/$3
+pcode=$4
+refant=$5
+mfinterval=$6
+bpinterval=$7
+gpinterval=$8
+noflag=$9
 
 # Load data
 prompt "Reload data?"
@@ -30,7 +30,7 @@ case $reload in
 
 	# Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
 	# can sit in subdirectories of the data directory without being auto-imported
-	export infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',')
+	infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',')
 
 	atlod in=$infiles out=$pcode.uv options=$atlod_options
 
@@ -66,7 +66,7 @@ case $reload in
 esac
 
 # Choose frequency
-export freqs=$(ls | grep -E '2100|5500|9000|17000' | sed 's/^[^\.]*\.//g' | sort | uniq)
+freqs=$(ls | grep -E '2100|5500|9000|17000' | sed 's/^[^\.]*\.//g' | sort | uniq)
 print "Choose frequency / IF"
 select f in $freqs; do
     if [[ "$REPLY" == stop ]]; then break; fi
@@ -78,17 +78,21 @@ select f in $freqs; do
 
     # TODO: improve this logic
     if [ $(echo $f | grep 2100 | wc -l) -gt 0 ]; then
-        export freq=$f
-        export spec=2.1
+        freq=$f
+        spec=2.1
+	band=AT_L
     elif [ $(echo $f | grep 5500 | wc -l) -gt 0 ]; then
-        export freq=$f
-        export spec=5.5
+        freq=$f
+        spec=5.5
+	band=AT_C
     elif [ $(echo $f | grep 9000 | wc -l) -gt 0 ]; then
-        export freq=$f
-        export spec=9
+        freq=$f
+        spec=9
+	band=AT_X
     elif [ $(echo $f | grep 17000 | wc -l) -gt 0 ]; then
-        export freq=$f
-        export spec=17
+        freq=$f
+        spec=17
+	band=AT_K
 
     fi
     break
@@ -119,6 +123,7 @@ for src in "${orders[@]}"; do
 	fi
 
 	export $src=$file
+
 	break
 
     done
@@ -215,7 +220,6 @@ esac
 # Copy calibration to secondary calibrator
 if [ $pcal != $scal ]; then
     gpcopy vis=$pcal.$freq out=$scal.$freq options=nocal;
-    # flag_extreme $scal.$freq 200;
 else
     print "Using primary as secondary, skipping calibration copy."
 fi
@@ -281,68 +285,21 @@ fi
 # Transfer gain calibrations to target
 print "Transferring calibration tables to science target"
 gpcopy vis=$scal.$freq out=$target.$freq;
-# flag_extreme $target.$freq 20
 
 # Average gain phase solutions over 2 minutes for better interpolation
 print "Averaging 2 minute calibration samples"
 gpaver vis=$target.$freq interval=2;
 
-prompt "Proceed with target flagging?"
-read calibrate
-case $calibrate in
-	
-    [Yy]* )
-
-	print "Flagging science target"
-	while true; do
-
-	    # Run blflag on science target prior to calibrating
-	    print "Running blflag on $target.$freq"
-	    # blflag vis=$target.$freq device=/xs stokes=xx,yy,xy,yx axis=time,amp options=nofqav
-	    blflag vis=$target.$freq device=/xs stokes=xx,yy,xy,yx axis=chan,amp options=nofqav
-
-	    # Run automatic flagging on secondary
-	    prompt "Run automatic flagging?"
-	    read autoflag
-	    case $autoflag in
-		[Yy]* )
-		    print "Running pgflag on $target.$freq"
-		    pgflag vis=$target.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
-		    pgflag vis=$target.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
-		    ;;
-		[Nn]* )
-		    : ;;
-	    esac
-
-	    # Check target calibration
-	    # uvplt vis=$target.$freq stokes=xx,yy axis=time,amp options=nofqav device=/xs
-	    # uvplt vis=$target.$freq stokes=xx,yy axis=time,phase options=nofqav device=/xs
-	    uvplt vis=$target.$freq stokes=xx,yy axis=real,imag options=nofqav,nobase,equal device=/xs
-
-	    prompt "Do more interactive flagging?"
-	    read flagmore
-	    case $flagmore in
-		[Yy]* ) : ;;
-		[Nn]* )
-		    cp -r $target.$freq $target.$freq.flagged_backup
-		    break ;;
-	    esac
-	    
-	done
-	;;
-    
-    [Nn]* ) :
-	    ;;
-    
-esac
-
 print "Applying calibration to science target"
 uvaver vis=$scal.$freq out=$scal.$freq.cal
 uvaver vis=$target.$freq out=$target.$freq.cal
 
-# Clean up miriad files before moving to CASA (just keep calibrated target)
-export target_dir=$(echo $target | tr '[:lower:]' '[:upper:]')
+# Clean up miriad files before moving to CASA (just keep calibrated target in MS format)
+target_dir=$(echo $target | tr '[:lower:]' '[:upper:]')
 mkdir ../$target_dir 2>/dev/null
-mv $target.$freq.cal ../$target_dir/.
+
+fits in=$target.$freq.cal out=$target.$freq.cal.fits op=uvout
+msfile=../$target_dir/$target.$band.ms
+casa --nologger --nologfile -c "importuvfits(fitsfile='$target.$freq.cal.fits', vis='$msfile')" 1>/dev/null
 
 print "DONE!"
