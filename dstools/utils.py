@@ -1,4 +1,5 @@
 import astropy.units as u
+from astropy.coordinates import SkyCoord
 from dataclasses import dataclass
 
 import dstools
@@ -15,6 +16,17 @@ BANDS = [
     "MKT_UHF",
     "MKT_L",
 ]
+
+
+def parse_coordinates(coord: tuple) -> (str, str):
+    """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
+
+    ra, dec = coord
+    raunit = "hourangle" if ":" in ra or "h" in ra else "deg"
+    pos = SkyCoord(ra=ra, dec=dec, unit=(raunit, "deg"))
+    ra, dec = pos.to_string(style="hmsdms", precision=3).split()
+
+    return ra, dec
 
 
 def parse_casa_args(func, module, kwargs, args=None):

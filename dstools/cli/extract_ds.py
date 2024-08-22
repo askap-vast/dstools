@@ -13,6 +13,8 @@ from astroutils.logger import setupLogger
 from casacore.tables import table
 from concurrent.futures import ProcessPoolExecutor, wait
 
+from dstools.utils import parse_coordinates
+
 import dstools
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
@@ -98,14 +100,11 @@ def validate_datacolumn(ms, datacolumn):
 
 def rotate_phasecentre(ms, phasecentre):
     # Parse phasecentre
-    ra, dec = phasecentre
-    ra_unit = "hourangle" if ":" in ra or "h" in ra else "deg"
-    position = SkyCoord(ra=ra, dec=dec, unit=(ra_unit, "deg"))
-    c = position.to_string(style="hmsdms", precision=3)
-    logger.debug(f"Rotating phasecentre to {c}")
+    ra, dec = parse_coordinates(phasecentre)
+    logger.debug(f"Rotating phasecentre to {ra} {dec}")
 
     # Apply phasecentre rotation
-    os.system(f"dstools-rotate -- {ms} {c} 1>/dev/null")
+    os.system(f"dstools-rotate -- {ms} {ra} {dec} 1>/dev/null")
 
     # Use rotated MeasurementSet for subsequent processing
     ms = ms.replace(".ms", ".rotated.target.ms")
