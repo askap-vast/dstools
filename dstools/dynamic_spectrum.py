@@ -158,7 +158,6 @@ def make_summary_plot(ds, stokes, cmax, imag):
 @dataclass
 class DynamicSpectrum:
     ds_path: str
-    band: str = "AT_L"
 
     favg: int = 1
     tavg: int = 1
@@ -194,10 +193,10 @@ class DynamicSpectrum:
         XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
 
         # Store time and frequency resolution
-        self.time_res = (
-            (self.tmax - self.tmin) * self.tunit / len(self.time) * self.tavg
-        )
-        self.freq_res = (self.fmax - self.fmin) * u.MHz / len(self.freq) * self.favg
+        timebins = len(self.time) * self.tavg
+        freqbins = len(self.freq) * self.favg
+        self.time_res = (self.tmax - self.tmin) * self.tunit / timebins
+        self.freq_res = (self.fmax - self.fmin) * u.MHz / freqbins
         self.header.update(
             {
                 "time_resolution": f"{self.time_res.to(u.s):.1f}",
@@ -355,7 +354,7 @@ class DynamicSpectrum:
         self._timelabel = "Phase" if self.fold else f"Time ({self.tunit})"
 
         # Flip ATCA L-band frequency axis to intuitive order
-        if self.band == "AT_L":
+        if freq[0] > freq[-1]:
             XX = np.flip(XX, axis=1)
             XY = np.flip(XY, axis=1)
             YX = np.flip(YX, axis=1)

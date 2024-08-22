@@ -145,12 +145,12 @@ class Array:
             "MKT_L": 2.56,
         }
         imsize = {
-            "AK_low": 4000,
-            "AK_mid": 3600,
-            "AK_high": 3600,
+            "AK_low": 6144,
+            "AK_mid": 4500,
+            "AK_high": 4500,
             "AT_L": 4500,
-            "AT_C": 2044,
-            "AT_X": 2044,
+            "AT_C": 2048,
+            "AT_X": 2048,
             "AT_K": 1200,
             "MKT_UHF": 4500,
             "MKT_L": 6144,

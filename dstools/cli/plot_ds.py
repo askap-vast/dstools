@@ -229,13 +229,6 @@ stokes_choices = [
     help="Toggle inclusion of null-valued time chunks while off-source (e.g. calibrator scans, wind stows)",
 )
 @click.option(
-    "-B",
-    "--band",
-    default="AT_L",
-    type=click.Choice(BANDS),
-    help="Frequency band. Must correspond to a sub-directory of <project>/dynamic_spectra/",
-)
-@click.option(
     "-Y",
     "--summary",
     is_flag=True,
@@ -275,7 +268,6 @@ def main(
     period,
     period_offset,
     calscans,
-    band,
     summary,
     verbose,
     ds_path,
@@ -294,8 +286,6 @@ def main(
 
     ds = DynamicSpectrum(
         ds_path=ds_path,
-        band=band,
-        calscans=calscans,
         tavg=tavg,
         favg=favg,
         minfreq=fmin,
@@ -307,9 +297,10 @@ def main(
         mintime=tmin,
         maxtime=tmax,
         tunit=tunit,
-        fold=fold,
         trim=trim,
+        calscans=calscans,
         derotate=derotate,
+        fold=fold,
         period=period,
         period_offset=period_offset,
     )
