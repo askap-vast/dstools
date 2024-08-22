@@ -508,10 +508,17 @@ class DynamicSpectrum:
         """Convert instrumental polarisations to Stokes products."""
 
         # Compute Stokes products from instrumental pols
-        I = (XX + YY) / 2
-        Q = (XX - YY) / 2
-        U = (XY + YX) / 2
-        V = 1j * (YX - XY) / 2
+        feedtype = self.header["feeds"]
+        if feedtype == "linear":
+            I = (XX + YY) / 2
+            Q = (XX - YY) / 2
+            U = (XY + YX) / 2
+            V = 1j * (YX - XY) / 2
+        elif feedtype == "circular":
+            I = (XX + YY) / 2
+            Q = (XY + YX) / 2
+            U = 1j * (XY - YX) / 2
+            V = (XX - YY) / 2
 
         L = Q.real + 1j * U.real
 

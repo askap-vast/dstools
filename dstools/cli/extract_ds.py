@@ -22,6 +22,42 @@ DSTOOLS_PATH = dstools.__path__[0]
 logger = logging.getLogger(__name__)
 
 
+def get_feed_polarisation(ms):
+
+    tf = table(f"{ms}::FEED", ack=False)
+    feedtype = tf.getcol("POLARIZATION_TYPE")["array"][0]
+    tf.close()
+
+    feedtype = {
+        "X": "linear",
+        "Y": "linear",
+        "R": "circular",
+        "L": "circular",
+    }.get(feedtype)
+
+    if feedtype is None:
+        raise ValueError(
+            f"Feed has polarisation type {feedtype} which cannot be recognised."
+        )
+
+    return feedtype
+
+
+def combine_spws(ms, datacolumn):
+
+    tf = table(f"{ms}::SPECTRAL_WINDOW", ack=False)
+    nspws = len(tf)
+    tf.close()
+
+    if nspws > 1:
+        outvis = ms.replace(".ms", ".comb.ms")
+        cmd = f'mstransform(vis="{ms}", datacolumn="{datacolumn}", combinespws=True, outputvis="{outvis}")'
+        os.system(f"casa --nologger -c '{cmd}' 1>/dev/null")
+        return outvis
+    else:
+        return ms
+
+
 def get_data_dimensions(ms):
 
     # Get antenna count and time / frequency arrays
@@ -230,6 +266,9 @@ def main(
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
 
+    # Combine multiple spectral windows (e.g. VLA)
+    ms = combine_spws(ms, datacolumn)
+
     if askap:
 
         # Fix beam pointing
@@ -253,6 +292,8 @@ def main(
     data_shape = (nbaselines, len(times), len(freqs), 4)
 
     # Get other observation metadata
+    feedtype = get_feed_polarisation(ms)
+
     ta = table(f"{ms}::OBSERVATION", ack=False)
     telescope = ta.getcol("TELESCOPE_NAME")[0]
     ta.close()
@@ -319,6 +360,7 @@ def main(
     header = {
         "telescope": telescope,
         "antennas": len(antennas),
+        "feeds": feedtype,
         "baselines": nbaselines,
         "integrations": len(times),
         "channels": len(freqs),
@@ -342,6 +384,8 @@ def main(
 
     # Clean up intermediate files
     if "rotated.target.ms" in ms:
+        os.system(f"rm -r {ms} 2>/dev/null")
+    if "comb.ms" in ms:
         os.system(f"rm -r {ms} 2>/dev/null")
     os.system("rm *.log *.last 2>/dev/null")
 
