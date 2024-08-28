@@ -484,15 +484,18 @@ class DynamicSpectrum:
 
             # Make array of complex NaN's for subsequent calibrator / stow gaps
             # and append to each on-target chunk of data
-            if self.calscans:
-                num_nans = (int(round(num_scans)), num_channels)
+            if self.calscans and num_scans > 0:
+                num_nans = (int(round(num_scans) - 1), num_channels)
                 nan_chunk = np.full(num_nans, np.nan + np.nan * 1j)
 
                 XX_chunk = np.ma.vstack([XX_chunk, nan_chunk])
                 XY_chunk = np.ma.vstack([XY_chunk, nan_chunk])
                 YX_chunk = np.ma.vstack([YX_chunk, nan_chunk])
                 YY_chunk = np.ma.vstack([YY_chunk, nan_chunk])
-                time_chunk = np.append(time_chunk, np.full(num_nans[0], np.nan))
+
+                time_break_start = self.time[end_index] + dt
+                time_break_scans = time_break_start + np.arange(num_nans[0]) * dt
+                time_chunk = np.append(time_chunk, time_break_scans)
 
             new_data_XX = np.ma.vstack([new_data_XX, XX_chunk])
             new_data_XY = np.ma.vstack([new_data_XY, XY_chunk])
