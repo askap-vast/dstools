@@ -5,7 +5,7 @@ import subprocess
 import astropy.units as u
 from pathlib import Path
 
-from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
+from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param, parse_coordinates
 
 
 @click.command()
@@ -62,12 +62,6 @@ from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
     help="Briggs weighting robust parameter.",
 )
 @click.option(
-    "-p",
-    "--phasecenter",
-    default="",
-    help="Imaging phasecentre (in format J2000 hms dms).",
-)
-@click.option(
     "-l",
     "--pblim",
     default=-0.1,
@@ -80,15 +74,10 @@ from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
     help="Run tclean in interactive mode",
 )
 @click.option(
-    "-a",
-    "--automask/--no-automask",
-    default=False,
-    help="Use auto-multithresh mode to automatically generate clean mask.",
-)
-@click.option(
     "-k",
     "--killcoord",
     type=str,
+    nargs=2,
     help="Coordinates of source to model and subtract.",
 )
 @click.option(
@@ -105,6 +94,7 @@ from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param
     help="Use parallel processing with mpi.",
 )
 @click.argument("data")
+# @click.argument("killcoord", nargs=2)
 def main(
     data,
     config,
@@ -115,18 +105,24 @@ def main(
     scale,
     widefield,
     robust,
-    phasecenter,
     pblim,
     interactive,
-    automask,
     killcoord,
     imsize,
     mpi,
 ):
 
+    # Set up directories
+    # ------------------
+
     datapath = Path(data)
     proj_dir = str(datapath.parent.absolute()) + "/"
-    source = str(data.split(".")[0])
+    offaxis_impath = f"{proj_dir}/field_model/offaxis_subtraction/"
+
+    os.system(f"mkdir -p {offaxis_impath}")
+
+    # Parameter Settings
+    # ------------------
 
     array = Array(band, config)
     freq = array.frequency
@@ -145,36 +141,29 @@ def main(
         gridder = "standard"
         wprojplanes = 1
 
-    # Set cycleniter=niter if using both automasking and interactive mode
-    # to ensure major cycles trigger at expected times
-    usemask = "auto-multithresh" if automask else "user"
-    cycleniter = iterations if automask and interactive else -1
+    ra, dec = parse_coordinates(killcoord)
+    killcoord = f"J2000 {ra} {dec}"
 
-    field_model_path = f"{proj_dir}/field_model/{band}/"
-    kill_impath = f"{field_model_path}/offaxis_kill/"
+    killcount = len(glob.glob(f"{offaxis_impath}/*image.tt0"))
 
-    killcount = len(glob.glob(f"{field_model_path}/offaxis_kill/*image.tt0"))
-
-    os.system(f"mkdir -p {kill_impath}")
+    # Generate offaxis source model
+    # -----------------------------
 
     tclean(
         vis=data,
         field=field,
         cell=[cellsize],
         imsize=[imsize],
-        threshold=threshold,
-        niter=iterations,
-        imagename=f"{kill_impath}/offaxis{killcount+1}",
+        imagename=f"{offaxis_impath}/offaxis{killcount+1}",
         nterms=nterms,
+        niter=2000,
         deconvolver="mtmfs",
         scales=clean_scales,
         reffreq=reffreq,
         weighting="briggs",
         stokes="IQUV",
         robust=robust,
-        usemask=usemask,
         pbmask=0.0,
-        cycleniter=cycleniter,
         gridder=gridder,
         wprojplanes=wprojplanes,
         phasecenter=killcoord,
@@ -182,35 +171,21 @@ def main(
         pblimit=pblim,
         parallel=mpi,
     )
-    bgmodel = f"{kill_impath}/offaxis{killcount+1}.model"
 
-    # Insert masked background model into visibilities and subtract
-    tclean(
-        vis=data,
-        field=field,
-        cell=[cellsize],
-        imsize=[imsize],
-        startmodel=[f"{bgmodel}.tt{i}" for i in range(nterms)],
-        savemodel="modelcolumn",
-        niter=0,
-        imagename=f"{kill_impath}/offaxis{killcount+1}.im_presub",
-        nterms=nterms,
-        deconvolver="mtmfs",
-        scales=clean_scales,
-        reffreq=reffreq,
-        weighting="briggs",
-        stokes="IQUV",
-        robust=robust,
-        gridder=gridder,
-        wprojplanes=wprojplanes,
-        phasecenter=killcoord,
-        pblimit=pblim,
-        parallel=mpi,
+    # Subtract model
+    # --------------
+
+    scaleargs = " ".join([f"-S {scale}" for scale in clean_scales])
+    mpi = "" if mpi else ""
+    interactive = " --no-interactive" if not interactive else ""
+    models = " ".join(glob.glob(f"{offaxis_impath}/*.model.tt*"))
+    call = f"dstools-subtract-model -v{mpi}p {ra} {dec} {scaleargs}{interactive} {data} {models}".split(
+        " "
     )
-    os.system(f"rm -r {kill_impath}/offaxis{killcount+1}.im_presub* >/dev/null 2>&1")
+    subprocess.run(call)
 
-    # Perform UV-subtraction.
-    uvsub(vis=data)
+    # Split to new MS
+    # ---------------
 
     split(
         vis=data,

@@ -59,12 +59,6 @@ from dstools.utils import BANDS, CONFIGS, parse_casa_args
     help="Briggs weighting robust parameter.",
 )
 @click.option(
-    "-p",
-    "--phasecenter",
-    default="",
-    help="Imaging phasecentre (in format J2000 hms dms).",
-)
-@click.option(
     "-l",
     "--pblim",
     default=-0.1,
@@ -83,30 +77,21 @@ from dstools.utils import BANDS, CONFIGS, parse_casa_args
     help="Image size in pixels.",
 )
 @click.option(
-    "-a",
-    "--automask/--no-automask",
-    default=False,
-    help="Use auto-multithresh mode to automatically generate clean mask.",
-)
-@click.option(
     "-m",
     "--mpinodes",
     default=1,
     help="Set greater than 1 to run casa in mpi mode with mpinodes available nodes.",
 )
 @click.argument("data")
-@click.argument("ra")
-@click.argument("dec")
+@click.argument("killcoord", nargs=2)
 def main(**kwargs):
-
-    ra, dec = kwargs.pop("ra"), kwargs.pop("dec")
-    killcoord = f"J2000 {ra} {dec}"
 
     # Read off multiple scale arguments from tuple and rewrite as individual flags
     scales = kwargs.pop("scale")
     scaleargs = [f" -S {clean_scale}" for clean_scale in scales]
 
     mpinodes = kwargs.pop("mpinodes")
+    killcoord = kwargs.pop("killcoord")
 
     # Construct string call signature to pass on to CASA
     path, argstr, kwargstr = parse_casa_args(
@@ -115,6 +100,7 @@ def main(**kwargs):
         kwargs,
         args=["data"],
     )
+
     kwargstr += "".join(scaleargs)
 
     casa_bin = shutil.which("casa")
@@ -126,7 +112,7 @@ def main(**kwargs):
 
     call = f"{casa_cmd} --nologger -c {path} {argstr} {kwargstr}".split(" ") + [
         "-k",
-        killcoord,
+        *killcoord,
     ]
     subprocess.run(call)
 
