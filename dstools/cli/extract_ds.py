@@ -45,19 +45,12 @@ def get_feed_polarisation(ms):
     return feedtype
 
 
-def combine_spws(ms, datacolumn):
+def combine_spws(ms):
 
-    tf = table(f"{ms}::SPECTRAL_WINDOW", ack=False)
-    nspws = len(tf)
-    tf.close()
+    outvis = ms.replace(".ms", ".dstools-temp.comb.ms")
+    os.system(f"_dstools-combine-spws {ms} {outvis} 1>/dev/null")
 
-    if nspws > 1:
-        outvis = ms.replace(".ms", ".comb.ms")
-        cmd = f'mstransform(vis="{ms}", datacolumn="{datacolumn}", combinespws=True, outputvis="{outvis}")'
-        os.system(f"casa --nologger -c '{cmd}' 1>/dev/null")
-        return outvis
-    else:
-        return ms
+    return outvis
 
 
 def get_data_dimensions(ms):
@@ -253,13 +246,16 @@ def main(
     }
     datacolumn = columns[datacolumn]
 
+    # Combine multiple spectral windows (e.g. VLA)
+    # This also appears to fix an MS corrupted by model insertion
+    # which has otherwise been very difficult to debug
+    ms = combine_spws(ms)
+
     # Check that selected column exists in MS
     if not validate_datacolumn(ms, datacolumn):
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
 
-    # Combine multiple spectral windows (e.g. VLA)
-    ms = combine_spws(ms, datacolumn)
 
     if askap:
 

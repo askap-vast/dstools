@@ -28,8 +28,8 @@ dstools-model-field = "dstools.cli.model_field:main"
 dstools-subtract-model = "dstools.cli.subtract_model:main"
 dstools-extract-ds = "dstools.cli.extract_ds:main"
 dstools-plot-ds = "dstools.cli.plot_ds:main"
-_dstools-avg-baselines = "dstools.cli.avg_baselines:main"
 _dstools-combine-spws = "dstools.cli.combine_spws:main"
+_dstools-avg-baselines = "dstools.cli.avg_baselines:main"
 _dstools-rotate = "dstools.cli.fix_phasecentre:main"
 
 [tool.poetry.group.dev.dependencies]
