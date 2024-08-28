@@ -206,8 +206,8 @@ class DynamicSpectrum:
         XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
 
         # Store time and frequency resolution
-        timebins = len(self.time) * self.tavg
-        freqbins = len(self.freq) * self.favg
+        timebins = len(self.time) / self.tavg
+        freqbins = len(self.freq) / self.favg
         self.time_res = (self.tmax - self.tmin) * self.tunit / timebins
         self.freq_res = (self.fmax - self.fmin) * u.MHz / freqbins
         self.header.update(
