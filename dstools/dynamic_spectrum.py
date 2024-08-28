@@ -30,6 +30,15 @@ COLORS = {
 }
 
 
+def snr_mask(data, noise, n_sigma):
+    """Mask data array below n_sigma based on imaginary component of stokes array."""
+
+    mask = np.abs(noise.real) < n_sigma * np.nanstd(noise.imag)
+    data[mask] = np.nan
+
+    return data
+
+
 def rebin(o, n, axis):
     """Create unitary array compression matrix from o -> n length.
 
@@ -747,9 +756,9 @@ class DynamicSpectrum:
     def plot_pol_ds(self, fig=None, ax=None, mask_sigma=1):
         """Plot dynamic spectrum of polarisation fraction."""
 
-        P = self.data["P"]
-        P = self.snr_mask(
-            data=P,
+        # Mask based on Stokes I RMS
+        P = snr_mask(
+            data=self.data["P"],
             noise=self.data["I"],
             sigma=mask_sigma,
         )
@@ -770,14 +779,6 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def snr_mask(self, data, noise, sigma):
-        """Mask data array below n-sigma based on imaginary component of stokes array."""
-
-        mask = np.abs(noise.real) < sigma * np.nanstd(noise.imag)
-        data[mask] = np.nan
-
-        return data
-
     def plot_polangle_ds(
         self,
         fig=None,
@@ -786,13 +787,11 @@ class DynamicSpectrum:
         cmax=180,
         mask_sigma=1,
     ):
-        """Plot dynamic spectra of polarisation fraction and angle."""
-
-        PA = self.data["PA"]
+        """Plot dynamic spectrum of polarisation angle."""
 
         # Mask based on Stokes I RMS
-        PA = self.snr_mask(
-            data=PA,
+        PA = snr_mask(
+            data=self.data["PA"],
             noise=self.data["L"],
             sigma=0.1,
         )
