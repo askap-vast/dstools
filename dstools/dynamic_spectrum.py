@@ -144,8 +144,19 @@ def make_summary_plot(ds, stokes, cmax, imag):
     fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax["U"], fig=fig, ax=U_ax, imag=imag)
     fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax["V"], fig=fig, ax=V_ax, imag=imag)
 
-    fig, sp_ax = ds.plot_spectrum(stokes=stokes, fig=fig, ax=sp_ax)
-    fig, lc_ax = ds.plot_lightcurve(stokes=stokes, fig=fig, ax=lc_ax, polangle=False)
+    fig, sp_ax = ds.plot_spectrum(
+        stokes=stokes,
+        fig=fig,
+        ax=sp_ax,
+        imag=imag,
+    )
+    fig, lc_ax = ds.plot_lightcurve(
+        stokes=stokes,
+        fig=fig,
+        ax=lc_ax,
+        polangle=False,
+        imag=imag,
+    )
 
     fig.subplots_adjust(
         left=0.06,
@@ -660,10 +671,10 @@ class DynamicSpectrum:
 
         return L
 
-    def plot_lightcurve(self, stokes, polangle, fig=None, ax=None):
+    def plot_lightcurve(self, stokes, polangle, fig=None, ax=None, imag=False):
         """Plot channel-averaged lightcurve."""
 
-        lc = LightCurve(self, stokes)
+        lc = LightCurve(self, stokes, imag=imag)
 
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(7, 5))
@@ -671,10 +682,10 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def plot_spectrum(self, stokes, fig=None, ax=None):
+    def plot_spectrum(self, stokes, fig=None, ax=None, imag=False):
         """Plot time-averaged spectrum."""
 
-        sp = Spectrum(self, stokes)
+        sp = Spectrum(self, stokes, imag=imag)
 
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(7, 5))
@@ -733,8 +744,8 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def plot_pol_ds(self, fig=None, ax=None, imag=False, mask_sigma=1):
-        """Plot dynamic spectra of polarisation fraction and angle."""
+    def plot_pol_ds(self, fig=None, ax=None, mask_sigma=1):
+        """Plot dynamic spectrum of polarisation fraction."""
 
         P = self.data["P"]
         P = self.snr_mask(
@@ -873,27 +884,29 @@ class TimeFreqSeries(ABC):
             sqrtn = np.sqrt(self.ds.data["I"].shape[avg_axis])
 
             for stokes in self.stokes:
+                data = self.ds.data[stokes]
                 if stokes == "L":
                     # Compute L as complex magnitude of averaged DS
-                    y[stokes] = np.abs(np.nanmean(self.ds.data[stokes], axis=avg_axis))
-                    yerr[stokes] = (
-                        np.abs(np.nanstd(self.ds.data[stokes], axis=avg_axis)) / sqrtn
-                    )
+                    y[stokes] = np.abs(np.nanmean(data, axis=avg_axis))
+                    yerr[stokes] = np.abs(np.nanstd(data, axis=avg_axis)) / sqrtn
                 else:
-                    y[stokes] = np.nanmean(self.ds.data[stokes], axis=avg_axis)
-                    yerr[stokes] = (
-                        np.nanstd(self.ds.data[stokes].imag, axis=avg_axis) / sqrtn
-                    )
+                    ydata = data.imag if self.imag else data.real
+
+                    y[stokes] = np.nanmean(ydata, axis=avg_axis)
+                    yerr[stokes] = np.nanstd(data.imag, axis=avg_axis) / sqrtn
+                    averaged = np.nanmean(data.imag, axis=avg_axis)
 
         return y, yerr
 
     def plot(self, avg_axis):
+
         # Overplot each specified polarisation
         for stokes in self.stokes:
+
             # Plot time/frequency series
             self.ax.errorbar(
                 self.x,
-                y=self.y[stokes].real,
+                y=self.y[stokes],
                 yerr=self.yerr[stokes],
                 lw=1,
                 color=COLORS[stokes],
@@ -925,6 +938,7 @@ class LightCurve(TimeFreqSeries):
     ds: DynamicSpectrum
     stokes: str
     pa_sigma: int = 2
+    imag: bool = False
 
     def __post_init__(self):
         self.column = "time"
@@ -1002,6 +1016,7 @@ class LightCurve(TimeFreqSeries):
 class Spectrum(TimeFreqSeries):
     ds: DynamicSpectrum
     stokes: str
+    imag: bool = False
 
     def __post_init__(self):
         self.column = "frequency"
