@@ -12,6 +12,7 @@ from astropy.wcs import WCS, FITSFixedWarning
 from astroutils.logger import setupLogger
 from casacore.tables import table
 from concurrent.futures import ProcessPoolExecutor, wait
+from pathlib import Path
 
 from dstools.utils import parse_coordinates
 
@@ -22,6 +23,48 @@ warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 DSTOOLS_PATH = dstools.__path__[0]
 
 logger = logging.getLogger(__name__)
+
+
+def get_header_properties(ms, datacolumn, pb_scale):
+
+    # Calculate data dimensions
+    times, freqs, antennas, nbaselines = get_data_dimensions(ms)
+
+    # Infer polarisation of feeds
+    feedtype = get_feed_polarisation(ms)
+
+    # Get telescope name
+    ta = table(f"{ms}::OBSERVATION", ack=False)
+    telescope = ta.getcol("TELESCOPE_NAME")[0]
+    ta.close()
+
+    # Parse phasecentre direction
+    ta = table(f"{ms}::FIELD", ack=False)
+    phasecentre_coords = ta.getcol("PHASE_DIR")[0][0]
+    phasecentre = SkyCoord(
+        ra=phasecentre_coords[0],
+        dec=phasecentre_coords[1],
+        unit="rad",
+    )
+    ta.close()
+
+    # Create header
+    ncorrelations = nbaselines * len(freqs) * len(times) * 4
+    header = {
+        "telescope": telescope,
+        "datacolumn": datacolumn,
+        "feeds": feedtype,
+        "antennas": len(antennas),
+        "baselines": nbaselines,
+        "integrations": len(times),
+        "channels": len(freqs),
+        "polarisations": 4,
+        "correlations": ncorrelations,
+        "phasecentre": phasecentre.to_string("hmsdms"),
+        "pb_scale": pb_scale,
+    }
+
+    return header
 
 
 def get_feed_polarisation(ms):
@@ -91,25 +134,37 @@ def validate_datacolumn(ms, datacolumn):
     return col_exists
 
 
-def rotate_phasecentre(ms, phasecentre):
-    # Parse phasecentre
-    ra, dec = parse_coordinates(phasecentre)
+def rotate_phasecentre(ms, ra, dec):
     logger.debug(f"Rotating phasecentre to {ra} {dec}")
 
     # Apply phasecentre rotation
-    os.system(f"dstools-rotate -- {ms} {ra} {dec} 1>/dev/null")
+    os.system(f"_dstools-rotate -- {ms} {ra} {dec} 1>/dev/null")
 
     # Use rotated MeasurementSet for subsequent processing
-    ms = ms.replace(".ms", ".rotated.target.ms")
+    rotated_ms = ms.replace(".ms", ".dstools-temp.rotated.ms")
 
-    return ms
+    return rotated_ms
 
 
-def get_pb_correction(position, primary_beam):
+def get_pb_correction(primary_beam, ra, dec):
+
+    if primary_beam is None:
+        return 1
+
+    position = SkyCoord(ra=ra, dec=dec, unit=("hourangle", "deg"))
+
+    if ".fits" not in primary_beam:
+        pbfits = primary_beam + ".dstools.fits"
+        cmd = f'exportfits(imagename="{primary_beam}", fitsimage="{pbfits}", overwrite=True)'
+        os.system(f"casa --nologger --nologfile -c '{cmd}' 1>/dev/null")
+        primary_beam = pbfits
 
     with fits.open(primary_beam) as hdul:
         header, data = hdul[0].header, hdul[0].data
         data = data[0, 0, :, :]
+
+    if "dstools" in primary_beam:
+        os.system(f"rm {pbfits} 2>/dev/null")
 
     wcs = WCS(header, naxis=2)
     x, y = wcs.wcs_world2pix(position.ra, position.dec, 1)
@@ -125,7 +180,7 @@ def get_pb_correction(position, primary_beam):
     ]
     if any(im_outside_limit):
         logger.warning(
-            f"Position {c} outside of supplied PB image, disabling PB correction."
+            f"Position {ra} {dec} outside of supplied PB image, disabling PB correction."
         )
         return 1
 
@@ -255,41 +310,25 @@ def main(
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
 
-
-    scale = 1
+    # Optionally rotate phasecentre to new coordinates
+    pb_scale = 1
     if phasecentre is not None:
+        ra, dec = parse_coordinates(phasecentre)
+        ms = rotate_phasecentre(ms, ra, dec)
+        pb_scale = get_pb_correction(primary_beam, ra, dec)
 
-        # Rotate phasecentre to target position
-        ms = rotate_phasecentre(ms, phasecentre)
+    # Construct header with observation properties
+    header = get_header_properties(ms, datacolumn, pb_scale)
 
-        # Correct flux scale for primary beam
-        if primary_beam is not None:
-            scale = get_pb_correction(position, primary_beam)
     # Optionally average over baselines
     if baseline_average:
         logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
         os.system(f"_dstools-avg-baselines -u {minuvdist} {ms} 1>/dev/null")
         ms = ms.replace(".ms", ".dstools-temp.baseavg.ms")
 
-    # Calculate data dimensions
+    # Calculate final dimensions of DS
     times, freqs, antennas, nbaselines = get_data_dimensions(ms)
     data_shape = (nbaselines, len(times), len(freqs), 4)
-
-    # Get other observation metadata
-    feedtype = get_feed_polarisation(ms)
-
-    ta = table(f"{ms}::OBSERVATION", ack=False)
-    telescope = ta.getcol("TELESCOPE_NAME")[0]
-    ta.close()
-
-    ta = table(f"{ms}::FIELD", ack=False)
-    phasecentre_coords = ta.getcol("PHASE_DIR")[0][0]
-    phasecentre = SkyCoord(
-        ra=phasecentre_coords[0],
-        dec=phasecentre_coords[1],
-        unit="rad",
-    )
-    ta.close()
 
     # Initialise output arrays
     waterfall = np.full(data_shape, np.nan, dtype=complex)
@@ -324,26 +363,7 @@ def main(
         waterfall[flags] = np.nan
 
     # Apply primary beam correction
-    waterfall /= scale
-
-    # Create header metadata
-    ncorrelations = nbaselines * len(freqs) * len(times) * 4
-    nflagged = np.sum(flags)
-    header = {
-        "telescope": telescope,
-        "antennas": len(antennas),
-        "feeds": feedtype,
-        "baselines": nbaselines,
-        "integrations": len(times),
-        "channels": len(freqs),
-        "polarisations": 4,
-        "datacolumn": datacolumn,
-        "phasecentre": phasecentre.to_string("hmsdms"),
-        "correlations": ncorrelations,
-        "flagged_correlations": f"{nflagged} ({nflagged/ncorrelations:.2%})",
-        "uvdist_range": f"{np.nanmin(uvdist):.1f}-{np.nanmax(uvdist):.1f}m",
-        "pb_scale": scale,
-    }
+    waterfall /= header["pb_scale"]
 
     # Write all data to file
     with h5py.File(outfile, "w", track_order=True) as f:
@@ -355,12 +375,9 @@ def main(
         f.create_dataset("flux", data=waterfall)
 
     # Clean up intermediate files
-    if "rotated.target.ms" in ms:
-        os.system(f"rm -r {ms} 2>/dev/null")
-    if "comb.ms" in ms:
-        os.system(f"rm -r {ms} 2>/dev/null")
-    os.system("rm *.log *.last 2>/dev/null")
+    ms_dir = Path(ms).parent
     os.system(f"rm -r {ms_dir}/*dstools-temp*.ms 2>/dev/null")
+    os.system("rm *.pre *.last 2>/dev/null")
 
 
 if __name__ == "__main__":
