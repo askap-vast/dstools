@@ -5,22 +5,14 @@ import numpy as np
 @click.command()
 @click.option(
     "-u",
-    "--uvrange",
-    type=str,
-    default="0m",
-    help="Minimum uv distance to select from data column (e.g. -u 200m).",
-)
-@click.option(
-    "-c",
-    "--datacolumn",
-    type=click.Choice(["data", "corrected"]),
-    default="data",
-    help="Selection of DATA or CORRECTED_DATA column.",
+    "--minuvdist",
+    type=float,
+    default=0,
+    help="Minimum UV distance in meters to retain if averaging over baseline axis.",
 )
 @click.argument("msname")
-def main(msname, datacolumn, uvrange):
-    uvrange = ">{}".format(uvrange)
-    savename = msname.replace(".ms", ".baseavg.ms")
+def main(msname, minuvdist):
+    savename = msname.replace(".ms", ".dstools-temp.baseavg.ms")
 
     intab = tbtool()
     intab.open(msname, nomodify=False)
@@ -40,18 +32,21 @@ def main(msname, datacolumn, uvrange):
     mstransform(
         vis=msname,
         outputvis=savename,
-        datacolumn=datacolumn,
-        uvrange=uvrange,
+        datacolumn="all",
+        uvrange=f">{minuvdist}m",
         timeaverage=True,
         timebin=timebin,
         keepflags=False,
     )
 
+    # Replace original antenna names
     intab.putcol("ANTENNA1", ant1)
     intab.putcol("ANTENNA2", ant2)
 
     intab.unlock()
     intab.close()
+
+    return
 
 
 if __name__ == "__main__":

@@ -274,6 +274,11 @@ def main(
         # Correct flux scale for primary beam
         if primary_beam is not None:
             scale = get_pb_correction(position, primary_beam)
+    # Optionally average over baselines
+    if baseline_average:
+        logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
+        os.system(f"_dstools-avg-baselines -u {minuvdist} {ms} 1>/dev/null")
+        ms = ms.replace(".ms", ".dstools-temp.baseavg.ms")
 
     # Calculate data dimensions
     times, freqs, antennas, nbaselines = get_data_dimensions(ms)
@@ -327,18 +332,6 @@ def main(
     if not noflag:
         waterfall[flags] = np.nan
 
-    # Optionally average over baseline axis.
-    # Retain 4D cube with length 1 baseline axis for data structure uniformity
-    if baseline_average:
-        logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
-        blmask = uvdist > minuvdist
-        waterfall = waterfall[blmask, :, :, :]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            waterfall = np.expand_dims(np.nanmean(waterfall, axis=0), axis=0)
-            uvdist = np.expand_dims(np.nanmean(uvdist, axis=0), axis=0)
-
     # Apply primary beam correction
     waterfall /= scale
 
@@ -376,6 +369,7 @@ def main(
     if "comb.ms" in ms:
         os.system(f"rm -r {ms} 2>/dev/null")
     os.system("rm *.log *.last 2>/dev/null")
+    os.system(f"rm -r {ms_dir}/*dstools-temp*.ms 2>/dev/null")
 
 
 if __name__ == "__main__":
