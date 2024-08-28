@@ -560,6 +560,8 @@ class DynamicSpectrum:
             # Compute complex Q and U from L
             Q = L.real + 1j * Li.real
             U = L.imag + 1j * Li.imag
+        else:
+            self.polobs = None
 
         P = np.sqrt(Q.real**2 + U.real**2 + V.real**2) / I.real
 
@@ -636,7 +638,10 @@ class DynamicSpectrum:
             fig, ax = plt.subplots(figsize=(7, 5))
 
         if not self.polobs:
-            self.rm_synthesis()
+            I = self.data["I"]
+            Q = self.data["Q"]
+            U = self.data["U"]
+            self.rm_synthesis(I, Q, U)
 
         ax.plot(
             self.polobs.rmsf_phi,
