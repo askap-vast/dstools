@@ -139,7 +139,7 @@ def get_pb_correction(position, primary_beam):
     scale = data[x, y]
 
     logger.debug(
-        f"PB correction scale {scale:.2f} measured at pixel {x},{y} in image of size {xmax},{ymax}"
+        f"PB correction scale {scale:.4f} measured at pixel {x},{y} in image of size {xmax},{ymax}"
     )
 
     return scale
@@ -180,27 +180,6 @@ def process_baseline(ms, times, baseline, datacolumn):
 
 @click.command()
 @click.option(
-    "-F",
-    "--noflag",
-    is_flag=True,
-    default=False,
-    help="Remove flagging mask.",
-)
-@click.option(
-    "-B",
-    "--baseline-average",
-    is_flag=True,
-    default=False,
-    help="Average date over baseline axis.",
-)
-@click.option(
-    "-u",
-    "--minuvdist",
-    type=float,
-    default=0,
-    help="Minimum UV distance in meters to retain if averaging over baseline axis.",
-)
-@click.option(
     "-d",
     "--datacolumn",
     type=click.Choice(["data", "corrected", "model"]),
@@ -223,11 +202,25 @@ def process_baseline(ms, times, baseline, datacolumn):
     help="Path to primary beam image with which to correct flux scale. Must also provide phasecentre.",
 )
 @click.option(
-    "-a",
-    "--askap",
+    "-F",
+    "--noflag",
     is_flag=True,
     default=False,
-    help="Rescale flux and fix beam pointing coordinates (only required for ASKAP beams).",
+    help="Remove flagging mask.",
+)
+@click.option(
+    "-B",
+    "--baseline-average",
+    is_flag=True,
+    default=True,
+    help="Disable averaging over baseline axis.",
+)
+@click.option(
+    "-u",
+    "--minuvdist",
+    type=float,
+    default=0,
+    help="Minimum UV distance in meters to retain if averaging over baseline axis.",
 )
 @click.option(
     "-v",
@@ -239,13 +232,13 @@ def process_baseline(ms, times, baseline, datacolumn):
 @click.argument("ms")
 @click.argument("outfile")
 def main(
-    noflag,
-    baseline_average,
-    minuvdist,
     datacolumn,
     phasecentre,
     primary_beam,
     askap,
+    noflag,
+    baseline_average,
+    minuvdist,
     verbose,
     ms,
     outfile,

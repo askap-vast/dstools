@@ -22,10 +22,10 @@ case $reload in
 	mkdir -p $proj_dir/
 	cd $proj_dir
 
-	if [[ $noflag ]]; then
+	if $noflag; then
 	    atlod_options=noauto,xycorr,notsys
 	else
-	    atlod_options=birdie,rfiflag,noauto,xycorr,notsys;
+	    atlod_options=birdie,rfiflag,noauto,xycorr,notsys
 	fi
 
 	# Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
@@ -148,30 +148,29 @@ cal_flux $pcal.$freq
 # Copy calibration to secondary calibrator
 if [ $pcal != $scal ]; then
     gpcopy vis=$pcal.$freq out=$scal.$freq options=nocal;
+    autoflag $scal.$freq
 else
     print "Using primary as secondary, skipping calibration copy."
 fi
-
-autoflag $scal.$freq
 
 # Gain calibrations for secondary calibrator
 gpcal vis=$scal.$freq interval=$gpinterval options="xyvary,qusolve" minants=3 nfbin=4 refant=$refant;
 
 # Transfer flux scale from primary to secondary
 if [ $pcal != $scal ]; then
-    print "Propagating flux scale to secondary calibrator"
+    print "Propagating flux scale to secondary calibrator."
     gpboot vis=$scal.$freq cal=$pcal.$freq;
 fi
 
 # Transfer gain calibrations to target
-print "Transferring calibration tables to science target"
+print "Transferring calibration tables to science target."
 gpcopy vis=$scal.$freq out=$target.$freq;
 
 # Average gain phase solutions over 2 minutes for better interpolation
-print "Averaging 2 minute calibration samples"
+print "Averaging 2 minute calibration samples."
 gpaver vis=$target.$freq interval=2;
 
-print "Applying calibration to science target"
+print "Applying calibration to science target."
 uvaver vis=$scal.$freq out=$scal.$freq.cal
 uvaver vis=$target.$freq out=$target.$freq.cal
 

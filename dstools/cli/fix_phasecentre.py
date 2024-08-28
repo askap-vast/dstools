@@ -1,5 +1,5 @@
-import shutil
 import click
+import shutil
 import subprocess
 from astropy.coordinates import SkyCoord
 
@@ -16,7 +16,9 @@ def main(msname, phasecenter):
     ra, dec = phasecenter
 
     casa_bin = shutil.which("casa")
-    call = f"{casa_bin} --nologger -c {path} {msname} -p {ra} {dec}".split(" ")
+    call = f"{casa_bin} --nologger --nologfile -c {path} {msname} -p {ra} {dec}".split(
+        " "
+    )
     subprocess.run(call)
 
 

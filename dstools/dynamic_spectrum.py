@@ -13,10 +13,11 @@ import numpy as np
 import pandas as pd
 from astropy.time import Time
 from astropy.visualization import ImageNormalize, ZScaleInterval
-from dstools.rm import PolObservation
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import correlate, find_peaks
+
+from dstools.rm import PolObservation
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,8 @@ def rebin(o, n, axis):
 
         >>> rebin(5, 3)
         array([[0.6, 0.4, 0. , 0. , 0. ],
-                [0. , 0.2, 0.6, 0.2, 0. ],
-                [0. , 0. , 0. , 0.4, 0.6]])
+               [0. , 0.2, 0.6, 0.2, 0. ],
+               [0. , 0. , 0. , 0.4, 0.6]])
 
         - transpose of this for column rebinning
 
@@ -126,6 +127,7 @@ def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
 
 
 def make_summary_plot(ds, stokes, cmax, imag):
+    """Plot all-stokes dynamic spectra and averaged light-curve / spectrum."""
 
     fig = plt.figure(figsize=(14, 15))
     gs = GridSpec(3, 2, figure=fig)
@@ -217,7 +219,7 @@ class DynamicSpectrum:
             self.time = rebin(len(self.time), len(XX), axis=0) @ self.time
 
         # Average data in time and frequency
-        XX, XY, YX, YY = self.rebin(XX, XY, YX, YY)
+        XX, XY, YX, YY = self._rebin(XX, XY, YX, YY)
 
         # Compute Stokes products and store in data attribute
         self._make_stokes(XX, XY, YX, YY)
@@ -441,7 +443,6 @@ class DynamicSpectrum:
 
         dt = self.time[1] - self.time[0]
         num_break_cycles = np.append((time_end_break - time_start_break), 0) / dt
-        num_tsamples = self.header["integrations"]
         num_channels = self.header["channels"]
 
         # Create initial time-slice to start stacking target and calibrator scans together
@@ -488,7 +489,7 @@ class DynamicSpectrum:
 
         return new_data_XX, new_data_XY, new_data_YX, new_data_YY
 
-    def rebin(self, XX, XY, YX, YY):
+    def _rebin(self, XX, XY, YX, YY):
         num_tsamples, num_channels = XX.shape
         tbins = num_tsamples // self.tavg
         fbins = num_channels // self.favg
@@ -575,7 +576,8 @@ class DynamicSpectrum:
         return acf2d
 
     def rm_synthesis(self, I, Q, U):
-        # Zero null values in Stokes arrays
+
+        # Zero out null values in Stokes arrays
         I[np.isnan(I)] = 0 + 0j
         Q[np.isnan(Q)] = 0 + 0j
         U[np.isnan(U)] = 0 + 0j
@@ -789,14 +791,14 @@ class DynamicSpectrum:
         ax.text(
             0.05,
             0.95,
-            r"$\chi$",
+            "PA",
             color="white",
             weight="heavy",
             path_effects=[pe.withStroke(linewidth=2, foreground="black")],
             transform=ax.transAxes,
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-        cb.set_label(r"$\chi$ (deg)")
+        cb.set_label("PA (deg)")
 
         return fig, ax
 
