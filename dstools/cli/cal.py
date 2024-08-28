@@ -1,6 +1,5 @@
-import os
-
 import click
+import subprocess
 
 import dstools
 
@@ -9,33 +8,36 @@ import dstools
 @click.option(
     "-m",
     "--mfinterval",
-    default=1.0,
-    help="Time interval to solve for antenna gains in bandpass calibration",
+    default="1.0",
+    type=str,
+    help="Time interval to solve for antenna gains in bandpass calibration.",
 )
 @click.option(
     "-b",
     "--bpinterval",
-    default=1.0,
-    help="Time interval to solve for bandpass in bandpass calibration",
+    default="1.0",
+    type=str,
+    help="Time interval to solve for bandpass in bandpass calibration.",
 )
 @click.option(
     "-g",
     "--gpinterval",
-    default=0.1,
-    help="Time interval to solve for antenna gains in gain calibration",
+    default="0.1",
+    type=str,
+    help="Time interval to solve for antenna gains in gain calibration.",
 )
 @click.option(
     "-F",
     "--noflag",
     is_flag=True,
     default=False,
-    help="Disable birdie and rfiflag options in atlod",
+    help="Disable birdie and rfiflag options in atlod.",
 )
 @click.option(
     "-r",
     "--refant",
     type=click.Choice(["1", "2", "3", "4", "5", "6"]),
-    default="1",
+    default="3",
     help="Reference antenna.",
 )
 @click.option(
@@ -66,21 +68,22 @@ def main(
     path = dstools.__path__[0]
 
     script = "atca_quickcal.sh" if auto else "atca_cal.sh"
-    call = "{}/{} {} {} {} {} {} {} {} {} {}".format(
-        path,
-        script,
+    call = [
+        f"{path}/{script}",
         path,
         project_dir,
         data_dir,
         project_code,
         refant,
-        mfinterval,
-        bpinterval,
-        gpinterval,
-        noflag,
-    )
+        str(mfinterval),
+        str(bpinterval),
+        str(gpinterval),
+        str(noflag).lower(),
+    ]
 
-    os.system(call)
+    subprocess.run(call)
+
+    return
 
 
 if __name__ == "__main__":
