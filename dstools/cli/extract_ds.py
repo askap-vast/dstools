@@ -228,7 +228,6 @@ def main(
     datacolumn,
     phasecentre,
     primary_beam,
-    askap,
     noflag,
     baseline_average,
     minuvdist,
@@ -256,14 +255,6 @@ def main(
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
 
-
-    if askap:
-
-        # Fix beam pointing
-        os.system(f"python {DSTOOLS_PATH}/fix_dir.py {ms}")
-
-        # Convert instrumental pol visibilities from average to total flux
-        os.system(f"python {DSTOOLS_PATH}/rescale_askapsoft.py {ms}")
 
     scale = 1
     if phasecentre is not None:
