@@ -1,13 +1,24 @@
 import click
+import logging
 import os
+from casacore.tables import tableexists
+from astroutils.logger import setupLogger
 
 import dstools
+
+logger = logging.getLogger(__name__)
+setupLogger(verbose=False)
 
 
 @click.command()
 @click.argument("ms")
 def main(ms):
+
     root = dstools.__path__[0]
+
+    if tableexists(f"{ms}/FIELD_OLD"):
+        logger.error(f"ASKAP beam pointing and flux re-scaling already applied.")
+        exit(1)
 
     # Fix beam pointing
     os.system(f"python {root}/fix_dir.py {ms}")
