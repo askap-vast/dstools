@@ -21,14 +21,6 @@ from dstools.utils import BANDS, CONFIGS, parse_casa_args
     help="Briggs weighting robust parameter.",
 )
 @click.option(
-    "-S",
-    "--scale",
-    default=[0, 4, 8],
-    type=int,
-    multiple=True,
-    help="Multi-scale clean pixel smoothing scales.",
-)
-@click.option(
     "-t",
     "--target_position",
     type=str,
@@ -66,10 +58,6 @@ from dstools.utils import BANDS, CONFIGS, parse_casa_args
 @click.argument("model", nargs=-1)
 def main(**kwargs):
 
-    # Read off multiple scale arguments from tuple and rewrite as individual flags
-    scales = kwargs.pop("scale")
-    scaleargs = [f" -S {clean_scale}" for clean_scale in scales]
-
     # Read off phasecentre separately so that multi-word string can be parsed
     phasecenter = kwargs.pop("phasecenter")
     phasecenter = ["-p", *phasecenter] if phasecenter is not None else []
@@ -88,7 +76,6 @@ def main(**kwargs):
         args=["ms"],
     )
     argstr += " " + " ".join(list(model))
-    kwargstr += "".join(scaleargs)
 
     casa_bin = shutil.which("casa")
     if mpinodes > 1:

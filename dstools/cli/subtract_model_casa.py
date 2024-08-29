@@ -27,14 +27,6 @@ logger = logging.getLogger(__name__)
     help="Briggs weighting robust parameter.",
 )
 @click.option(
-    "-S",
-    "--scale",
-    default=[0, 4, 8],
-    type=int,
-    multiple=True,
-    help="Multi-scale clean pixel smoothing scales.",
-)
-@click.option(
     "-t",
     "--target_position",
     type=str,
@@ -74,7 +66,6 @@ logger = logging.getLogger(__name__)
 def main(
     phasecenter,
     robust,
-    scale,
     target_position,
     interactive,
     widefield,
@@ -106,7 +97,6 @@ def main(
     reffreq = f"{freq}MHz"
     pblim = -0.1
     nterms = len(model)
-    clean_scales = list(scale)
 
     if widefield:
         gridder = "widefield"
@@ -194,7 +184,6 @@ def main(
         imagename=f"{maskgen}.im_presub",
         nterms=nterms,
         deconvolver="mtmfs",
-        scales=clean_scales,
         reffreq=reffreq,
         weighting="briggs",
         stokes="IQUV",
@@ -227,7 +216,6 @@ def main(
         imagename=subbed_image,
         nterms=nterms,
         deconvolver="mtmfs",
-        scales=clean_scales,
         reffreq=reffreq,
         weighting="briggs",
         stokes="IQUV",
