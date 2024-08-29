@@ -35,7 +35,7 @@ _dstools-rotate = "dstools.cli.fix_phasecentre:main"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 isort = "^5.13.2"
-black = "^24.1.1"
+black = "^24.3.0"
 flake8 = "^7.0.0"
 pre-commit = "^3.6.1"
 coverage = "^7.4.1"
