@@ -6,10 +6,10 @@ import astropy.units as u
 import click
 import matplotlib.pyplot as plt
 import numpy as np
-from astroutils.logger import setupLogger
 from erfa import ErfaWarning
 
 from dstools.dynamic_spectrum import DynamicSpectrum, make_summary_plot
+from dstools.logger import setupLogger
 
 warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
 

@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from astroutils.logger import setupLogger
+from dstools.logger import setupLogger
 
 logger = logging.getLogger(__name__)
 setupLogger(verbose=False)

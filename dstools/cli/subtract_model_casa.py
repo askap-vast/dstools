@@ -5,8 +5,8 @@ from pathlib import Path
 import astropy.units as u
 import click
 import numpy as np
-from astroutils.logger import setupLogger
 
+from dstools.logger import setupLogger
 from dstools.utils import parse_coordinates
 
 logger = logging.getLogger(__name__)

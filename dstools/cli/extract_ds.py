@@ -11,10 +11,10 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
-from astroutils.logger import setupLogger
 from casacore.tables import table
 
 import dstools
+from dstools.logger import setupLogger
 from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)

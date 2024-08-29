@@ -12,9 +12,9 @@ numpy = "^1.22.2"
 scipy = "^1.9.3"
 astropy = "^6.0.0"
 pandas = "2.1.4"
-astroutils = {git = "https://joshoewahp@github.com/joshoewahp/astroutils.git", rev = "main"}
 python-casacore = "3.5.1"
 h5py = "^3.11.0"
+colorlog = "^6.8.2"
 
 [tool.poetry.scripts]
 dstools-setup = "dstools.cli.setup:main"
