@@ -548,14 +548,14 @@ class DynamicSpectrum:
         if self.derotate:
 
             # Compute RM
-            self.rm_synthesis(I, Q, U)
+            RM = self.rm_synthesis(I, Q, U)
 
             # Build L from imaginary components
             Li = Q.imag + 1j * U.imag
 
             # Derotate real and imaginary L
-            L = self.derotate_faraday(L)
-            Li = self.derotate_faraday(Li)
+            L = self.derotate_faraday(L, RM)
+            Li = self.derotate_faraday(Li, RM)
 
             # Compute complex Q and U from L
             Q = L.real + 1j * Li.real
@@ -628,8 +628,10 @@ class DynamicSpectrum:
             verbose=False,
         )
 
-        self.RM = self.polobs.phi[np.argmax(abs(self.polobs.fdf))]
-        logger.debug(f"Peak RM of {self.RM:.1f} rad/m2")
+        RM = self.polobs.phi[np.argmax(abs(self.polobs.fdf))]
+        logger.debug(f"Peak RM of {RM:.1f} rad/m2")
+
+        return RM
 
     def plot_fdf(self, fig=None, ax=None):
         """Plot Faraday dispersion function derived with RMclean (Heald 2009)."""
@@ -641,7 +643,7 @@ class DynamicSpectrum:
             I = self.data["I"]
             Q = self.data["Q"]
             U = self.data["U"]
-            self.rm_synthesis(I, Q, U)
+            _ = self.rm_synthesis(I, Q, U)
 
         ax.plot(
             self.polobs.rmsf_phi,
@@ -675,13 +677,9 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def derotate_faraday(self, L, RM=None):
+    def derotate_faraday(self, L, RM):
         """Correct linear polarisation DS for Faraday rotation."""
 
-        if not RM and not self.RM:
-            self.rm_synthesis()
-
-        RM = RM if RM else self.RM
 
         lam = (c.c / (self.freq * u.MHz)).to(u.m).value
         L = L * np.exp(-2j * RM * lam**2)
