@@ -1,5 +1,4 @@
 import logging
-import sys
 import warnings
 from itertools import chain, combinations
 
@@ -11,7 +10,6 @@ from astroutils.logger import setupLogger
 from erfa import ErfaWarning
 
 from dstools.dynamic_spectrum import DynamicSpectrum, make_summary_plot
-from dstools.utils import BANDS
 
 warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
 

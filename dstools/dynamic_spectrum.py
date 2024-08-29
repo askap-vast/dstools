@@ -1,12 +1,13 @@
 import logging
-import h5py
 import warnings
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Optional
 
 import astropy.constants as c
 import astropy.units as u
+import h5py
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
@@ -184,10 +185,10 @@ class DynamicSpectrum:
     favg: int = 1
     tavg: int = 1
 
-    minfreq: float = None
-    maxfreq: float = None
-    mintime: float = None
-    maxtime: float = None
+    minfreq: Optional[float] = None
+    maxfreq: Optional[float] = None
+    mintime: Optional[float] = None
+    maxtime: Optional[float] = None
     minuvdist: float = 0
     maxuvdist: float = np.inf
     minuvwave: float = 0
@@ -199,7 +200,7 @@ class DynamicSpectrum:
     derotate: bool = False
 
     fold: bool = False
-    period: float = None
+    period: Optional[float] = None
     period_offset: float = 0.0
     fold_periods: int = 2
 
@@ -542,6 +543,10 @@ class DynamicSpectrum:
             Q = (XY + YX) / 2
             U = 1j * (XY - YX) / 2
             V = (XX - YY) / 2
+        else:
+            raise ValueError(
+                f"Feed type {feedtype} not recognised, should be either 'linear' or 'circular'."
+            )
 
         L = Q.real + 1j * U.real
 
@@ -679,7 +684,6 @@ class DynamicSpectrum:
 
     def derotate_faraday(self, L, RM):
         """Correct linear polarisation DS for Faraday rotation."""
-
 
         lam = (c.c / (self.freq * u.MHz)).to(u.m).value
         L = L * np.exp(-2j * RM * lam**2)
@@ -877,6 +881,7 @@ class DynamicSpectrum:
 
 
 class TimeFreqSeries(ABC):
+
     def _construct_yaxis(self, avg_axis):
         """Construct y-axis averaging flux over x-axis."""
 
@@ -899,11 +904,10 @@ class TimeFreqSeries(ABC):
 
                     y[stokes] = np.nanmean(ydata, axis=avg_axis)
                     yerr[stokes] = np.nanstd(data.imag, axis=avg_axis) / sqrtn
-                    averaged = np.nanmean(data.imag, axis=avg_axis)
 
         return y, yerr
 
-    def plot(self, avg_axis):
+    def plot(self):
 
         # Overplot each specified polarisation
         for stokes in self.stokes:
@@ -986,7 +990,7 @@ class LightCurve(TimeFreqSeries):
         self.ax.set_xlabel(self.ds._timelabel)
 
         # Plot with lightcurve/spectrum independent parameters
-        super().plot(avg_axis=1)
+        super().plot()
 
         pad = (self.x.max() - self.x.min()) * 0.05
         self.ax.set_xlim([self.x.min() - pad, self.x.max() + pad])
@@ -1042,6 +1046,6 @@ class Spectrum(TimeFreqSeries):
         ax.set_xlabel("Frequency (MHz)")
 
         # Plot with lightcurve/spectrum independent parameters
-        super().plot(avg_axis=0)
+        super().plot()
 
         return self.fig, self.ax

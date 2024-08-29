@@ -1,5 +1,6 @@
-import click
 import subprocess
+
+import click
 
 from dstools.utils import parse_casa_args
 

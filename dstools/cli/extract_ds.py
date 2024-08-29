@@ -1,22 +1,21 @@
-import time
-import click
-import h5py
+import itertools as it
 import logging
 import os
 import warnings
-import itertools as it
+from concurrent.futures import ProcessPoolExecutor, wait
+from pathlib import Path
+
+import click
+import h5py
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from astroutils.logger import setupLogger
 from casacore.tables import table
-from concurrent.futures import ProcessPoolExecutor, wait
-from pathlib import Path
-
-from dstools.utils import parse_coordinates
 
 import dstools
+from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 

@@ -1,8 +1,9 @@
-import click
 import logging
 import os
-from casacore.tables import tableexists
+
+import click
 from astroutils.logger import setupLogger
+from casacore.tables import tableexists
 
 import dstools
 

@@ -1,7 +1,7 @@
-import click
 import shutil
 import subprocess
-from astropy.coordinates import SkyCoord
+
+import click
 
 import dstools
 

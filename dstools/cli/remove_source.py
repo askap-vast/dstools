@@ -1,6 +1,7 @@
 import shutil
-import click
 import subprocess
+
+import click
 
 from dstools.utils import BANDS, CONFIGS, parse_casa_args
 

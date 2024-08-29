@@ -1,9 +1,10 @@
-import click
 import logging
 import os
-import astropy.units as u
-import numpy as np
 from pathlib import Path
+
+import astropy.units as u
+import click
+import numpy as np
 from astroutils.logger import setupLogger
 
 from dstools.utils import parse_coordinates

@@ -1,11 +1,11 @@
-import click
 import glob
 import os
 import subprocess
-import astropy.units as u
 from pathlib import Path
 
-from dstools.utils import BANDS, CONFIGS, Array, prompt, update_param, parse_coordinates
+import click
+
+from dstools.utils import BANDS, CONFIGS, Array, parse_coordinates
 
 
 @click.command()

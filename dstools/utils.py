@@ -1,6 +1,7 @@
+from dataclasses import dataclass
+
 import astropy.units as u
 from astropy.coordinates import SkyCoord
-from dataclasses import dataclass
 
 import dstools
 
@@ -18,7 +19,7 @@ BANDS = [
 ]
 
 
-def parse_coordinates(coord: tuple) -> (str, str):
+def parse_coordinates(coord: tuple) -> tuple[str, str]:
     """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
 
     ra, dec = coord

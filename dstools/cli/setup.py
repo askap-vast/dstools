@@ -3,10 +3,12 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
+
 from astroutils.logger import setupLogger
 
 logger = logging.getLogger(__name__)
 setupLogger(verbose=False)
+
 
 def main():
     casa_bin = shutil.which("casa")

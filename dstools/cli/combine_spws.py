@@ -1,6 +1,7 @@
-import click
 import shutil
 import subprocess
+
+import click
 
 import dstools
 
