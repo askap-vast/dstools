@@ -1,144 +1,182 @@
 # DStools #
 
-A processing pipeline to produce dynamic spectra from ATCA and ASKAP visibilities.
-
-## Installation / Setup ##
-
-Clone this repo and install with `pip` or `poetry`, preferably into a virtual environment. In order to make the modules from this package available within CASA, create or edit `~/.casa/config.py` to add the following lines
-```
-import sys
-
-dstools_path = '/path/to/dstools/installation'
-
-sys.path.append('')
-sys.path.append(dstools_path)
-```
-where `dstools_path` should point to the install path. If you are unsure where this is, open a python REPL after installing `dstools` and run
-```
-import dstools
-
-print(dstools.__path__[0])
-```
-
-The command line scripts should now be accessible from anywhere.
-
-These tools rely on your RPFITS files residing in a `data/` subdirectory of your working directory. Any extra files with the same target name (e.g. backup 1934 scans) can be placed in a subdirectory of `data/` to avoid being auto-ingested.
-
-### NOTE: If Skipping ATCA Calibration ###
-
-If beginning from ATCA RPFITS files, the other necessary directory structure will be created automatically. If you already have calibrated data, however, you will want to create the following sub-directories:
-```
-reduced/<PROJECT_NAME>/<TARGET_NAME>/
-reduced/<PROJECT_NAME>/miriad/
-```
-where `<PROJECT_NAME>` can be whatever you like and `<TARGET_NAME>` is the name of your target source, as written in your observing schedule. Then make sure to place your calibrated visibilities (`.uv` format) in the `miriad` subdirectory.
+`DStools` is a processing pipeline to produce and post-process dynamic spectrum data products from radio interferometer visibilities. `DStools` currently directly supports extraction of dynamic spectra from the following telescopes:
+* ATCA
+* ASKAP
+* VLA
+* MeerKAT
 
 ## Dependencies ##
 
-* CASA 6
-* python-casacore
-* click
-* colorlog
-* numpy
-* astropy
-* pandas
+`DStools` is built on top of `CASA 6` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
 
-## ATCA Calibration ##
+* CASA 6.6
+* miriad
 
-`dstools-cal` is a miriad script to calibrate and flag ATCA data prior to use with CASA in the other scripts. I have designed the flow of this to match my needs which may not necessarily meet yours! If not, just produce flagged and calibrated visibilities in `.uv` format as you otherwise would, and make sure to drop them in the `miriad` subdirectory as describe in Installation / Setup
+## Installation / Configuration ##
+
+Install `DStools` using `pip` or your preferred package manager:
+```
+pip install py-dstools
+```
+
+To make `DStools` available within your CASA environment, run the following setup script:
+```
+dstools-setup
+```
+You will only need to run this once
+
+<!-- create or edit `~/.casa/config.py` to add the following lines -->
+<!-- ``` -->
+<!-- import sys -->
+
+<!-- dstools_path = '/path/to/dstools/installation' -->
+
+<!-- sys.path.append('') -->
+<!-- sys.path.append(dstools_path) -->
+<!-- ``` -->
+<!-- where `dstools_path` should point to the install path. If you are unsure where this is, open a python REPL after installing `dstools` and run -->
+<!-- ``` -->
+<!-- import dstools -->
+
+<!-- print(dstools.__path__[0]) -->
+<!-- ``` -->
+
+## Command Line Scripts ##
+
+Generating dynamic spectra with `DStools` generally involves some level of pre-processing (e.g. calibration, flagging, field source subtraction), extraction of the visibilities into a custom HDF5 data structure, and some level of post-processing (e.g. averaging in time/frequency, period folding, time/frequency/baseline filtering, polarisation processing, etc.). The following commands are provided to perform these steps:
+| `dstools-cal`              | convenience script for flagging/calibration of raw ATCA visibilities and output in MeasurementSet format       |
+| `dstools-askap-preprocess` | script to set the correct flux scale and pointing centre of ASKAP beams                                        |
+| `dstools-model-field`      | script to produce a model of field sources with optional self-calibration loop                                 |
+| `dstools-subtract-model`   | script to subtract a (multi-term) field model image from visibilities                                          |
+| `dstools-extract-ds`       | script to extract visibilities into a custom HDF5 format for use with the `DStools` library                    |
+| `dstools-plot-ds`          | convenience script using the `DStools` python library to post-process and plot dynamic spectra in various ways |
+
+The following scripts are used in the above commands, but are also available for more modular processing needs:
+
+| `_dstools-combine-spws`  | script to combine multiple spectral windows                    |
+| `_dstools-avg-baselines` | script to average visibilities over all baselines              |
+| `_dstools-rotate`        | script to rotate the phasecentre to a given set of coordinates |
+
+Below some common workflows are described. For further details on usage, run any of these commands with the `--help` flag.
+
+### ATCA Calibration ###
+
+`dstools-cal` is a convenience script to calibrate raw ATCA data prior to use with CASA in the other scripts.
 
 ```
-dstools-cal <PROJECT_NAME> <PROJECT_CODE>
+dstools-cal -d <DATA_DIR> <PROJECT_DIR> <PROJECT_CODE>
 ```
-where `<PROJECT_CODE>` is your observation's project code and `<PROJECT_NAME>` is the name of a sub-directory to store processing output, call this whatever you like. You can supply further options to modify gain and bandpass solution intervals and the reference antenna, see details with `dstools-cal --help`.
+where `<DATA_DIR>` is a directory containing your raw ATCA RPFITS files, `<PROJECT_DIR>` is the name of a sub-directory to store processing output, and `<PROJECT_CODE>` is your observation's project code. You can supply further options to modify gain and bandpass solution intervals, set the reference antenna, and run automatic calibration/flagging. 
 
-The script steps through prompts to:
+In manual mode the script steps through prompts to:
 * load the RPFITS files, 
 * select the IF to be processed, 
 * declare which scan targets to use for primary and secondary calibrators and the target source,
 * perform primary calibrator flagging and bandpass / flux calibration,
 * perform secondary calibrator flagging and gain calibration,
-* perform science target flagging,
-* and finally transfer all calibration solutions to the science target.
+* and finally transfer all calibration solutions to the science target and export to MeasurementSet format.
 
-## Imaging, Field Modeling \& Subtraction ##
+In auto mode (use flag `-A`) these steps will be performed non-interactively.
 
-`dstools-model-field` is a CASA script that imports calibrated visibilities and performs self-calibration and imaging tasks. The deconvolution stage also stores the model for all cleaned field sources and produces a uv-subtracted MeasurementSet with (ideally) only the target source remaining---to be further used in constructing lightcurves and dynamic spectra.
+### ASKAP Preprocessing ###
+
+ASKAP data requires extra pre-processing to 
+1) set the instrumental polarisation flux scale to agree with CASA conventions (e.g. `I = (XX + YY)/2`), and 
+2) set the reference frame of the beam phase centre to the correct coordinates.
+
+These corrections should be applied before any further imaging or dynamic spectrum tasks. You can run both steps with:
+```
+dstools-askapsoft-preprocess <MS>
+```
+where `<MS>` is the path to your data in MeasurementSet format.
+
+### Imaging and Field Modeling ###
+
+`dstools-model-field` is a CASA script to image calibrated visibilities, optionally run a self-calibration loop, and produce a final model of selected sources in the field.
 
 Run the script with
 ```
-dstools-model-field reduced/<PROJECT_NAME>/<TARGET_NAME>/<DATA>
+dstools-model-field <MS>
 ```
-where `<DATA>` are calibrated visibilities either in miriad (ending in .cal), UV FITS (ending in .calfits), or CASA MeasurementSet (ending in .ms) format.
 
-You can supply further options such as:
-* array configuration (`6km`, `750_no6`, `750_6`, or `H168`),
-* frequency band (`low`, `mid`, `L`, `C`, or `X`),
+You can supply further options (see details with `dstools-model-field --help`) such as:
+* array configuration and frequency band (to help choose imaging parameters),
+* imaging phasecentre,
 * robust parameter,
 * clean threshold,
 * maximum clean iterations,
-* primary beam limit,
+* primary beam fractional power cutoff,
 * number of Taylor terms used in mtmfs deconvolution,
 * number and size of clean scales,
-* use of widefield gridder with w-projection,
-* and whether to use interactive `tclean`.
+* use of automatic clean masking,
+* use of the widefield gridder with w-projection,
+* and whether to use interactive mode in `tclean`.
 
-The script then progresses through prompts to load the data into a MeasurementSet and optionally test the imaging parameters are appropriate and perform additional flagging before performing further processing. 
+The script then progresses through prompts to:
+* run autoflaggers,
+* run an optional self-calibration loop, with intermediate self-calibration products stored in a `selfcal/<BAND>` directory,
+* store the field-model imaging products in a `field_model/<BAND>` directory.
 
-The next stage is an optional self-calibration loop to improve phase calibration, with prompts to adjust solution intervals and perform additional rounds until happy with the results. Intermediate self-calibration products are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/selfcal/<BAND>/`.
+### Model Subtraction ###
 
-Next is a deep clean to produce the field source model. By default this is set to interactive mode to place a clean mask carefully over each field source. Once happy that the mask covers all sources of interest you can set the threshold and iterations to desired levels before running the remainder of the task automatically. 
-
-Once the field model has been produced, the next step is to mask the target source from this model so that it is untouched by uv subtraction. If your source is at the phase / image centre you can use automatic masking to cut out a circle of radius 30 pixels. The better approach is to opt out of this which will trigger another interactive `tclean` run so that you can draw a clean mask manually around your target source. Click the green arrow to finish `tclean` and this will be used to remove your source from the field model. The masked field model will then be inserted into the MeasurementSet and subtracted from the visibilities. The resulting subtracted MeasurementSet is stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/` with a `subbed.ms` suffix.
-
-`tclean` will run once more to produce a field-subtracted image so that you can confirm no field sources remain. Results of both the deep and subtracted clean are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/field_model/<BAND>/`.
-
-## Baseline Averaging / Dynamic Spectrum Forming ##
-
-These are a few small CASA / Python scripts used to collapse a MeasurementSet (either the subtracted version from `dstools-model-field` or another MeasurementSet entirely) into a time vs frequency array ready for plotting.
-
-`dstools-rotate` is a script that rotates a MeasurementSet's phase centre to provided coordinates. 
+`dstools-subtract-model` is a CASA script to subtract a field model (either produced by `dstools-field-model` or elsewhere) from the visibilities. Model images can be supplied for multiple Taylor terms  You can optionally mask the model components of your target from the field model so that it is untouched by model subtraction.
 
 Run the script with
 ```
-dstools-rotate reduced/<PROJECT_NAME>/<MS> <COORDS>
+dstools-subtract-model <MS> <MODEL>.tt0 <MODEL>.tt1 ...
 ```
-where `<MS>` is the MeasurementSet you want to work with and `<COORDS>` are the target coordinates in the format `"J2000 hms dms"` format (e.g. `"J2000 12h30m41.2s -45d11m04.1s"`). `:` delimiters will result in the declination being treated in hourangle units.
+where `<MODEL>.tt0` (etc.) are the model image path for each Taylor term used in the production of your model.
 
-`dstools-avg-baselines` is a script that averages the data over all baselines. Options are available to select either the DATA or CORRECTED_DATA column with `-c`, and include a lower cutoff to uv distance used to improve results with RFI affected short baselines with `-u`. 
+You can supply further options (see details with `dstools-subtract-model --help` such as:
+* phasecentre coordinates at which the model images are centred,
+* robust parameter,
+* use of the widefield gridder with w-projection,
+* whether to mask your target interactively,
+* or alternatively the coordinates of your target for automatic masking.
 
-Run the script with
-```
-dstools-avg-baselines reduced/<PROJECT_NAME>/<MS>
-```
-and see option details with
-```
-dstools-avg-baselines --help
-```
+The masked field model will then be subtracted from the visibilities with the result stored in the `CORRECTED_DATA` column of the MeasurementSet, and a model-subtracted image stored in the `field_model` directory.
 
-`dstools-make-dspec` is a python script that converts the flux, frequency, and time values in a MeasurementSet data column into numpy arrays for each instrumental polarisation. These are stored in `reduced/<PROJECT_NAME>/<TARGET_NAME>/dynamic_spectra/<BAND>/`. Options include selection of data column, frequency band, and removal of flagging mask.
+## Dynamic Spectrum Extraction ##
 
-Run the script supplying the path to the baseline averaged MeasurementSet. If using products from the field modeling stage, this is
+`dstoools-extract-ds` is the main task to extract dynamic spectra from your MeasurementSet. This command stores dynamic spectra as a 4D cube with dimensions of `baselines x integrations x channels x instrumental polarisations` as an HDF5 data structure, which can be read and post-processed with the `DynamicSpectrum` class provided with the `DStools` library. By default the script will average the visibilities over the baseline axis to save memory and disk space.
+
+Run the script with:
 ```
-dstools-make-dspec reduced/<PROJECT_NAME>/<TARGET_NAME>/<MS>
+dstools-extract-ds <MS> <DS>
 ```
-See option details with
-```
-dstools-make-dspec --help
-```
+where `<MS>` is the path to your data and `<DS>` is the path to store your output dynamic spectrum.
+
+You can supply further options (see details with `dstools-extract-ds --help`) to:
+* set the phasecentre at which to extract the dynamic spectrum with `-p <RA> <DEC>` (coordinates can be in sexagesimal or decimal degree formats),
+* select extraction from either the `DATA`, `CORRECTED_DATA`, or `MODEL_DATA` column,
+* throw away baselines shorter than some threshold in meters with (for example) `-u 500`
+* disable averaging over the baseline axis with `-B`,
+* correct for primary beam attenuation by supplying a primary beam map (e.g. from tclean) with `-P <PB_PATH>.pb.tt0`,
+* disable masking of flagged data with `-F`.
 
 ## Plotting ##
 
-`dstools-plot-dspec` is a convenience script for plotting the dynamic spectra produced by `dstools-make-dspec`, as well as functionality to produce 1D lightcurves and spectra, 2D auto-correlation functions, and fold the data to a specified period before plotting.
+`dstools-plot-ds` is a convenience script to plot the dynamic spectra produced by `dstools-extract-ds`, as well as perform post-processing to produce 1D lightcurves and spectra, average the data in time and frequency, fold the data to a specified period,
 
 To produce a basic dynamic spectrum, run the script with
 ```
-dstools-plot-dspec -d -f <FREQ_AVG> -t <TIME_AVG> reduced/<PROJECT_NAME>/<TARGET_NAME>
+dstools-plot-ds -d <DS>
 ```
-where `<FREQ_AVG>` and `<TIME_AVG>` are integer factors to average / rebin the data by. See other option details with
-```
-dstools-plot-dspec --help
-```
+where `<DS>` is your HDF5 dynamic spectrum file. 
+
+Some other simple options (see details with `dstools-plot-ds --help` include:
+* choose which Stokes parameters to plot with a subset of `{I, Q, U, V, L}` (e.g. `-s IQUV`)
+* plot a channel-averaged lightcurve with `-l`,
+* plot a time-averaged spectrum with `-p`,
+* produce a summary plot including a lightcurve, spectrum, and dynamic spectra in all polarisations with `-Y`,
+* average in time (`-t`) or frequency (`-f`) by an integer factor (e.g. `-t 5 -f 10` to average every five integrations and 10 channels),
+* perform RM synthesis and correct for Faraday rotation with `-E`,
+* plot the Faraday dispersion function with `-R`,
+* perform 2D auto-correlation of the dynamic spectra with `-a` to highlight periodic features,
+* fold the data to a specified period with `-FT <PERIOD>`.
+
+## DStools Library ##
 
 `dstools` can also be imported into your own scripts/notebooks as a package for more customised plotting. The main object is `DynamicSpectrum` which can be created as follows:
 ```
@@ -146,11 +184,7 @@ import matplotlib.pyplot as plt
 from dstools.dynamic_spectrum import DynamicSpectrum
 
 # Create DS object
-ds = DynamicSpectrum(
-    project='reduced/<PROJECT_NAME>/<TARGET_NAME>',
-    tavg=<TIME_AVG>,
-    favg=<FREQ_AVG>,
-)
+ds = DynamicSpectrum(ds_path='path/to/dynamic_spectrum.hdf5')
 
 # Plot dynamic spectrum with real visibilities and color-scale clipped at 20 mJy/beam
 fig, ax = ds.plot_ds(stokes='I', cmax=20, imag=False)
@@ -160,3 +194,22 @@ fig, ax = ds.plot_ds(stokes='I', cmax=20, imag=False)
 
 plt.show()
 ```
+
+The `DynamicSpectrum` class takes the following keyword arguments:
+* `tavg`- int (default 1) - factor by which to average the data across time
+* `favg`- int (default 1) - factor by which to average the data across frequency channels
+* `mintime` / `maxtime` - float (default None) - minimum and maximum cuts on frequency in units of `tunit`
+* `minfreq` / `maxfreq` - float (default None) - minimum and maximum cuts on frequency in units of MHz 
+* `minuvdist` / `maxuvdist` - float (default None) - minimum and maximum cuts on baseline distance in units of meters\dagger
+* `minuvwave` / `maxuvwave` - float (default None) - minimum and maximum cuts on baseline distance in units of wavelengths\dagger
+* `tunit` - astropy units.Quantity (default u.hour) - time unit to use for selection and plotting 
+* `corr_dumptime` - astropy units.Quantity (default 10*u.s) - correlator dumptime, used to detect calibrator scan breaks
+* `derotate` - bool (default False) - Apply Faraday de-rotation to linear polarisations
+* `fold` - bool (default False) - enable folding, must also provide `period` keyword
+* `period` - float (default None) - period on which to fold the data in units of `tunit`
+* `period_offset` - float (default 0.0) - period phase offset in units of `period`
+* `fold_periods` - float (default 2) - number of folded periods to concatenate for visualisation purposes
+* `calscans` - bool (default True) - insert breaks during off-source time (e.g. calibrator scans, wind stows, etc.)
+* `trim` - bool (default True) - remove fully flagged channel ranges at the bottom and top of the band
+
+\dagger - Note: selection on baseline distance requires DS extraction without averaging over baselines (see `dstools-extract-ds`)
