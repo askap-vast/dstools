@@ -766,7 +766,7 @@ class DynamicSpectrum:
         P = snr_mask(
             data=self.data["P"],
             noise=self.data["I"],
-            sigma=mask_sigma,
+            n_sigma=mask_sigma,
         )
 
         fig, ax, im = self._plot_ds(P, 0, 100, "plasma", fig, ax)
@@ -799,7 +799,7 @@ class DynamicSpectrum:
         PA = snr_mask(
             data=self.data["PA"],
             noise=self.data["L"],
-            sigma=0.1,
+            n_sigma=mask_sigma,
         )
 
         fig, ax, im = self._plot_ds(PA, cmin, cmax, "coolwarm", fig, ax)
