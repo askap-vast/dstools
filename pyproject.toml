@@ -21,9 +21,8 @@ colorlog = "^6.8.2"
 
 [tool.poetry.scripts]
 dstools-setup = "dstools.cli.setup:main"
-dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
 dstools-cal = "dstools.cli.cal:main"
-dstools-remove-source = "dstools.cli.remove_source:main"
+dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
 dstools-model-field = "dstools.cli.model_field:main"
 dstools-subtract-model = "dstools.cli.subtract_model:main"
 dstools-extract-ds = "dstools.cli.extract_ds:main"

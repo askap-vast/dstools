@@ -3,35 +3,35 @@
 `DStools` is a processing pipeline to produce and post-process dynamic spectrum data products from radio interferometer visibilities. `DStools` currently directly supports extraction of dynamic spectra from the following telescopes:
 * ATCA
 * ASKAP
-* VLA
 * MeerKAT
+* VLA
 
 ## Table of Contents
-1. [Installation](#installation)
-2. [Command Line Scripts](#cli)
-  - [ATCA Calibration](#atca-cal)
-  - [ASKAP Pre-processing](#askap-preprocess)
-  - [Field Modeling](#model-field)
-  - [Model Subtraction](#model-subtraction)
-  - [Dynamic Spectrum Extraction](#ds-extraction)
-  - [Plotting](#ds-plotting)
-4. [DStools Library](#dstools-library)
+- [Installation](#installation)
+- [Command Line Scripts](#cli)
+    - [ATCA Calibration](#atca-cal)
+    - [ASKAP Pre-processing](#askap-preprocess)
+    - [Field Modeling](#model-field)
+    - [Model Subtraction](#model-subtraction)
+    - [Dynamic Spectrum Extraction](#ds-extraction)
+    - [Plotting](#ds-plotting)
+- [DStools Library](#dstools-library)
 
 <a name="installation"></a>
 ## Installation
 
 ### Dependencies ###
 
-`DStools` is built on top of `CASA 6` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
+`DStools` is built on top of `CASA 6.6` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
 
-* CASA 6.6
-* miriad
+* `CASA 6.6`
+* `miriad`
 
 ### Installation / Configuration ###
 
 Install `DStools` using `pip` or your preferred package manager:
 ```
-pip install py-dstools
+pip install radio-dstools
 ```
 
 To make `DStools` available within your CASA environment, run the following setup script:
@@ -163,7 +163,7 @@ You can supply further options (see details with `dstools-extract-ds --help`) to
 * correct for primary beam attenuation by supplying a primary beam map (e.g. from tclean) with `-P <PB_PATH>.pb.tt0`,
 * disable masking of flagged data with `-F`.
 
-<a name="ds-lotting"></a>
+<a name="ds-plotting"></a>
 ### Plotting ###
 
 `dstools-plot-ds` is a convenience script to plot the dynamic spectra produced by `dstools-extract-ds`, as well as perform post-processing to produce 1D lightcurves and spectra, average the data in time and frequency, fold the data to a specified period,
@@ -206,22 +206,22 @@ plt.show()
 ```
 
 The `DynamicSpectrum` class takes the following keyword arguments:
-| Parameter                 | Type             | Default Value   | Description                                                           |
-| ------------------------- | -----------------|---------------- | --------------------------------------------------------------------- |
-| `tavg`                    | int              | 1               | factor by which to average the data across time                       |
-| `favg`                    | int              | 1               | factor by which to average the data across frequency channels         |
-| `mintime` / `maxtime`     | float            | None            | minimum and maximum cuts on frequency in units of `tunit`             |
-| `minfreq` / `maxfreq`     | float            | None            | minimum and maximum cuts on frequency in units of MHz                 |
-| `minuvdist` / `maxuvdist` | float            | None            | minimum and maximum cuts on baseline distance in units of meters      |
-| `minuvwave` / `maxuvwave` | float            | None            | minimum and maximum cuts on baseline distance in units of wavelengths |
-| `tunit`                   | astropy Quantity | u.hour          | time unit to use for selection and plotting                           |
-| `corr_dumptime`           | astropy Quantity | 10*u.s          | correlator dumptime, used to detect calibrator scan breaks            |
-| `derotate`                | bool             | False           | Apply Faraday de-rotation to linear polarisations                     |
-| `fold`                    | bool             | False           | enable folding, must also provide `period` keyword                    |
-| `period`                  | float            | None            | period on which to fold the data in units of `tunit`                  |
-| `period_offset`           | float            | 0.0             | period phase offset in units of `period`                              |
-| `fold_periods`            | float            | 2               | number of folded periods to concatenate for visualisation purposes    |
-| `calscans`                | bool             | True            | insert breaks during off-source time                                  |
-| `trim`                    | bool             | True            | remove fully flagged channel ranges at the bottom and top of the band |
+| Parameter                 | Type             | Default | Description                                                   |
+| ------------------------- | -----------------|-------- | ------------------------------------------------------------- |
+| `tavg`                    | int              | 1       | factor by which to average the data across time               |
+| `favg`                    | int              | 1       | factor by which to average the data across frequency channels |
+| `mintime` / `maxtime`     | float            | None    | min and max cuts on frequency in units of `tunit`             |
+| `minfreq` / `maxfreq`     | float            | None    | min and max cuts on frequency in units of MHz                 |
+| `minuvdist` / `maxuvdist` | float            | None    | min and max cuts on baseline distance in units of meters      |
+| `minuvwave` / `maxuvwave` | float            | None    | min and max cuts on baseline distance in units of wavelengths |
+| `tunit`                   | astropy Quantity | u.hour  | time unit to use for selection and plotting                   |
+| `corr_dumptime`           | astropy Quantity | 10*u.s  | correlator dumptime, used to detect calibrator scan breaks    |
+| `derotate`                | bool             | False   | Apply Faraday de-rotation to linear polarisations             |
+| `fold`                    | bool             | False   | enable folding, must also provide `period` keyword            |
+| `period`                  | float            | None    | period on which to fold the data in units of `tunit`          |
+| `period_offset`           | float            | 0.0     | period phase offset in units of `period`                      |
+| `fold_periods`            | float            | 2       | number of folded periods to display for visualisation         |
+| `calscans`                | bool             | True    | insert breaks during off-source time                          |
+| `trim`                    | bool             | True    | remove flagged channel ranges at band edges                   |
 
 Note: selection on baseline distance requires DS extraction without averaging over baselines (see `dstools-extract-ds`)
