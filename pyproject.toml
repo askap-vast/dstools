@@ -1,8 +1,11 @@
 [tool.poetry]
-name = "dstools"
+name = "radio-dstools"
 version = "1.0.0"
 description = "A processing pipeline to produce dynamic spectra from visibilities."
 authors = ["Joshua Pritchard <joshua.pritchard@csiro.au>"]
+packages = [
+    {include = "dstools"},
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
