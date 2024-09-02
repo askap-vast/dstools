@@ -1,4 +1,5 @@
-# DStools #
+# DStools # 
+[![DOI](https://zenodo.org/badge/306534672.svg)](https://zenodo.org/doi/10.5281/zenodo.13626182)
 
 `DStools` is a processing pipeline to produce and post-process dynamic spectrum data products from radio interferometer visibilities. `DStools` currently directly supports extraction of dynamic spectra from the following telescopes:
 * ATCA
