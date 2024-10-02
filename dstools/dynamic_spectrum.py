@@ -218,8 +218,9 @@ class DynamicSpectrum:
         # Store time and frequency resolution
         timebins = len(self.time) / self.tavg
         freqbins = len(self.freq) / self.favg
-        self.time_res = (self.tmax - self.tmin) * self.tunit / timebins
-        self.freq_res = (self.fmax - self.fmin) * u.MHz / freqbins
+
+        self.time_res = (self.tmax - self.tmin) * self.tunit / (timebins-1)
+        self.freq_res = (self.fmax - self.fmin) * u.MHz / (freqbins-1)
         self.header.update(
             {
                 "time_resolution": f"{self.time_res.to(u.s):.1f}",
