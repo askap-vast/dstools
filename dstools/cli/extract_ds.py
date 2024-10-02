@@ -11,7 +11,8 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
-from casacore.tables import table
+from casatasks import exportfits, mstransform, phaseshift
+from casatools import table
 
 import dstools
 from dstools.logger import setupLogger
@@ -24,6 +25,44 @@ DSTOOLS_PATH = dstools.__path__[0]
 logger = logging.getLogger(__name__)
 
 
+def average_baselines(ms, minuvdist=0):
+    logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
+    outputvis = ms.replace(".ms", ".dstools-temp.baseavg.ms")
+
+    intab = table(ms, nomodify=False)
+
+    ant1 = intab.getcol("ANTENNA1")
+    ant2 = intab.getcol("ANTENNA2")
+
+    # Set all antenna pairs equal for baseline averaging
+    nrows = intab.nrows()
+    intab.putcol("ANTENNA1", np.zeros(nrows))
+    intab.putcol("ANTENNA2", np.ones(nrows))
+
+    # Average over baselines by setting timeaverage interval to less than one scan cycle
+    interval = intab.getcol("INTERVAL")
+    timebin = "{}s".format(min(interval) * 1e-2)
+
+    mstransform(
+        vis=ms,
+        outputvis=outputvis,
+        datacolumn="all",
+        uvrange=f">{minuvdist}m",
+        timeaverage=True,
+        timebin=timebin,
+        keepflags=False,
+    )
+
+    # Replace original antenna names
+    intab.putcol("ANTENNA1", ant1)
+    intab.putcol("ANTENNA2", ant2)
+
+    intab.unlock()
+    intab.close()
+
+    return outputvis
+
+
 def get_header_properties(ms, datacolumn, pb_scale):
 
     # Calculate data dimensions
@@ -33,13 +72,13 @@ def get_header_properties(ms, datacolumn, pb_scale):
     feedtype = get_feed_polarisation(ms)
 
     # Get telescope name
-    ta = table(f"{ms}::OBSERVATION", ack=False)
-    telescope = ta.getcol("TELESCOPE_NAME")[0]
+    ta = table(f"{ms}/OBSERVATION", ack=False)
+    telescope = str(ta.getcol("TELESCOPE_NAME")[0])
     ta.close()
 
     # Parse phasecentre direction
-    ta = table(f"{ms}::FIELD", ack=False)
-    phasecentre_coords = ta.getcol("PHASE_DIR")[0][0]
+    ta = table(f"{ms}/FIELD", ack=False)
+    phasecentre_coords = ta.getcol("PHASE_DIR")[:, 0, 0]
     phasecentre = SkyCoord(
         ra=phasecentre_coords[0],
         dec=phasecentre_coords[1],
@@ -68,8 +107,8 @@ def get_header_properties(ms, datacolumn, pb_scale):
 
 def get_feed_polarisation(ms):
 
-    tf = table(f"{ms}::FEED", ack=False)
-    feedtype = tf.getcol("POLARIZATION_TYPE")["array"][0]
+    tf = table(f"{ms}/FEED", ack=False)
+    feedtype = tf.getcol("POLARIZATION_TYPE")[0, 0]
     tf.close()
 
     feedtype = {
@@ -90,7 +129,23 @@ def get_feed_polarisation(ms):
 def combine_spws(ms):
 
     outvis = ms.replace(".ms", ".dstools-temp.comb.ms")
-    os.system(f"_dstools-combine-spws {ms} {outvis} 1>/dev/null")
+
+    # Determine number of spectral windows
+    tab = table(f"{ms}/SPECTRAL_WINDOW")
+
+    nspws = len(tab.getcol("FREQ_GROUP_NAME"))
+
+    tab.unlock()
+    tab.close()
+
+    # Combine spectral windows if more than 1
+    combine = nspws > 1
+    mstransform(
+        vis=ms,
+        combinespws=combine,
+        datacolumn="all",
+        outputvis=outvis,
+    )
 
     return outvis
 
@@ -98,15 +153,15 @@ def combine_spws(ms):
 def get_data_dimensions(ms):
 
     # Get antenna count and time / frequency arrays
-    tab = table(ms, ack=False, lockoptions="autonoread")
+    tab = table(ms, ack=False)
 
     # Throw away autocorrelations
     tab = tab.query("ANTENNA1 != ANTENNA2")
 
     # Get time, frequency, and baseline axes
     times = np.unique(tab.getcol("TIME"))
-    tf = table(f"{ms}::SPECTRAL_WINDOW", ack=False)
-    freqs = tf[0]["CHAN_FREQ"]
+    tf = table(f"{ms}/SPECTRAL_WINDOW", ack=False)
+    freqs = tf.getcol("CHAN_FREQ").reshape(-1)
 
     antennas = np.unique(
         np.append(
@@ -126,7 +181,7 @@ def get_data_dimensions(ms):
 
 def validate_datacolumn(ms, datacolumn):
 
-    tab = table(ms, ack=False, lockoptions="autonoread")
+    tab = table(ms, ack=False)
     col_exists = datacolumn in tab.colnames()
     tab.close()
 
@@ -137,10 +192,13 @@ def rotate_phasecentre(ms, ra, dec):
     logger.debug(f"Rotating phasecentre to {ra} {dec}")
 
     # Apply phasecentre rotation
-    os.system(f"_dstools-rotate -- {ms} {ra} {dec} 1>/dev/null")
-
-    # Use rotated MeasurementSet for subsequent processing
     rotated_ms = ms.replace(".ms", ".dstools-temp.rotated.ms")
+
+    phaseshift(
+        vis=ms,
+        outputvis=rotated_ms,
+        phasecenter=f"J2000 {ra} {dec}",
+    )
 
     return rotated_ms
 
@@ -154,8 +212,11 @@ def get_pb_correction(primary_beam, ra, dec):
 
     if ".fits" not in primary_beam:
         pbfits = primary_beam + ".dstools.fits"
-        cmd = f'exportfits(imagename="{primary_beam}", fitsimage="{pbfits}", overwrite=True)'
-        os.system(f"casa --nologger --nologfile -c '{cmd}' 1>/dev/null")
+        exportfits(
+            imagename=primary_beam,
+            fitsimage=pbfits,
+            overwrite=True,
+        )
         primary_beam = pbfits
 
     with fits.open(primary_beam) as hdul:
@@ -196,8 +257,8 @@ def process_baseline(ms, times, baseline, datacolumn):
 
     i, (ant1, ant2) = baseline
 
-    tab = table(ms, ack=False, lockoptions="autonoread")
-    bl_tab = tab.query("(ANTENNA1==$ant1) && (ANTENNA2==$ant2)")
+    tab = table(ms, ack=False)
+    bl_tab = tab.query(f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})")
 
     # Identify missing integrations on this baseline
     bl_time = bl_tab.getcol("TIME")
@@ -208,14 +269,14 @@ def process_baseline(ms, times, baseline, datacolumn):
     data_idx = np.argwhere(~np.in1d(bl_time, missing_times)).ravel()
 
     # Calculate UVrange for each baseline
-    bl_uvw = bl_tab.getcol("UVW")
+    bl_uvw = bl_tab.getcol("UVW").T
     bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
 
     data = {
         "baseline": i,
         "data_idx": data_idx,
-        "data": bl_tab.getcol(datacolumn),
-        "flags": bl_tab.getcol("FLAG"),
+        "data": bl_tab.getcol(datacolumn).T,
+        "flags": bl_tab.getcol("FLAG").T,
         "uvdist": np.nanmean(bl_uvdist, axis=0),
     }
 
@@ -321,9 +382,7 @@ def main(
 
     # Optionally average over baselines
     if baseline_average:
-        logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
-        os.system(f"_dstools-avg-baselines -u {minuvdist} {ms} 1>/dev/null")
-        ms = ms.replace(".ms", ".dstools-temp.baseavg.ms")
+        ms = average_baselines(ms, minuvdist)
 
     # Calculate final dimensions of DS
     times, freqs, antennas, nbaselines = get_data_dimensions(ms)
