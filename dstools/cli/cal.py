@@ -5,7 +5,7 @@ import click
 import dstools
 
 
-@click.command()
+@click.command(context_settings={"show_default": True})
 @click.option(
     "-m",
     "--mfinterval",

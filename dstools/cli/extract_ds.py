@@ -225,7 +225,7 @@ def process_baseline(ms, times, baseline, datacolumn):
     return data
 
 
-@click.command()
+@click.command(context_settings={"show_default": True})
 @click.option(
     "-d",
     "--datacolumn",
@@ -239,7 +239,7 @@ def process_baseline(ms, times, baseline, datacolumn):
     type=str,
     nargs=2,
     default=None,
-    help="RA and Dec of phasecentre at which to extract DS.",
+    help="Coordinates of phasecentre at which to extract DS (provide as separate values, e.g. -p <RA> <DEC>).",
 )
 @click.option(
     "-P",

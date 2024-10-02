@@ -12,14 +12,14 @@ from dstools.utils import parse_coordinates
 logger = logging.getLogger(__name__)
 
 
-@click.command()
+@click.command(context_settings={"show_default": True})
 @click.option(
     "-p",
     "--phasecenter",
     type=str,
     nargs=2,
     default=None,
-    help="Imaging phasecenter",
+    help="Coordinates of imaging phasecentre (provide as separate values, e.g. -p <RA> <DEC>).",
 )
 @click.option(
     "-r",
@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-t",
-    "--target_position",
+    "--target-position",
     type=str,
     nargs=2,
     default=None,
-    help="Coordinates around which to mask model images before subtraction.",
+    help="Coordinates around which to mask model images before subtraction (provide as separate values, e.g. -p <RA> <DEC>).",
 )
 @click.option(
     "-I",
@@ -198,12 +198,12 @@ def main(
     os.system(f"rm -r {maskgen}.im_presub* >/dev/null 2>&1")
 
     # Perform field model subtraction
-    # -----------------------
+    # ------------------------------
 
     uvsub(vis=ms)
 
     # Reimage to confirm field subtraction
-    # -------------------------------------
+    # -----------------------------------
 
     subbed_image = model_base.replace(".model", ".subbed")
     os.system(f"rm -r {subbed_image}* >/dev/null 2>&1")
@@ -230,7 +230,7 @@ def main(
     )
 
     # Export to FITS format
-    # ----------------------
+    # --------------------
 
     for stokes in "IQUV":
         subimagename = f"{subbed_image}.image.{stokes}.tt0"

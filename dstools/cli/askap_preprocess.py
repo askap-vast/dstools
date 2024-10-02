@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 setupLogger(verbose=False)
 
 
-@click.command()
+@click.command(context_settings={"show_default": True})
 @click.argument("ms")
 def main(ms):
 

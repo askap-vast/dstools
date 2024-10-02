@@ -37,7 +37,7 @@ case $reload in
 	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
 	# during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
 	# errors. Correction would be to shift by +120 arcsec here.
-	print "Shift phasecenter?"
+	print "Shift phasecenter? (y/n)"
 	read fix_phasecenter
 	case $fix_phasecenter in
 
@@ -152,7 +152,6 @@ case $reflag in
 	    blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=time,amp options=nofqav,nobase
 	    blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=chan,amp options=nofqav,nobase
 	    blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=chan,amp options=nofqav
-	    # blflag vis=$pcal.$freq device=/xs stokes=xx,yy,xy,yx axis=uvdistance,amp options=nofqav
 
 	    # Solve for bandpass
 	    print "Running mfcal on $pcal.$freq"
@@ -164,18 +163,14 @@ case $reflag in
 	    case $autoflag in
 		[Yy]* )
 		    print "Running pgflag on $pcal.$freq"
-		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
-		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy
+		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx options=nodisp
+		    pgflag vis=$pcal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy options=nodisp
 		    print "Running mfcal on $pcal.$freq"
 		    mfcal vis=$pcal.$freq interval=$mfinterval,$mfinterval,$bpinterval refant=$refant
 		    ;;
 		[Nn]* )
 		    : ;;
 	    esac
-
-	    # Check bandpass calibration
-	    # uvspec vis=$pcal.$freq interval=$mfinterval axis=channel,amp device=/xs nxy=1,1
-	    # uvspec vis=$pcal.$freq interval=$mfinterval axis=channel,phase device=/xs nxy=1,1
 
 	    prompt "Do more interactive flagging?"
 	    read flagmore
@@ -248,8 +243,8 @@ case $calibrate in
 		case $autoflag in
 		    [Yy]* )
 			print "Running pgflag on $scal.$freq"
-			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx
-			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy
+			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,xy,yx options=nodisp
+			pgflag vis=$scal.$freq command="<b" device=/xs stokes=xx,yy,yx,xy options=nodisp
 			;;
 		    [Nn]* ) : ;;
 		esac

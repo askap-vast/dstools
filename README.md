@@ -23,9 +23,9 @@
 
 ### Dependencies ###
 
-`DStools` is built on top of `CASA 6.6` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
+`DStools` is built on top of `CASA 6.6.5` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
 
-* `CASA 6.6`
+* `CASA 6.6.5`
 * `miriad`
 
 ### Installation / Configuration ###

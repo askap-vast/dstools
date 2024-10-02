@@ -37,7 +37,7 @@ case $reload in
 	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
 	# during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
 	# errors. Correction would be to shift by +120 arcsec here.
-	print "Shift phasecenter?"
+	prompt "Shift phasecenter?"
 	read fix_phasecenter
 	case $fix_phasecenter in
 

@@ -5,8 +5,6 @@ from pathlib import Path
 import astropy.units as u
 import click
 
-from dstools.utils import BANDS, CONFIGS, Array, parse_coordinates, prompt, update_param
-
 
 def validate_parameters(cell, imsize, nterms):
     while True:
@@ -109,9 +107,19 @@ def run_selfcal(ms):
             os.system(f"rm -r {cal_table}")
 
     return
+from dstools.utils import (
+    BANDS,
+    CONFIGS,
+    Array,
+    parse_coordinates,
+    prompt,
+    run_selfcal,
+    update_param,
+    validate_parameters,
+)
 
 
-@click.command()
+@click.command(context_settings={"show_default": True})
 @click.option(
     "-C",
     "--config",
@@ -170,7 +178,7 @@ def run_selfcal(ms):
     type=str,
     nargs=2,
     default=None,
-    help="RA and Dec of phasecentre at which to extract DS.",
+    help="Coordinates of imaging phasecentre (provide as separate values, e.g. -p <RA> <DEC>).",
 )
 @click.option(
     "-l",
