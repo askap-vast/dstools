@@ -9,18 +9,19 @@ import click
 import h5py
 import numpy as np
 from astropy.coordinates import SkyCoord
-from astropy.io import fits
-from astropy.wcs import WCS, FITSFixedWarning
-from casatasks import exportfits, mstransform, phaseshift
-from casatools import table
+from astropy.wcs import FITSFixedWarning
+from casaconfig import config
 
-import dstools
+config.logfile = "/dev/null"
+from importlib.metadata import version
+
+from casatasks import mstransform, phaseshift
+from casatools import table
+from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
 from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
-
-DSTOOLS_PATH = dstools.__path__[0]
 
 logger = logging.getLogger(__name__)
 
@@ -203,56 +204,6 @@ def rotate_phasecentre(ms, ra, dec):
     return rotated_ms
 
 
-def get_pb_correction(primary_beam, ra, dec):
-
-    if primary_beam is None:
-        return 1
-
-    position = SkyCoord(ra=ra, dec=dec, unit=("hourangle", "deg"))
-
-    if ".fits" not in primary_beam:
-        pbfits = primary_beam + ".dstools.fits"
-        exportfits(
-            imagename=primary_beam,
-            fitsimage=pbfits,
-            overwrite=True,
-        )
-        primary_beam = pbfits
-
-    with fits.open(primary_beam) as hdul:
-        header, data = hdul[0].header, hdul[0].data
-        data = data[0, 0, :, :]
-
-    if "dstools" in primary_beam:
-        os.system(f"rm {pbfits} 2>/dev/null")
-
-    wcs = WCS(header, naxis=2)
-    x, y = wcs.wcs_world2pix(position.ra, position.dec, 1)
-    x, y = int(x // 1), int(y // 1)
-    xmax, ymax = data.shape
-
-    # Check position is within limits of supplied PB image
-    im_outside_limit = [
-        x < 0,
-        x > xmax,
-        y < 0,
-        y > ymax,
-    ]
-    if any(im_outside_limit):
-        logger.warning(
-            f"Position {ra} {dec} outside of supplied PB image, disabling PB correction."
-        )
-        return 1
-
-    scale = data[x, y]
-
-    logger.debug(
-        f"PB correction scale {scale:.4f} measured at pixel {x},{y} in image of size {xmax},{ymax}"
-    )
-
-    return scale
-
-
 def process_baseline(ms, times, baseline, datacolumn):
 
     i, (ant1, ant2) = baseline
@@ -305,7 +256,7 @@ def process_baseline(ms, times, baseline, datacolumn):
 @click.option(
     "-P",
     "--primary-beam",
-    type=click.Path(),
+    type=Path,
     default=None,
     help="Path to primary beam image with which to correct flux scale. Must also provide phasecentre.",
 )
@@ -360,15 +311,15 @@ def main(
     }
     datacolumn = columns[datacolumn]
 
-    # Combine multiple spectral windows (e.g. VLA)
-    # This also appears to fix an MS corrupted by model insertion
-    # which has otherwise been very difficult to debug
-    ms = combine_spws(ms)
-
     # Check that selected column exists in MS
     if not validate_datacolumn(ms, datacolumn):
         logger.error(f"{datacolumn} column does not exist in {ms}")
         exit(1)
+
+    # Combine multiple spectral windows (e.g. VLA)
+    # This also appears to fix an MS corrupted by model insertion
+    # which has otherwise been very difficult to debug
+    ms = combine_spws(ms)
 
     # Optionally rotate phasecentre to new coordinates
     pb_scale = 1
@@ -425,8 +376,11 @@ def main(
 
     # Write all data to file
     with h5py.File(outfile, "w", track_order=True) as f:
+
+        f.attrs["dstools_version"] = version("radio-dstools")
         for attr in header:
             f.attrs[attr] = header[attr]
+
         f.create_dataset("time", data=times)
         f.create_dataset("frequency", data=freqs)
         f.create_dataset("uvdist", data=uvdist)

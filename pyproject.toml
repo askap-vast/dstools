@@ -8,7 +8,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.13"
 click = "^8.0.3"
 matplotlib = "^3.8.2"
 numpy = "^1.22.2"
@@ -24,7 +24,9 @@ casatasks = "^6.6.5.31"
 dstools-setup = "dstools.cli.setup:main"
 dstools-cal = "dstools.cli.cal:main"
 dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
-dstools-model-field = "dstools.cli.model_field:main"
+dstools-create-model = "dstools.cli.create_model:main"
+dstools-insert-model = "dstools.cli.insert_model:main"
+dstools-selfcal = "dstools.cli.selfcal:main"
 dstools-subtract-model = "dstools.cli.subtract_model:main"
 dstools-extract-ds = "dstools.cli.extract_ds:main"
 dstools-plot-ds = "dstools.cli.plot_ds:main"

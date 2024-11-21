@@ -3,6 +3,7 @@ import warnings
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
+from importlib.metadata import version
 from typing import Optional
 
 import astropy.constants as c
@@ -320,6 +321,13 @@ class DynamicSpectrum:
             self.maxuvdist = np.inf
             self.minuvwave = 0
             self.maxuvwave = np.inf
+
+        ds_version = datafile.attrs.get("dstools_version", "1.0.0")
+        dstools_version = version("radio-dstools")
+        if ds_version != dstools_version:
+            logger.warning(
+                f"Attempting to open DS generated with DStools v{ds_version} with DStools v{dstools_version}."
+            )
 
         return
 

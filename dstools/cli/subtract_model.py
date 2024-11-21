@@ -1,94 +1,60 @@
-import shutil
-import subprocess
+import logging
+import os
+from pathlib import Path
 
+import astropy.units as u
 import click
+import numpy as np
+from casaconfig import config
 
-from dstools.utils import parse_casa_args
+config.logfile = "/dev/null"
+from casatasks import split, uvsub
+from dstools.imaging import CASAModel, WSCleanModel
+from dstools.logger import setupLogger
+from dstools.utils import parse_coordinates
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "-p",
-    "--phasecenter",
-    type=str,
-    nargs=2,
-    default=None,
-    help="Coordinates of imaging phasecentre (provide as separate values, e.g. -p <RA> <DEC>).",
-)
-@click.option(
-    "-r",
-    "--robust",
-    default=0.5,
-    help="Briggs weighting robust parameter.",
-)
-@click.option(
-    "-t",
-    "--target-position",
-    type=str,
-    nargs=2,
-    default=None,
-    help="Coordinates around which to mask model images before subtraction (provide as separate values, e.g. -p <RA> <DEC>).",
-)
-@click.option(
-    "-I",
-    "--interactive/--no-interactive",
-    is_flag=True,
-    default=True,
-    help="Mask out target source in interactive tclean.",
-)
-@click.option(
-    "-w",
-    "--widefield/--no-widefield",
+    "-S",
+    "--split-data/--no-split-data",
     default=False,
-    help="Enable w-projection to correct for widefield artefacts in off-axis sources.",
-)
-@click.option(
-    "-m",
-    "--mpinodes",
-    default=1,
-    help="Set greater than 1 to run casa in mpi mode with mpinodes available nodes.",
+    help="Split subtracted data into DATA column of output MS with .subbed.ms suffix.",
 )
 @click.option(
     "-v",
-    "--verbose",
+    "--verbose/--no-verbose",
     is_flag=True,
     default=False,
     help="Enable verbose logging.",
 )
 @click.argument("ms")
-@click.argument("model", nargs=-1)
-def main(**kwargs):
+def main(
+    split_data,
+    verbose,
+    ms,
+):
 
-    # Read off phasecentre separately so that multi-word string can be parsed
-    phasecenter = kwargs.pop("phasecenter")
-    phasecenter = ["-p", *phasecenter] if phasecenter is not None else []
+    setupLogger(verbose=verbose)
 
-    target_position = kwargs.pop("target_position")
-    target_position = ["-t", *target_position] if target_position is not None else []
+    # Perform field model subtraction
+    # ------------------------------
 
-    mpinodes = kwargs.pop("mpinodes")
-    model = kwargs.pop("model")
+    uvsub(vis=ms)
 
-    # Construct string call signature to pass on to CASA
-    path, argstr, kwargstr = parse_casa_args(
-        main,
-        "subtract_model_casa.py",
-        kwargs,
-        args=["ms"],
-    )
-    argstr += " " + " ".join(list(model))
+    # Split subtracted visibilities into new file
+    # ------------------------------------------
 
-    casa_bin = shutil.which("casa")
-    if mpinodes > 1:
-        casa_bin = f"mpicasa -n {mpinodes} {casa_bin}"
-        argstr += " --mpi"
+    if split_data:
+        split(
+            vis=ms,
+            outputvis=ms.replace(".ms", ".subbed.ms"),
+            datacolumn="corrected",
+        )
 
-    call = (
-        f"{casa_bin} --nologger -c {path} {argstr} {kwargstr}".split(" ")
-        + phasecenter
-        + target_position
-    )
-    subprocess.run(call)
+    return
 
 
 if __name__ == "__main__":

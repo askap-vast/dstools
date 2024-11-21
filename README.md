@@ -12,7 +12,7 @@
 - [Command Line Scripts](#cli)
     - [ATCA Calibration](#atca-cal)
     - [ASKAP Pre-processing](#askap-preprocess)
-    - [Field Modeling](#model-field)
+    - [Field Modeling / Insertion](#model-field)
     - [Model Subtraction](#model-subtraction)
     - [Dynamic Spectrum Extraction](#ds-extraction)
     - [Plotting](#ds-plotting)
@@ -23,10 +23,10 @@
 
 ### Dependencies ###
 
-`DStools` is built on top of `CASA 6.6.5` for the majority of tasks, and also uses `miriad` for pre-processing and calibration of ATCA observations. Make sure these tools are installed on your system:
+`DStools` uses `miriad` for pre-processing and calibration of ATCA observations, and `WSclean` for imaging and model insertion. Make sure these tools are installed on your system for:
 
-* `CASA 6.6.5`
 * `miriad`
+* `WSclean 3.5`
 
 ### Installation / Configuration ###
 
@@ -35,24 +35,25 @@ Install `DStools` using `pip` or your preferred package manager:
 pip install radio-dstools
 ```
 
-To make `DStools` available within your CASA environment, run the following setup script:
-```
-dstools-setup
-```
-You will only need to run this once.
-
 <a name="cli"></a>
 ## Command Line Scripts ##
 
 Generating dynamic spectra with `DStools` generally involves some level of pre-processing (e.g. calibration, flagging, field source subtraction), extraction of the visibilities into a custom HDF5 data structure, and some level of post-processing (e.g. averaging in time/frequency, period folding, time/frequency/baseline filtering, polarisation processing, etc.). The following commands are provided to perform these steps:
-| Command                    | Description                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `dstools-cal`              | convenience script for flagging/calibration of raw ATCA visibilities           |
-| `dstools-askap-preprocess` | script to set the correct flux scale and pointing centre of ASKAP beams        |
-| `dstools-model-field`      | script to produce a model of field sources with optional self-calibration loop |
-| `dstools-subtract-model`   | script to subtract a (multi-term) field model image from visibilities          |
-| `dstools-extract-ds`       | script to extract visibilities for use with the `DStools` library              |
-| `dstools-plot-ds`          | convenience script to post-process and plot dynamic spectra in various ways    |
+
+| Command                                                       | Description                                                                 |
+|---------------------------------------------------------------|-----------------------------------------------------------------------------|
+| `dstools-atca-cal`<span style="color:red">&dagger;</span>     | convenience script for flagging/calibration of raw ATCA visibilities        |
+| `dstools-askap-preprocess`                                    | script to set the correct flux scale and reference frame of ASKAP beams     |
+| `dstools-create-model`<span style="color:red">&dagger;</span> | script to image and model the field with WSclean                            |
+| `dstools-insert-model`<span style="color:red">&dagger;</span> | script to predict model images into visibilities                            |
+| `dstools-selfcal`                                             | script to run a self-calibration loop using inserted model visibilities     |
+| `dstools-subtract-model`                                      | script to subtract an inserted model from the visibilities                  |
+| `dstools-extract-ds`                                          | script to extract visibilities for use with the `DStools` library           |
+| `dstools-plot-ds`                                             | convenience script to post-process and plot dynamic spectra in various ways |
+
+*NOTE:* \
+<span style="color:red">&dagger;</span> `miriad` is a requirement to run `dstools-atca-cal` \
+<span style="color:red">&Dagger;</span> `WSclean` is a requirement to run `dstools-create-model` and `dstools-insert-model` with WSclean generated model images
 
 The following scripts are used in the above commands, but are also available for more modular processing needs:
 
@@ -70,7 +71,7 @@ Below some common workflows are described. For further details on usage, run any
 `dstools-cal` is a convenience script to calibrate raw ATCA data prior to use with CASA in the other scripts.
 
 ```
-dstools-cal -d <DATA_DIR> <PROJECT_DIR> <PROJECT_CODE>
+dstools-atca-cal -d <DATA_DIR> <PROJECT_DIR> <PROJECT_CODE>
 ```
 where `<DATA_DIR>` is a directory containing your raw ATCA RPFITS files, `<PROJECT_DIR>` is the name of a sub-directory to store processing output, and `<PROJECT_CODE>` is your observation's project code. You can supply further options to modify gain and bandpass solution intervals, set the reference antenna, and run automatic calibration/flagging. 
 
@@ -82,14 +83,14 @@ In manual mode the script steps through prompts to:
 * perform secondary calibrator flagging and gain calibration,
 * and finally transfer all calibration solutions to the science target and export to MeasurementSet format.
 
-In auto mode (use flag `-A`) these steps will be performed non-interactively.
+In auto mode (use flag `-A`) these steps will be performed (mostly) non-interactively.
 
 <a name="askap-preprocess"></a>
 ### ASKAP Pre-processing ###
 
 ASKAP data requires extra pre-processing to 
 1) set the instrumental polarisation flux scale to agree with CASA conventions (e.g. `I = (XX + YY)/2`), and 
-2) set the reference frame of the beam phase centre to the correct coordinates.
+2) set the reference frame of the beam phase centre to the correct coordinates (by default the phasecentre is oriented to the mosaicked field centre coordinates).
 
 These corrections should be applied before any further imaging or dynamic spectrum tasks. You can run both steps with:
 ```
@@ -98,52 +99,58 @@ dstools-askapsoft-preprocess <MS>
 where `<MS>` is the path to your data in MeasurementSet format.
 
 <a name="model-field"></a>
-### Imaging and Field Modeling ###
+### Imaging and Self Calibration ###
 
-`dstools-model-field` is a CASA script to image calibrated visibilities, optionally run a self-calibration loop, and produce a final model of selected sources in the field.
+`dstools-create-field` is a script to image calibrated visibilities with WSclean and produce a model of sources in the field.
 
 Run the script with
 ```
-dstools-model-field <MS>
+dstools-create-model <MS>
 ```
 
-You can supply further options (see details with `dstools-model-field --help`) such as:
+You can supply further options (see details with `dstools-create-model --help`) such as:
 * array configuration and frequency band (to help choose imaging parameters),
 * imaging phasecentre,
 * robust parameter,
 * clean threshold,
 * maximum clean iterations,
-* primary beam fractional power cutoff,
-* number of Taylor terms used in mtmfs deconvolution,
-* number and size of clean scales,
-* use of automatic clean masking,
-* use of the widefield gridder with w-projection,
-* and whether to use interactive mode in `tclean`.
+* and number of Taylor terms used in MFS deconvolution.
 
-The script then progresses through prompts to:
-* run autoflaggers,
-* run an optional self-calibration loop, with intermediate self-calibration products stored in a `selfcal/<BAND>` directory,
-* store the field-model imaging products in a `field_model/<BAND>` directory.
+Image and model products will be stored in a directory determined by the `--out_directory` parameter.
 
-<a name="model-subtraction"></a>
-### Model Subtraction ###
-
-`dstools-subtract-model` is a CASA script to subtract a field model (either produced by `dstools-field-model` or elsewhere) from the visibilities. Model images can be supplied for multiple Taylor terms  You can optionally mask the model components of your target from the field model so that it is untouched by model subtraction.
+`dstools-selfcal` is a script to run a self-calibration loop using model visibilities stored in the `MODEL_DATA` column of your MeasurementSet.
 
 Run the script with
 ```
-dstools-subtract-model <MS> <MODEL>.tt0 <MODEL>.tt1 ...
+dstools-selfcal <MS>
 ```
-where `<MODEL>.tt0` (etc.) are the model image path for each Taylor term used in the production of your model.
 
-You can supply further options (see details with `dstools-subtract-model --help` such as:
-* phasecentre coordinates at which the model images are centred,
-* robust parameter,
-* use of the widefield gridder with w-projection,
-* whether to mask your target interactively,
-* or alternatively the coordinates of your target for automatic masking.
+You can provide further options (see details with `dstools-selfcal --help`) to:
+* solve for phase-only `--calmode p` or phase and amplitude `--calmode ap` calibration solutions,
+* adjust the solution interval,
+* solve for either polarisation-dependent or polarisation-indepdendent gains.
 
-The masked field model will then be subtracted from the visibilities with the result stored in the `CORRECTED_DATA` column of the MeasurementSet, and a model-subtracted image stored in the `field_model` directory.
+### Field Modeling / Subtraction ###
+
+`dstools-insert-model` is a script to predict model images into visibilities stored in the `MODEL_DATA` column of your MeasurementSet.
+
+```
+dstools-insert-model <MODEL_DIR> <MS>
+```
+
+Two model image formats are supported---`wsclean` and `casa`---which can be specified with the `-f / --model-format` option. Using `-f wsclean` will expect `<MODEL_DIR>` to contain model images from a WSclean imaging run (generally MFS images alongside some number of joined channel images), and `-f casa` will expect this directory to contain some number of Taylor term model images produced with the `tclean` task in CASA.
+
+An interactive viewer will be launched allowing you to draw masks around any portions of the image that you want removed from the model. This is generally where you would remove any model components that are associated with your target of interest. Click to create polygon vertices, then either press `x` to mask the enclosed region or `c` to unmask enclosed pixels that have previously been masked. When you are satisfied with the mask close the viewer and the model images will be masked and predicted into visibilities.
+
+<a name="model-subtraction"></a>
+
+`dstools-subtract-model` is a script that will subtract the model visibilities from your MeasurementSet (`CORRECTED_DATA = DATA - MODEL_DATA`).
+
+Run the script with
+```
+dstools-subtract-model <MS>
+```
+You can optionally use the `-S / --split-data` option, which will split off a new MeasurementSet (name with a `.subbed.ms` suffix) with the `DATA` column containing the model subtracted visibilities. This can be useful for iterative model subtraction (e.g. removing bright sources far outside the primary beam).
 
 <a name="ds-extraction"></a>
 ### Dynamic Spectrum Extraction ###
@@ -182,7 +189,8 @@ Some other simple options (see details with `dstools-plot-ds --help` include:
 * produce a summary plot including a lightcurve, spectrum, and dynamic spectra in all polarisations with `-Y`,
 * average in time (`-t`) or frequency (`-f`) by an integer factor (e.g. `-t 5 -f 10` to average every five integrations and 10 channels),
 * perform RM synthesis and correct for Faraday rotation with `-E`,
-* plot the Faraday dispersion function with `-R`,
+* provide a known RM with `-R`,
+* plot the Faraday dispersion function with `-D`,
 * perform 2D auto-correlation of the dynamic spectra with `-a` to highlight periodic features,
 * fold the data to a specified period with `-FT <PERIOD>`.
 
@@ -218,6 +226,7 @@ The `DynamicSpectrum` class takes the following keyword arguments:
 | `tunit`                   | astropy Quantity | u.hour  | time unit to use for selection and plotting                   |
 | `corr_dumptime`           | astropy Quantity | 10*u.s  | correlator dumptime, used to detect calibrator scan breaks    |
 | `derotate`                | bool             | False   | Apply Faraday de-rotation to linear polarisations             |
+| `RM`                      | float            | None    | User provided rotation measure in units of rad / m^2          |
 | `fold`                    | bool             | False   | enable folding, must also provide `period` keyword            |
 | `period`                  | float            | None    | period on which to fold the data in units of `tunit`          |
 | `period_offset`           | float            | 0.0     | period phase offset in units of `period`                      |

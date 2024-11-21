@@ -1,9 +1,8 @@
+import logging
 from dataclasses import dataclass
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
-
-import dstools
 
 CONFIGS = ["6km", "750_no6", "750_6", "H168"]
 BANDS = [
@@ -19,6 +18,9 @@ BANDS = [
 ]
 
 
+logger = logging.getLogger(__name__)
+
+
 def parse_coordinates(coord: tuple) -> tuple[str, str]:
     """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
 
@@ -30,63 +32,20 @@ def parse_coordinates(coord: tuple) -> tuple[str, str]:
     return ra, dec
 
 
-def parse_casa_args(func, module, kwargs, args=None):
-    path = dstools.__path__[0]
-    path = f"{path}/cli/{module}"
+def prompt(msg, bypass=False, bypass_msg=None, default_response=True):
 
-    if args is not None:
-        args = [f"{kwargs.pop(arg)}" for arg in args]
-        argstr = " ".join(args)
-    else:
-        argstr = ""
+    if bypass:
+        if bypass_msg is not None:
+            logger.warning(bypass_msg)
+        return default_response
 
-    kw_args = []
-    for key, val in kwargs.items():
-        if isinstance(val, bool):
-            boolval = "" if val else "no-"
-            flag = f"--{boolval}{key}"
-        elif val == None or val == "":
-            continue
-        else:
-            flag = f"--{key} {val}"
+    msg = f"{msg} (y/n)\n"
 
-        kw_args.append(flag)
-
-    kwargstr = " ".join(kw_args)
-
-    return path, argstr, kwargstr
-
-
-def colored(msg):
-    return "\033[91m{}\033[0m".format(msg)
-
-
-def prompt(msg):
-    msg = msg[:-1] + " (y/n)?\n"
-
-    resp = input(colored(msg))
+    resp = input(msg)
     if resp not in ["y", "n"]:
-        resp = input(colored(msg))
+        resp = input(msg)
 
     return True if resp == "y" else False
-
-
-def update_param(name, val, dtype):
-    while True:
-        newval = input("Enter new {} (currently {}): ".format(name, val))
-
-        # Accept old value if nothing entered
-        if not newval:
-            break
-
-        # Test for correct input type
-        try:
-            val = dtype(newval)
-            break
-        except ValueError:
-            print("{} must be of type {}".format(name, type(val)))
-
-    return val
 
 
 @dataclass
