@@ -22,10 +22,10 @@ case $reload in
 	mkdir -p $proj_dir/
 	cd $proj_dir
 
-	if [[ $noflag ]]; then
+	if $noflag; then
 	    atlod_options=noauto,xycorr,notsys
 	else
-	    atlod_options=birdie,rfiflag,noauto,xycorr,notsys;
+	    atlod_options=birdie,rfiflag,noauto,xycorr,notsys
 	fi
 
 	# Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
@@ -37,7 +37,7 @@ case $reload in
 	# Optionally shift phasecenter. This is to be used when you have offset the phasecenter
 	# during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
 	# errors. Correction would be to shift by +120 arcsec here.
-	print "Shift phasecenter? (y/n)"
+	prompt "Shift phasecenter?"
 	read fix_phasecenter
 	case $fix_phasecenter in
 
@@ -273,19 +273,19 @@ esac
 
 # Transfer flux scale from primary to secondary
 if [ $pcal != $scal ]; then
-    print "Propagating flux scale to secondary calibrator"
+    print "Propagating flux scale to secondary calibrator."
     gpboot vis=$scal.$freq cal=$pcal.$freq;
 fi
 
 # Transfer gain calibrations to target
-print "Transferring calibration tables to science target"
+print "Transferring calibration tables to science target."
 gpcopy vis=$scal.$freq out=$target.$freq;
 
 # Average gain phase solutions over 2 minutes for better interpolation
-print "Averaging 2 minute calibration samples"
+print "Averaging 2 minute calibration samples."
 gpaver vis=$target.$freq interval=2;
 
-print "Applying calibration to science target"
+print "Applying calibration to science target."
 uvaver vis=$scal.$freq out=$scal.$freq.cal
 uvaver vis=$target.$freq out=$target.$freq.cal
 
@@ -295,6 +295,10 @@ mkdir ../$target_dir 2>/dev/null
 
 fits in=$target.$freq.cal out=$target.$freq.cal.fits op=uvout
 msfile=../$target_dir/$target.$band.ms
-python -c "from casatasks import importuvfits;importuvfits(fitsfile='$target.$freq.cal.fits', vis='$msfile')" 1>/dev/null
 
-print "DONE!"
+python -c "
+from casatools import config;
+config.logfile = '/dev/null';
+from casatasks import importuvfits;
+importuvfits(fitsfile='$target.$freq.cal.fits', vis='$msfile')
+" 1>/dev/null

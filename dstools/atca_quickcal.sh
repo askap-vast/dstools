@@ -180,6 +180,10 @@ mkdir ../$target_dir 2>/dev/null
 
 fits in=$target.$freq.cal out=$target.$freq.cal.fits op=uvout
 msfile=../$target_dir/$target.$band.ms
-python -c "from casatasks import importuvfits;importuvfits(fitsfile='$target.$freq.cal.fits', vis='$msfile')" 1>/dev/null
 
-print "DONE!"
+python -c "
+from casatools import config;
+config.logfile = '/dev/null';
+from casatasks import importuvfits;
+importuvfits(fitsfile='$target.$freq.cal.fits', vis='$msfile')
+" 1>/dev/null

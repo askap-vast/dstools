@@ -57,10 +57,10 @@ function cal_flux {
 function print {
     msg=$1
     msgcolor="\e[38;5;166m"
-    echo -e "$msgcolor$msg \e[39m"
+    echo $msg
 }
 function prompt {
     msg=$1
     promptcolor="\e[38;5;196m"
-    print "$msg $promptcolor(y/n)"
+    print "$msg (y/n)"
 }

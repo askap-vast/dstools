@@ -22,7 +22,7 @@ casatasks = "^6.6.5.31"
 
 [tool.poetry.scripts]
 dstools-setup = "dstools.cli.setup:main"
-dstools-cal = "dstools.cli.cal:main"
+dstools-atca-cal = "dstools.cli.atca_cal:main"
 dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
 dstools-create-model = "dstools.cli.create_model:main"
 dstools-insert-model = "dstools.cli.insert_model:main"
