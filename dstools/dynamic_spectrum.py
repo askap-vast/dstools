@@ -42,10 +42,10 @@ def snr_mask(data, noise, n_sigma):
 
 
 def rebin(o, n, axis):
-    """Create unitary array compression matrix from o -> n length.
+    """Create l1-norm preserving array compression matrix from o -> n length.
 
     if rebinning along row axis we want:
-        - (o // n) + 1 entries in each row that sum to unity,
+        - (o // n) + 1 entries in each row that sum to unity and preserve l1-norm,
         - each column to sum to the compression ratio o / n
         - values distributed along the row in units of o / n until expired
 
@@ -106,6 +106,10 @@ def rebin(o, n, axis):
 
 def rebin2D(array, new_shape):
     """Re-bin along time / frequency axes conserving flux."""
+
+    # Convert from masked array to pure numpy array
+    array[array.mask] = np.nan
+    array = array.data
 
     if new_shape == array.shape:
         array[array == 0 + 0j] = np.nan
@@ -220,8 +224,8 @@ class DynamicSpectrum:
         timebins = len(self.time) / self.tavg
         freqbins = len(self.freq) / self.favg
 
-        self.time_res = (self.tmax - self.tmin) * self.tunit / (timebins-1)
-        self.freq_res = (self.fmax - self.fmin) * u.MHz / (freqbins-1)
+        self.time_res = (self.tmax - self.tmin) * self.tunit / (timebins - 1)
+        self.freq_res = (self.fmax - self.fmin) * u.MHz / (freqbins - 1)
         self.header.update(
             {
                 "time_resolution": f"{self.time_res.to(u.s):.1f}",
@@ -728,7 +732,12 @@ class DynamicSpectrum:
 
         phasemax = 0.5 * self.fold_periods
         tmin, tmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
-        norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
+
+        # Only produce normalisation for products with valid data
+        if not np.isnan(data).all():
+            norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
+        else:
+            norm = None
 
         im = ax.imshow(
             np.transpose(data),
