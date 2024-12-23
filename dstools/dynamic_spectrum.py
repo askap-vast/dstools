@@ -203,6 +203,7 @@ class DynamicSpectrum:
     corr_dumptime: float = 10.1
 
     derotate: bool = False
+    RM: float = None
 
     fold: bool = False
     period: Optional[float] = None
@@ -565,15 +566,15 @@ class DynamicSpectrum:
 
         if self.derotate:
 
-            # Compute RM
-            RM = self.rm_synthesis(I, Q, U)
+            if self.RM is None:
+                self.RM = self.rm_synthesis(I, Q, U)
 
             # Build L from imaginary components
             Li = Q.imag + 1j * U.imag
 
             # Derotate real and imaginary L
-            L = self.derotate_faraday(L, RM)
-            Li = self.derotate_faraday(Li, RM)
+            L = self.derotate_faraday(L)
+            Li = self.derotate_faraday(Li)
 
             # Compute complex Q and U from L
             Q = L.real + 1j * Li.real
@@ -695,11 +696,11 @@ class DynamicSpectrum:
 
         return fig, ax
 
-    def derotate_faraday(self, L, RM):
+    def derotate_faraday(self, L):
         """Correct linear polarisation DS for Faraday rotation."""
 
         lam = (c.c / (self.freq * u.MHz)).to(u.m).value
-        L = L * np.exp(-2j * RM * lam**2)
+        L = L * np.exp(-2j * self.RM * lam**2)
 
         return L
 

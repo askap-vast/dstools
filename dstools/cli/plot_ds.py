@@ -171,7 +171,6 @@ stokes_choices = [
     help="Include polarisation angle in lightcurve plot.",
 )
 @click.option(
-    "-R",
     "--fdf",
     is_flag=True,
     default=False,
@@ -199,11 +198,17 @@ stokes_choices = [
     help="Toggle to enable folding of data. Must also provide period with -T.",
 )
 @click.option(
-    "-E",
+    "-R",
     "--derotate",
     is_flag=True,
     default=False,
     help="Toggle RM de-rotation of Stokes Q/U.",
+)
+@click.option(
+    "--RM",
+    type=float,
+    default=None,
+    help="Rotation measure in units of rad/m^2.",
 )
 @click.option(
     "-T",
@@ -259,6 +264,7 @@ def main(
     spectrum,
     polangle,
     fdf,
+    rm,
     acf,
     fold,
     derotate,
@@ -298,6 +304,7 @@ def main(
         trim=trim,
         calscans=calscans,
         derotate=derotate,
+        RM=rm,
         fold=fold,
         period=period,
         period_offset=period_offset,
