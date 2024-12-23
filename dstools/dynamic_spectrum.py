@@ -13,6 +13,7 @@ import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from astropy.coordinates import Angle, EarthLocation, SkyCoord
 from astropy.time import Time
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from matplotlib.gridspec import GridSpec
@@ -29,6 +30,18 @@ COLORS = {
     "U": "darkorchid",
     "V": "darkorange",
     "L": "cornflowerblue",
+}
+
+LOCATIONS = {
+    "ATCA": EarthLocation(
+        lat=Angle("-30:18:46.385", unit=u.degree),
+        lon=Angle(149.5501388, unit=u.degree),
+        height=236.87 * u.m,
+    ),
+    "GMRT": EarthLocation.of_site("GMRT"),
+    "VLA": EarthLocation.of_site("vla"),
+    "MeerKAT": EarthLocation.of_site("MeerKAT"),
+    "ASKAP": EarthLocation.of_site("ASKAP"),
 }
 
 
@@ -108,8 +121,9 @@ def rebin2D(array, new_shape):
     """Re-bin along time / frequency axes conserving flux."""
 
     # Convert from masked array to pure numpy array
-    array[array.mask] = np.nan
-    array = array.data
+    if isinstance(array, np.ma.MaskedArray):
+        array[array.mask] = np.nan
+        array = array.data
 
     if new_shape == array.shape:
         array[array == 0 + 0j] = np.nan
@@ -202,6 +216,7 @@ class DynamicSpectrum:
     tunit: u.Quantity = u.hour
     corr_dumptime: float = 10.1
 
+    barycentre: bool = True
     derotate: bool = False
     RM: float = None
 
@@ -433,15 +448,24 @@ class DynamicSpectrum:
         else:
             maxtime = 0
 
-        # Identify start time and set observation start to t=0
-        time_start = Time(
-            time[0] * time_scale_factor / 3600 / 24,
+        # Convert times to sensible format
+        t = Time(
+            (time * self.tunit).to(u.day),
             format="mjd",
             scale="utc",
         )
-        time_start.format = "iso"
-        self.header["time_start"] = time_start
-        time -= time[0]
+
+        # Correct to barycentric dynamic time
+        if self.barycentre:
+            t = self._barycentre_times(t)
+
+        # Set start time of observation in appopriate timescale (UTC or TDB)
+        time_start = getattr(t[0], t[0].scale)
+        self.header["time_start"] = time_start.iso
+        self.header["time_scale"] = t[0].scale
+
+        # Set time array relative to time_start
+        time = (t - t[0]).value * u.day.to(self.tunit)
 
         # Make data selection
         XX = slice_array(XX, mintime, maxtime, minchan, maxchan)
@@ -467,6 +491,24 @@ class DynamicSpectrum:
 
         return XX, XY, YX, YY
 
+    def _barycentre_times(self, time: Time):
+
+        ra, dec = self.header.get("phasecentre").split()
+        location = LOCATIONS.get(self.header.get("telescope"))
+
+        target_coord = SkyCoord(
+            ra=ra,
+            dec=dec,
+            unit="hourangle,deg",
+            frame="icrs",
+        )
+        time = Time(time, format="mjd", scale="utc", location=location)
+        ltt_bary = time.light_travel_time(target_coord)
+        time = time.tdb + ltt_bary
+
+        self._timescale = "TDB"
+
+        return time
     def _stack_cal_scans(self, XX, XY, YX, YY):
         """Insert null data representing off-source time."""
 

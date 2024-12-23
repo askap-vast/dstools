@@ -225,6 +225,13 @@ stokes_choices = [
     help="Period phase offset to use when folding data.",
 )
 @click.option(
+    "-B",
+    "--barycentre",
+    is_flag=True,
+    default=True,
+    help="Toggle Barycentric correction.",
+)
+@click.option(
     "-C",
     "--calscans",
     is_flag=True,
@@ -267,6 +274,7 @@ def main(
     rm,
     acf,
     fold,
+    barycentre,
     derotate,
     trim,
     period,
@@ -303,6 +311,7 @@ def main(
         tunit=tunit,
         trim=trim,
         calscans=calscans,
+        barycentre=barycentre,
         derotate=derotate,
         RM=rm,
         fold=fold,
