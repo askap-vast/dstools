@@ -218,7 +218,10 @@ class DynamicSpectrum:
 
     barycentre: bool = True
     derotate: bool = False
+    dedisperse: bool = False
     RM: float = None
+    DM: float = None
+    DM_reffreq: u.Quantity = None
 
     fold: bool = False
     period: Optional[float] = None
@@ -248,6 +251,13 @@ class DynamicSpectrum:
                 "freq_resolution": f"{self.freq_res.to(u.MHz):.1f}",
             }
         )
+
+        # Incoherently dedisperse at DM
+        if self.dedisperse and self.DM is not None:
+            XX = self._dedisperse(XX)
+            XY = self._dedisperse(XY)
+            YX = self._dedisperse(YX)
+            YY = self._dedisperse(YY)
 
         # Fold data to selected period
         if self.fold:
@@ -509,6 +519,32 @@ class DynamicSpectrum:
         self._timescale = "TDB"
 
         return time
+
+    def _dedisperse(self, array):
+        """Incoherently dedisperse using Fourier shift."""
+
+        # Compute time-domain delays
+        a = (c.e.si**2 / (4 * np.pi**2 * c.eps0 * c.m_e * c.c)).to(
+            u.GHz**2 * u.cm**3 * u.pc**-1 * u.ms
+        )
+        DM = self.DM * u.pc / u.cm**3
+        reffreq = self.freq[-1] if self.DM_reffreq is None else self.DM_reffreq
+        tau = (self.freq * u.MHz) ** -2 - (reffreq * u.MHz) ** -2
+        dt = (a * DM * tau / self.time_res).to(1)
+
+        # FFT
+        array = np.fft.fft(array, axis=0)
+        fsamp = np.fft.fftfreq(array.shape[0])
+
+        # Phase shift
+        phasor = np.exp(2j * np.pi * np.outer(fsamp, dt))
+        array = array * phasor.value
+
+        # Invert back to time/freq space
+        array = np.fft.ifft(array, axis=0)
+
+        return array
+
     def _stack_cal_scans(self, XX, XY, YX, YY):
         """Insert null data representing off-source time."""
 

@@ -211,6 +211,19 @@ stokes_choices = [
     help="Rotation measure in units of rad/m^2.",
 )
 @click.option(
+    "-D",
+    "--dedisperse",
+    is_flag=True,
+    default=False,
+    help="Toggle de-dispersion.",
+)
+@click.option(
+    "--DM",
+    type=float,
+    default=None,
+    help="Dispersion measure in units of pc/cm^3.",
+)
+@click.option(
     "-T",
     "--period",
     default=None,
@@ -275,6 +288,8 @@ def main(
     acf,
     fold,
     barycentre,
+    dedisperse,
+    dm,
     derotate,
     trim,
     period,
@@ -313,6 +328,8 @@ def main(
         calscans=calscans,
         barycentre=barycentre,
         derotate=derotate,
+        dedisperse=dedisperse,
+        DM=dm,
         RM=rm,
         fold=fold,
         period=period,
