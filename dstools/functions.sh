@@ -1,66 +1,103 @@
-function flag_extreme {
-    vis=$1
-    amp=$2
-    print "Flagging extreme values (amp > $amp) on $vis"
-    uvflag vis=$vis select="amplitude($amp)" flagval=flag
+function load_data {
+
+    proj_dir=$1
+    data_dir=$2
+    noflag=$3
+    pcode=$4
+    shiftra=$5
+    shiftdec=$6
+
+    mkdir -p $proj_dir/miriad
+    cd $proj_dir/miriad
+    
+    if $noflag; then
+	atlod_options=noauto,xycorr,notsys
+    else
+	atlod_options=birdie,rfiflag,noauto,xycorr,notsys
+    fi
+    
+    # Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
+    # can sit in subdirectories of the data directory without being auto-imported
+    infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',' | head -c -1)
+    
+    atlod in=$infiles out=$pcode.uv ifsel=$ifsel options=$atlod_options
+    
+    # Optionally shift phasecenter. This is to be used when you have offset the phasecenter
+    # during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
+    # errors. Correction would be to shift by +120 arcsec here.
+    if [[ $shiftra -ne 0 ]] || [[ $shiftdec -ne 0 ]]; then
+	uvedit vis=$pcode.uv ra=$shiftra dec=$shiftdec out=$pcode.fix.uv
+	rm -r $pcode.uv
+	mv $pcode.fix.uv $pcode.uv
+    fi
+    
+    uvsplit vis=$pcode.uv
+    
 }
 
-function flag_channels {
+function uvtofits {
+    uv=$1
+    fits=$2
+    fits in=$uv out=$fits op=uvout
+}
+
+function manflag {
     vis=$1
-    band=$2
-    print "Flagging known bad channels in band $band"
-    case $band in
-	[2100]* )
+    x=$2
+    y=$3
+    options=$4
 
-	    uvflag vis=$vis line=channel,60,435,1,1 flagval=flag
-	    uvflag vis=$vis line=channel,5,1300,1,1 flagval=flag
+    blflag vis=$vis device=/xs stokes=xx,yy,xy,yx axis=$x,$y options=$options
 
-	    ;;
-
-	[5500]* )
-	    ;;
-
-	[9000]* )
-	    ;;
-
-	[17000]* )
-	    ;;
-
-    esac
 }
 
 function autoflag {
 
     vis=$1
 
-    print "Running pgflag on $vis"
     pgflag vis=$vis command="<b" device=/xs stokes=xx,yy,xy,yx options=nodisp
     pgflag vis=$vis command="<b" device=/xs stokes=xx,yy,yx,xy options=nodisp
+
 }
 
 function cal_bandpass {
 
     vis=$1
-    print "Running mfcal on $vis"
 
     mfcal vis=$vis interval=$mfinterval,$mfinterval,$bpinterval refant=$refant
+
 }
 
-function cal_flux {
-
+function cal_gains {
     vis=$1
+    options=$2
+    
+    gpcal vis=$vis interval=$gpinterval options=$options minants=3 nfbin=4 spec=$spec refant=$refant;
+} 
 
-    gpcal vis=$vis interval=$gpinterval options=xyvary minants=3 nfbin=16 spec=$spec refant=$refant;
+function copy_cal {
+    pcal=$1
+    scal=$2
 
+    gpcopy vis=$pcal out=$scal
 }
 
-function print {
-    msg=$1
-    msgcolor="\e[38;5;166m"
-    echo $msg
+function bootstrap {
+    scal=$1
+    pcal=$2
+
+    gpboot vis=$scal cal=$pcal;
 }
-function prompt {
-    msg=$1
-    promptcolor="\e[38;5;196m"
-    print "$msg (y/n)"
+
+function average_gains {
+    cal=$1
+
+    gpaver vis=$cal interval=2;
 }
+
+function apply_gains {
+    cal=$1
+
+    uvaver vis=$cal out=$cal.cal
+}
+

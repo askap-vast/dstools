@@ -1,3 +1,4 @@
+import selectors
 import logging
 from typing import Optional
 
@@ -45,5 +46,34 @@ def setupLogger(verbose: bool, filename: Optional[str] = None) -> None:
     stream_handler.setFormatter(colorformatter)
 
     root_logger.addHandler(stream_handler)
+
+    return
+
+
+def parse_stdout_stderr(process, logger):
+
+    sel = selectors.DefaultSelector()
+    sel.register(process.stdout, selectors.EVENT_READ)
+    sel.register(process.stderr, selectors.EVENT_READ)
+
+    debug_lines = [
+        "### Warning:  Using post-Aug94 ATCA flux scale for 1934-638",
+        "### Warning:  Correlations flagged or edge-rejected:",
+    ]
+
+    lines_to_parse = True
+    while lines_to_parse:
+        for key, val in sel.select():
+            line = key.fileobj.readline()
+            if not line:
+                lines_to_parse = False
+                break
+
+            line = line.decode().rstrip()
+            debug_line = any(l in line for l in debug_lines)
+            if debug_line or key.fileobj is process.stdout:
+                logger.debug(line)
+            else:
+                logger.warning(line.replace("### Warning:  ", ""))
 
     return
