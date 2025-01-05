@@ -1,10 +1,11 @@
-import click
 import logging
-from pathlib import Path
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
+import click
 from dstools.logger import setupLogger
-from dstools.miriad import MiriadWrapper, CABBContinuumPipeline
+from dstools.miriad import CABBContinuumPipeline, MiriadWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,20 @@ BANDS = {
     default="0.1",
     type=str,
     help="Time interval to solve for antenna gains in gain calibration.",
+)
+@click.option(
+    "-f",
+    "--nfbin",
+    default="4",
+    type=str,
+    help="Number of frequency subbands in which to solve for gains/leakage.",
+)
+@click.option(
+    "-n",
+    "--num-flag-rounds",
+    default=1,
+    type=int,
+    help="Number of rounds in each autoflagging / calibration loop.",
 )
 @click.option(
     "-r",
@@ -99,6 +114,13 @@ BANDS = {
     help="Path to store calibrated MeasurementSet.",
 )
 @click.option(
+    "-S",
+    "--skip-pipeline",
+    is_flag=True,
+    default=False,
+    help="Skip execution of flagging/calibration pipeline.",
+)
+@click.option(
     "-k",
     "--keep-intermediate",
     is_flag=True,
@@ -120,34 +142,35 @@ def main(
     mfinterval,
     bpinterval,
     gpinterval,
+    nfbin,
+    num_flag_rounds,
     refant,
     shiftra,
     shiftdec,
     noflag,
     interactive,
     out_dir,
+    skip_pipeline,
     keep_intermediate,
     verbose,
 ):
 
     setupLogger(verbose=verbose)
+    os.system(f"mkdir -p {out_dir}")
+
 
     miriad = MiriadWrapper(
         data_dir=Path(data_dir),
         band=BANDS.get(band),
         project_code=project_code,
         out_dir=out_dir,
-        primary_cal=primary_cal,
-        leakage_cal=leakage_cal,
-        gain_cal=gain_cal,
-        target=target,
         strong_pol=strong_pol,
         mfinterval=mfinterval,
         bpinterval=bpinterval,
         gpinterval=gpinterval,
+        nfbin=nfbin,
         refant=refant,
         noflag=noflag,
-        keep_intermediate=keep_intermediate,
         verbose=verbose,
     )
 
@@ -155,9 +178,24 @@ def main(
         miriad=miriad,
         shiftra=shiftra,
         shiftdec=shiftdec,
+        num_flag_rounds=num_flag_rounds,
         interactive=interactive,
     )
-    pipeline.run()
+
+    try:
+        pipeline.miriad.set_targets(
+            primary_cal=primary_cal,
+            leakage_cal=leakage_cal,
+            gain_cal=gain_cal,
+            target=target,
+        )
+    except ValueError as e:
+        logger.error(e)
+        exit(1)
+
+    if not skip_pipeline:
+        pipeline.run()
+
 
     if not keep_intermediate:
         miriad.cleanup()

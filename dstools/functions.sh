@@ -26,6 +26,7 @@ function load_data {
     # during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
     # errors. Correction would be to shift by +120 arcsec here.
     if [[ $shiftra -ne 0 ]] || [[ $shiftdec -ne 0 ]]; then
+	echo "Shifting phasecentre by RA=$shiftra Dec=$shiftdec"
 	uvedit vis=$pcode.uv ra=$shiftra dec=$shiftdec out=$pcode.fix.uv
 	rm -r $pcode.uv
 	mv $pcode.fix.uv $pcode.uv
@@ -36,12 +37,16 @@ function load_data {
 }
 
 function uvtofits {
+
     uv=$1
     fits=$2
+
     fits in=$uv out=$fits op=uvout
+
 }
 
 function manflag {
+
     vis=$1
     x=$2
     y=$3
@@ -60,22 +65,39 @@ function autoflag {
 
 }
 
+function flag_timerange {
+
+    vis=$1
+    start_time=$2
+    end_time=$3
+
+    uvflag vis=$vis select="time($start_time,$end_time)" flagval=flag
+
+}
+
 function cal_bandpass {
 
     vis=$1
+    interpolate=$2
 
-    mfcal vis=$vis interval=$mfinterval,$mfinterval,$bpinterval refant=$refant
+    if $interpolate; then
+	mfcal vis=$vis interval=$mfinterval,$mfinterval,$bpinterval options=interpolate refant=$refant;
+    else
+	mfcal vis=$vis interval=$mfinterval,$mfinterval,$bpinterval refant=$refant;
+    fi
 
 }
 
 function cal_gains {
+
     vis=$1
     options=$2
-    
-    gpcal vis=$vis interval=$gpinterval options=$options minants=3 nfbin=4 spec=$spec refant=$refant;
+
+    gpcal vis=$vis interval=$gpinterval options=$options minants=3 nfbin=$nfbin spec=$spec refant=$refant;
 } 
 
 function copy_cal {
+
     pcal=$1
     scal=$2
 
@@ -83,6 +105,7 @@ function copy_cal {
 }
 
 function bootstrap {
+
     scal=$1
     pcal=$2
 
@@ -90,14 +113,18 @@ function bootstrap {
 }
 
 function average_gains {
+
     cal=$1
 
     gpaver vis=$cal interval=2;
+
 }
 
 function apply_gains {
+
     cal=$1
 
     uvaver vis=$cal out=$cal.cal
+
 }
 
