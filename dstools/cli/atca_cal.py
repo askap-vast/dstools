@@ -128,6 +128,13 @@ BANDS = {
     help="Store processing logs.",
 )
 @click.option(
+    "-d",
+    "--diagnostics",
+    is_flag=True,
+    default=False,
+    help="Generate diagnostic plots.",
+)
+@click.option(
     "-k",
     "--keep-intermediate",
     is_flag=True,
@@ -159,6 +166,7 @@ def main(
     out_dir,
     skip_pipeline,
     savelogs,
+    diagnostics,
     keep_intermediate,
     verbose,
 ):
@@ -205,6 +213,8 @@ def main(
     if not skip_pipeline:
         pipeline.run()
 
+    if diagnostics:
+        pipeline.make_diagnostics()
 
     if not keep_intermediate:
         miriad.cleanup()

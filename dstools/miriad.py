@@ -258,6 +258,129 @@ class CABBContinuumPipeline:
 
         return
 
+    def make_diagnostics(self):
+        logger.info("Generating calibration diagnostic plots")
+
+        cwd = Path(".").absolute()
+        os.system(f"mkdir -p {self.miriad.out_dir}/diagnostics")
+        os.chdir(self.miriad.out_dir)
+
+        pcal = self.miriad.target_paths.get("primary_cal").path.relative_to(
+            self.miriad.out_dir
+        )
+        scal = self.miriad.target_paths.get("gain_cal").path.relative_to(
+            self.miriad.out_dir
+        )
+
+        calibrators = set([pcal, scal])
+
+        # Primary / secondary plots
+        for vis in calibrators:
+            self.miriad.run_command(
+                f"uvfmeas vis={vis} \
+                stokes=i \
+                device=diagnostics/{vis.name}_spectrum.png/PNG"
+            )
+            self.miriad.run_command(
+                f"uvplt vis={vis} \
+                stokes=i  \
+                axis=re,im \
+                options=nofqav,nobase \
+                device=diagnostics/{vis.name}_real_imag.png/PNG"
+            )
+            self.miriad.run_command(
+                f"uvplt vis={vis} \
+                stokes=i \
+                axis=freq,phase \
+                nxy=4 \
+                options=nofqav \
+                device=diagnostics/{vis.name}_phase_spectrum.png/PNG"
+            )
+            self.miriad.run_command(
+                f"gpplt vis={vis} \
+                options=gains \
+                yaxis=amp,phase \
+                log=diagnostics/{vis.name}_gains.txt"
+            )
+            self.miriad.run_command(
+                f"gpplt vis={vis} \
+                options=polarization \
+                yaxis=amp,phase \
+                log=diagnostics/{vis.name}_leakages.txt"
+            )
+
+        # Primary plots
+        self.miriad.run_command(
+            f"gpplt vis={pcal} \
+            options=dots,bandpass \
+            log=diagnostics/{vis.name}_bandpass.txt \
+            device=diagnostics/{pcal.name}_bandpass.png/PNG"
+        )
+
+        # Secondary plots
+        self.miriad.run_command(
+            f"uvplt vis={scal} \
+            stokes=i \
+            axis=time,amp \
+            options=nofqav,nobase \
+            device=diagnostics/{scal.name}_amp_time.png/PNG"
+        )
+        self.miriad.run_command(
+            f"uvplt vis={scal} \
+            stokes=xx,yy \
+            axis=time,phase \
+            options=nofqav,nobase \
+            device=diagnostics/{scal.name}_phase_time.png/PNG"
+        )
+        self.miriad.run_command(
+            f"uvplt vis={scal} \
+            stokes=i \
+            axis=uc,vc \
+            options=nofqav,nobase \
+            device=diagnostics/{scal.name}_uv_coverage.png/PNG"
+        )
+        self.miriad.run_command(
+            f"uvplt vis={scal} \
+            stokes=i \
+            axis=time,parang \
+            options=nofqav,nobase \
+            device=diagnostics/{scal.name}_parang_coverage.png/PNG"
+        )
+        self.miriad.run_command(
+            f"gpplt vis={scal} \
+            options=dots,wrap \
+            yaxis=phase \
+            yrange=-180,180 \
+            device=diagnostics/phase_solutions.png/PNG"
+        )
+        self.miriad.run_command(
+            f"gpplt vis={scal} \
+            options=dots,xygains,wrap \
+            yaxis=phase \
+            yrange=-10,10 \
+            device=diagnostics/xy-phase_solutions.png/PNG"
+        )
+
+        # Rename bandpass plots for XX and YY polarisations
+        self.miriad.run_command(
+            f"mv \
+            diagnostics/{pcal.name}_bandpass.png \
+            diagnostics/{pcal.name}_bandpass_xx.png"
+        )
+        self.miriad.run_command(
+            f"mv \
+            diagnostics/{pcal.name}_bandpass.png_2 \
+            diagnostics/{pcal.name}_bandpass_yy.png"
+        )
+
+        # Remove all sub-band phase/xy-phase solution plots
+        for plot in glob.glob(f"diagnostics/*png_*"):
+            self.miriad.run_command(f"rm {plot}")
+
+        os.chdir(cwd)
+
+        return
+
     def run(self):
 
         primary_cal = self.miriad.target_paths.get("primary_cal").path
