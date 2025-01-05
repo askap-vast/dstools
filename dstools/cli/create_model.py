@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import click
-from dstools.imaging import wsclean_image
+from dstools.imaging import WSClean
 from dstools.logger import setupLogger
 from dstools.utils import BANDS, CONFIGS, Array, parse_coordinates
 
@@ -59,14 +59,20 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-f",
-    "--clean_channels",
+    "--channels-out",
+    default=8,
+    help="Number of sub-band images to produce.",
+)
+@click.option(
+    "-d",
+    "--deconvolution-channels",
     default=8,
     help="Number of sub-bands over which to run deconvolution.",
 )
 @click.option(
     "-s",
     "--subimages",
-    default=9,
+    default=1,
     help="Number of subimage planes in each axis over which to run parallel deconvolution.",
 )
 @click.option(
@@ -74,6 +80,12 @@ logger = logging.getLogger(__name__)
     "--nterms",
     default=3,
     help="Number of Taylor terms to use in deconvolution.",
+)
+@click.option(
+    "-u",
+    "--minuvw",
+    default=0,
+    help="Minimum uv distance in meters.",
 )
 @click.option(
     "-m",
@@ -116,18 +128,20 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("data", type=Path)
+@click.argument("ms", type=Path)
 def main(
-    data,
+    ms,
     imsize,
     cell,
     config,
     band,
     iterations,
     gain,
+    minuvw,
     threshold,
     mask_threshold,
-    clean_channels,
+    channels_out,
+    deconvolution_channels,
     subimages,
     nterms,
     robust,
@@ -142,7 +156,7 @@ def main(
     # Set up and create working directories
     # --------------------------------------
 
-    proj_dir = data.parent.absolute()
+    proj_dir = ms.parent.absolute()
 
     field_model_path = proj_dir / out_directory
     field_model_path.mkdir(exist_ok=True)
@@ -161,7 +175,7 @@ def main(
 
     if phasecentre:
         ra, dec = parse_coordinates(phasecentre)
-        phasecentre = f"-shift {ra} {dec} \ "
+        phasecentre = f"-shift {ra} {dec}"
     else:
         phasecentre = ""
 
@@ -169,17 +183,19 @@ def main(
     # -----------------
 
     # Move into working directory to store imaging products
-    data = data.absolute()
+    ms = ms.absolute()
     os.chdir(field_model_path)
 
-    wsclean_image(
-        data,
+    wsc = WSClean(
+        ms=ms,
         name=name,
         imsize=imsize,
         cellsize=cellsize,
         nterms=nterms,
+        minuvw=minuvw,
         iterations=iterations,
-        clean_channels=clean_channels,
+        channels_out=channels_out,
+        deconvolution_channels=deconvolution_channels,
         robust=robust,
         gain=gain,
         threshold=threshold,
@@ -188,6 +204,8 @@ def main(
         subimage_size=subimage_size,
         verbose=verbose,
     )
+
+    wsc.run()
 
     # Return to start directory
     os.chdir(proj_dir)

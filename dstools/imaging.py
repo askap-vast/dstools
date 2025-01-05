@@ -59,7 +59,6 @@ class CASAModel(Model):
     def __post_init__(self):
         super().__post_init__()
 
-        # self.image = self.image[0]
         self.name = str(self.image).replace(".tt0.fits", "")
 
         self.nterms = len(self.model_images)
@@ -169,13 +168,12 @@ class WSCleanModel(Model):
     def __post_init__(self):
         super().__post_init__()
 
-        # self.image = self.image[0]
         self.name = str(self.image).replace("-MFS-I-image.fits", "")
 
         chan_images = [
             im for im in self.model_images if "MFS" not in str(im) and "-I-" in str(im)
         ]
-        self.clean_channels = len(chan_images)
+        self.channels_out = len(chan_images)
 
     def _load(self):
         self.model = [p for p in self.model_dir.glob("*-MFS-I-model.fits")][0]
@@ -206,9 +204,9 @@ class WSCleanModel(Model):
             "-multiscale",
             "-pol iquv",
             f"-name {self.name}",
-            f"-channels-out {self.clean_channels}",
+            f"-channels-out {self.channels_out}",
             "-predict",
-            "-quiet",
+            # "-quiet",
             f"{ms}",
         ]
         wsclean_cmd = " ".join(wsclean_cmd)
@@ -235,55 +233,67 @@ class WSCleanModel(Model):
         return
 
 
-def wsclean_image(
-    ms: str,
-    name: str,
-    imsize: int,
-    cellsize: str,
-    nterms: int,
-    iterations: int = 30000,
-    clean_channels: int = 8,
-    robust: float = 0.5,
-    gain: float = 0.8,
-    threshold: float = 3,
-    mask_threshold: float = 5,
-    phasecentre: str = "",
-    subimage_size: int = 1,
-    verbose: bool = False,
-):
+@dataclass
+class WSClean:
 
-    if not verbose:
-        logger.info(
-            f"Imaging {ms.name} with {imsize}x{imsize} pixels, {cellsize} cellsize, and {nterms} Taylor terms."
+    ms: str
+    name: str
+    imsize: int
+    cellsize: str
+    nterms: int
+    minuvw: float = 0
+    iterations: int = 30000
+    channels_out: int = 8
+    deconvolution_channels: int = 8
+    robust: float = 0.5
+    gain: float = 0.8
+    threshold: float = 3
+    mask_threshold: float = 5
+    phasecentre: str = ""
+    subimage_size: int = 1
+    intervals: int = 1
+    verbose: bool = False
+
+    def run(self):
+
+        logger.debug(
+            f"Imaging {self.ms} with {self.imsize}x{self.imsize} pixels, {self.cellsize} cellsize, and {self.nterms} Taylor terms."
         )
 
-    verbose = "-quiet" if not verbose else ""
+        verbose = "-quiet" if not self.verbose else ""
+        intervals = f"-intervals-out {self.intervals}" if self.intervals > 1 else ""
 
-    # Run WSclean
-    wsclean_cmd = [
-        "wsclean",
-        f"--size {imsize} {imsize}",
-        f"-scale {cellsize}",
-        "-multiscale",
-        f"-niter {iterations}",
-        f"-mgain {gain}",
-        f"-auto-threshold {threshold}",
-        f"-auto-mask {mask_threshold}",
-        "-pol iquv",
-        f"-join-channels -channels-out {clean_channels}",
-        f"-weight briggs {robust}",
-        f"-fit-spectral-pol {nterms}",
-        f"-deconvolution-channels {clean_channels}",
-        f"-parallel-deconvolution {subimage_size} ",
-        phasecentre,
-        f"-name {name}",
-        verbose,
-        f"{ms}",
-    ]
-    wsclean_cmd = " ".join(wsclean_cmd)
-    os.system(wsclean_cmd)
+        if self.channels_out == 1:
+            chan_str = ""
+        else:
+            chan_str = f"-join-channels -channels-out {self.channels_out} -deconvolution-channels {self.deconvolution_channels}"
 
-    pass
+        # Run WSclean
+        wsclean_cmd = [
+            "wsclean",
+            f"--size {self.imsize} {self.imsize}",
+            f"-scale {self.cellsize}",
+            "-multiscale",
+            f"-niter {self.iterations}",
+            f"-mgain {self.gain}",
+            f"-auto-threshold {self.threshold}",
+            f"-auto-mask {self.mask_threshold}",
+            "-pol iquv",
+            chan_str,
+            f"-minuvw-m {self.minuvw}",
+            f"-weight briggs {self.robust}",
+            f"-fit-spectral-pol {self.nterms}",
+            f"-parallel-deconvolution {self.subimage_size} ",
+            intervals,
+            self.phasecentre,
+            f"-name {self.name}",
+            verbose,
+            f"{self.ms}",
+        ]
+        wsclean_cmd = " ".join(wsclean_cmd)
+        os.system(wsclean_cmd)
+
+        return
 
 
 def plot_gain_solutions(caltable: str, calmode: str) -> None:
@@ -406,21 +416,22 @@ def run_selfcal(
     if interactive:
         plt.show(block=False)
 
-    # Confirm solution is good before applying, else trial another solution
+    # Confirm solution is good before applying
     cal_good = prompt(
         msg="Is selfcal a good solution?",
         bypass=not interactive,
         default_response=True,
     )
 
-    if cal_good:
-        applycal(
-            vis=ms,
-            gaintable=[cal_table],
-            interp="linear",
-        )
-    else:
+    if not cal_good:
         os.system(f"rm -r {cal_table}")
+        return
+
+    applycal(
+        vis=ms,
+        gaintable=[cal_table],
+        interp="linear",
+    )
 
     if split_data:
         split(
