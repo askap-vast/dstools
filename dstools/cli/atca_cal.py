@@ -121,6 +121,13 @@ BANDS = {
     help="Skip execution of flagging/calibration pipeline.",
 )
 @click.option(
+    "-L",
+    "--savelogs",
+    is_flag=True,
+    default=False,
+    help="Store processing logs.",
+)
+@click.option(
     "-k",
     "--keep-intermediate",
     is_flag=True,
@@ -151,13 +158,15 @@ def main(
     interactive,
     out_dir,
     skip_pipeline,
+    savelogs,
     keep_intermediate,
     verbose,
 ):
 
-    setupLogger(verbose=verbose)
     os.system(f"mkdir -p {out_dir}")
 
+    logfile = out_dir / "atca-cal.log" if savelogs else None
+    setupLogger(verbose=verbose, filename=logfile)
 
     miriad = MiriadWrapper(
         data_dir=Path(data_dir),

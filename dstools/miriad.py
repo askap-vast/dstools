@@ -61,7 +61,7 @@ class MiriadWrapper:
         for k, v in self.opts.items():
             logger.debug(f"{k}={v}")
 
-    def run_command(self, command, args=None):
+    def run_command(self, command, args=None, print_stdout=False):
         if args is not None:
             args = " ".join([f"{arg}" for arg in args])
         else:
@@ -76,7 +76,7 @@ class MiriadWrapper:
             shell=True,
         )
 
-        parse_stdout_stderr(p, logger)
+        parse_stdout_stderr(p, logger, print_stdout)
 
         return
 
@@ -158,6 +158,7 @@ class MiriadWrapper:
         self.run_command(
             "manflag",
             args=[vis, x, y, options],
+            print_stdout=True,
         )
 
     def autoflag(self, vis):
