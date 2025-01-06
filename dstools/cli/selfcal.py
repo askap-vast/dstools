@@ -43,8 +43,15 @@ logger = logging.getLogger(__name__)
     default=True,
     help="Run interactively to select solution in",
 )
+@click.option(
+    "-n",
+    "--nspws",
+    default=1,
+    type=int,
+    help="Number of spectral windows to derive indepdendent gain solutions within.",
+)
 @click.argument("ms", type=Path)
-def main(ms, calmode, interval, combine_pols, split_data, interactive):
+def main(ms, calmode, interval, combine_pols, split_data, interactive, nspws):
 
     setupLogger(verbose=False)
 
@@ -57,6 +64,7 @@ def main(ms, calmode, interval, combine_pols, split_data, interactive):
             interval=interval,
             split_data=split_data,
             interactive=interactive,
+            nspws=nspws,
         )
     except ValueError as exc:
         logger.error(exc)
