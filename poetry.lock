@@ -914,6 +914,25 @@ files = [
 ]
 
 [[package]]
+name = "mpl-point-clicker"
+version = "0.4.1"
+description = ""
+optional = false
+python-versions = "*"
+files = [
+    {file = "mpl_point_clicker-0.4.1-py3-none-any.whl", hash = "sha256:13c43bf4ae50c94cea2999f4e3d4a17a222702aa27e9f7264847e0b0146d3e6c"},
+    {file = "mpl_point_clicker-0.4.1.tar.gz", hash = "sha256:61c65491968a28c2197e181848d5a4ec99281901b7ca73b6a573d91cebb3eb52"},
+]
+
+[package.dependencies]
+matplotlib = "*"
+numpy = "*"
+
+[package.extras]
+doc = ["autoapi", "furo", "numpydoc", "sphinx", "sphinx-autobuild", "sphinx-copybutton", "sphinx-gallery (>=0.8.2)"]
+test = ["black", "mpl-playback", "pytest", "pytest-mpl"]
+
+[[package]]
 name = "mypy"
 version = "1.13.0"
 description = "Optional static typing for Python"
@@ -1082,7 +1101,6 @@ files = [
 numpy = [
     {version = ">=1.22.4,<2", markers = "python_version < \"3.11\""},
     {version = ">=1.23.2,<2", markers = "python_version == \"3.11\""},
-    {version = ">=1.26.0,<2", markers = "python_version >= \"3.12\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -1680,5 +1698,5 @@ type = ["pytest-mypy"]
 
 [metadata]
 lock-version = "2.0"
-python-versions = ">=3.10,<3.13"
-content-hash = "16af85f5dcabd7bdd29162f7de6aea955d585124a087b18e5f153d9d68c65e88"
+python-versions = ">=3.10,<3.12"
+content-hash = "df0d26e8c1dff1bb6f6ab749ba70aa01375946d4c96d80c647ca861c9be9f188"

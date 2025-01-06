@@ -21,6 +21,7 @@ colorlog = "^6.8.2"
 casatasks = "^6.6.5.31"
 dask = "^2024.11.2"
 xarray = "^2024.11.0"
+mpl-point-clicker = "^0.4.1"
 
 [tool.poetry.scripts]
 dstools-setup = "dstools.cli.setup:main"
