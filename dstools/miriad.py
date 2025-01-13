@@ -476,6 +476,7 @@ class CABBContinuumPipeline:
         self.miriad.uvaver(target)
 
         self.miriad.generate_ms(f"{target}.cal")
+        self.miriad.generate_ms(f"{gain_cal}.cal")
         self.miriad.run_command(
             f"mv {target}.cal.ms {self.miriad.out_dir}/{target.name}.ms"
         )
