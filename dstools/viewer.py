@@ -7,33 +7,13 @@ import numpy as np
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS, FITSFixedWarning
+from dstools.imaging import Image
 from matplotlib.path import Path as Polypath
 from matplotlib.widgets import Button, RangeSlider
 from mpl_point_clicker import clicker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
-
-
-@dataclass
-class Image:
-    name: str
-    path: str
-
-    def __post_init__(self):
-        self._load()
-
-    def _load(self):
-
-        with fits.open(self.path) as hdul:
-            self.header, data = hdul[0].header, hdul[0].data
-            self.data = data[0, 0, :, :] if data.ndim == 4 else data
-            self.wcs = WCS(self.header, naxis=2)
-
-        if self.name == "model":
-            self.norm = ImageNormalize(vmin=0, vmax=self.data.max() / 2)
-        else:
-            self.norm = ImageNormalize(self.data, interval=ZScaleInterval(contrast=0.2))
 
 
 @dataclass

@@ -12,13 +12,36 @@ from casaconfig import config
 
 config.logfile = "/dev/null"
 
+from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
 from casatasks import exportfits, imsubimage, tclean
 from casatools import table
 from dstools.logger import parse_stdout_stderr
+from dstools.mask import minimum_absolute_clip
 from numpy.typing import ArrayLike
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Image:
+    name: str
+    path: str
+
+    def __post_init__(self):
+        self._load()
+
+    def _load(self):
+
+        with fits.open(self.path) as hdul:
+            self.header, data = hdul[0].header, hdul[0].data
+            self.data = data[0, 0, :, :] if data.ndim == 4 else data
+            self.wcs = WCS(self.header, naxis=2)
+
+        if self.name == "model":
+            self.norm = ImageNormalize(vmin=0, vmax=1e-9)
+        else:
+            self.norm = ImageNormalize(self.data, interval=ZScaleInterval(contrast=0.2))
 
 
 @dataclass
@@ -243,6 +266,7 @@ class WSClean:
 
     # masking / thresholds
     fits_mask: Path | None = None
+    galvin_clip_mask: Path | None = None
     mask_threshold: float = 5
     auto_threshold: float = 3
     local_rms_window: int = 25
@@ -278,7 +302,6 @@ class WSClean:
 
     def __post_init__(self):
         self.optional_args = (
-            "fits_mask",
             "parallel_deconvolution",
             "data_column",
             "minuvw_m",
@@ -335,6 +358,37 @@ class WSClean:
     def _verbosity(self):
         return "" if self.verbose else "-quiet"
 
+    def update_model_mask(self, model_mask: Path) -> None:
+        """Update FITS clean mask with supplied model image."""
+
+        clip_mask = model_mask.name.replace("model", "image")
+
+        self.fits_mask = model_mask
+        self.galvin_clip_mask = model_mask.with_name(clip_mask)
+
+        return
+
+    def _get_fits_mask(self):
+
+        if self.fits_mask is None:
+            return ""
+
+        fits_mask = self.fits_mask.absolute()
+
+        if self.galvin_clip_mask is not None:
+
+            mask_image = minimum_absolute_clip(
+                Image("mask", self.galvin_clip_mask.absolute()).data,
+                box_size=100,
+            )
+
+            with fits.open(fits_mask, mode="update") as hdul:
+                data = hdul[0].data
+                data[0, 0, ~mask_image] = 0
+                hdul[0].data = data
+
+        return f"-fits-mask {fits_mask}"
+
     def _format_optional_argument(self, arg: str):
 
         val = getattr(self, arg)
@@ -380,6 +434,10 @@ class WSClean:
         for arg in self.optional_args:
             argstr = self._format_optional_argument(arg)
             wsclean_cmd.append(argstr)
+
+        # Add FITS mask argument
+        fits_mask = self._get_fits_mask()
+        wsclean_cmd.append(fits_mask)
 
         # Add MS positional argument
         ms = Path(ms).absolute()

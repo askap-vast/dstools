@@ -99,6 +99,13 @@ logger = logging.getLogger(__name__)
     help="FITS image to use as deconvolution mask.",
 )
 @click.option(
+    "-G",
+    "--galvin-clip-mask",
+    default=None,
+    type=Path,
+    help="FITS image to use in minimum absolute clip mask.",
+)
+@click.option(
     "--local-rms-window",
     type=int,
     default=25,
@@ -168,6 +175,7 @@ def main(
     minuvw_m,
     minuvw_l,
     fits_mask,
+    galvin_clip_mask,
     threshold,
     mask_threshold,
     local_rms_window,
@@ -200,13 +208,12 @@ def main(
     cellsize = f"{cell}asec"
 
     fits_mask = fits_mask.absolute() if fits_mask else None
+    galvin_clip_mask = galvin_clip_mask.absolute() if galvin_clip_mask else None
 
     # Run WSclean
     # -----------------
 
     wsc = WSClean(
-        ms=ms,
-        name=name,
         imsize=imsize,
         cellsize=cellsize,
         spectral_pol_terms=spectral_pol_terms,
@@ -220,6 +227,7 @@ def main(
         auto_threshold=threshold,
         mask_threshold=mask_threshold,
         fits_mask=fits_mask,
+        galvin_clip_mask=galvin_clip_mask,
         phasecentre=phasecentre,
         parallel_deconvolution=parallel_deconvolution,
         out_dir=out_dir,
@@ -227,7 +235,7 @@ def main(
         verbose=verbose,
     )
 
-    wsc.run()
+    wsc.run(ms=ms, name=name)
 
     return
 

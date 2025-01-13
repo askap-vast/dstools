@@ -174,24 +174,3 @@ def minimum_absolute_clip(
         adaptive_box_step=adaptive_box_step,
         adaptive_skew_delta=adaptive_skew_delta,
     )
-
-
-def create_mask(model_dir: Path, name: str):
-
-    image_path = model_dir / f"{name}-MFS-I-image.fits"
-    model_path = model_dir / f"{name}-MFS-I-model.fits"
-
-    logger.debug(f"Creating clean mask using {model_path}")
-
-    image = Image(name="image", path=image_path.absolute())
-    mask = minimum_absolute_clip(
-        image.data,
-        box_size=100,
-    )
-
-    with fits.open(model_path.absolute(), mode="update") as hdul:
-        data = hdul[0].data
-        data[0, 0, ~mask] = 0
-        hdul[0].data = data
-
-    return model_path.absolute()
