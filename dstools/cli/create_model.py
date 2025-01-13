@@ -47,9 +47,9 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-g",
-    "--gain",
+    "--mgain",
     default=0.8,
-    help="Deconvolution minor cycle loop gain.",
+    help="Deconvolution major cycle loop gain.",
 )
 @click.option(
     "-t",
@@ -77,15 +77,32 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-n",
-    "--nterms",
+    "--spectral-pol-terms",
     default=3,
     help="Number of Taylor terms to use in deconvolution.",
 )
 @click.option(
-    "-u",
-    "--minuvw",
-    default=0,
+    "--minuvw_m",
+    default=None,
     help="Minimum uv distance in meters.",
+)
+@click.option(
+    "--minuvw_l",
+    default=None,
+    help="Minimum uv distance in wavelengths.",
+)
+@click.option(
+    "-M",
+    "--fits-mask",
+    default=None,
+    type=Path,
+    help="FITS image to use as deconvolution mask.",
+)
+@click.option(
+    "--local-rms-window",
+    type=int,
+    default=25,
+    help="Window size in multiples of PSF over which to calculate local RMS.",
 )
 @click.option(
     "-m",
@@ -108,7 +125,6 @@ logger = logging.getLogger(__name__)
     help="Coordinates of imaging phasecentre (provide as separate values, e.g. -p <RA> <DEC>).",
 )
 @click.option(
-    "-M",
     "--name",
     type=str,
     default="wsclean",
@@ -116,10 +132,22 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-o",
-    "--out_directory",
+    "--out-dir",
     type=Path,
-    default="wsclean_model",
+    default=Path("wsclean_model"),
     help="Directory path in which to store WSclean image and model products.",
+)
+@click.option(
+    "--temp-dir",
+    type=Path,
+    help="Directory path in which to store temporary WSclean products.",
+)
+@click.option(
+    "-L",
+    "--savelogs",
+    is_flag=True,
+    default=False,
+    help="Store processing logs.",
 )
 @click.option(
     "-v",
@@ -136,30 +164,28 @@ def main(
     config,
     band,
     iterations,
-    gain,
-    minuvw,
+    mgain,
+    minuvw_m,
+    minuvw_l,
+    fits_mask,
     threshold,
     mask_threshold,
+    local_rms_window,
     channels_out,
     deconvolution_channels,
     subimages,
-    nterms,
+    spectral_pol_terms,
     robust,
     phasecentre,
     name,
-    out_directory,
+    temp_dir,
+    out_dir,
+    savelogs,
     verbose,
 ):
 
-    setupLogger(verbose=verbose)
-
-    # Set up and create working directories
-    # --------------------------------------
-
-    proj_dir = ms.parent.absolute()
-
-    field_model_path = proj_dir / out_directory
-    field_model_path.mkdir(exist_ok=True)
+    logfile = out_dir / "rt-peel.log" if savelogs else None
+    setupLogger(verbose=verbose, filename=logfile)
 
     # Set imaging parameters:
     # If cellsize / imsize not specified they will be estimated from array config / observing band
@@ -170,45 +196,38 @@ def main(
     cell = cell if cell is not None else array.cell
     imsize = imsize if imsize is not None else array.imsize
 
-    subimage_size = imsize // subimages
+    parallel_deconvolution = imsize // subimages if subimages > 1 else None
     cellsize = f"{cell}asec"
 
-    if phasecentre:
-        ra, dec = parse_coordinates(phasecentre)
-        phasecentre = f"-shift {ra} {dec}"
-    else:
-        phasecentre = ""
+    fits_mask = fits_mask.absolute() if fits_mask else None
 
     # Run WSclean
     # -----------------
-
-    # Move into working directory to store imaging products
-    ms = ms.absolute()
-    os.chdir(field_model_path)
 
     wsc = WSClean(
         ms=ms,
         name=name,
         imsize=imsize,
         cellsize=cellsize,
-        nterms=nterms,
-        minuvw=minuvw,
+        spectral_pol_terms=spectral_pol_terms,
+        minuvw_m=minuvw_m,
+        minuvw_l=minuvw_l,
         iterations=iterations,
         channels_out=channels_out,
         deconvolution_channels=deconvolution_channels,
         robust=robust,
-        gain=gain,
-        threshold=threshold,
+        mgain=mgain,
+        auto_threshold=threshold,
         mask_threshold=mask_threshold,
+        fits_mask=fits_mask,
         phasecentre=phasecentre,
-        subimage_size=subimage_size,
+        parallel_deconvolution=parallel_deconvolution,
+        out_dir=out_dir,
+        temp_dir=temp_dir,
         verbose=verbose,
     )
 
     wsc.run()
-
-    # Return to start directory
-    os.chdir(proj_dir)
 
     return
 

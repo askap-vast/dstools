@@ -54,11 +54,13 @@ def setupLogger(verbose: bool, filename: Optional[str] = None) -> None:
 
 
 def parse_stdout_stderr(process, logger, print_stdout: bool = False):
+    """Parse STDOUT and STDERR from a subprocess and redirect to logger."""
 
     sel = selectors.DefaultSelector()
     sel.register(process.stdout, selectors.EVENT_READ)
     sel.register(process.stderr, selectors.EVENT_READ)
 
+    # Filter uninteresting warnings and set to DEBUG level
     debug_lines = [
         "### Warning:  Using post-Aug94 ATCA flux scale for 1934-638",
         "### Warning:  Correlations flagged or edge-rejected:",

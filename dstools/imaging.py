@@ -1,7 +1,7 @@
 import glob
 import logging
 import os
-import re
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,17 +12,10 @@ from casaconfig import config
 
 config.logfile = "/dev/null"
 
-import dask.array as da
-import matplotlib.pyplot as plt
-import pandas as pd
-import xarray as xr
-from astropy.time import Time
 from astropy.wcs import WCS
-from casatasks import (applycal, cvel, exportfits, flagdata, gaincal,
-                       imsubimage, mstransform, split, tclean)
+from casatasks import exportfits, imsubimage, tclean
 from casatools import table
-from dstools.utils import prompt
-from matplotlib.gridspec import GridSpec
+from dstools.logger import parse_stdout_stderr
 from numpy.typing import ArrayLike
 
 logger = logging.getLogger(__name__)
@@ -237,290 +230,193 @@ class WSCleanModel(Model):
 @dataclass
 class WSClean:
 
-    ms: str
-    name: str
     imsize: int
     cellsize: str
-    nterms: int
-    minuvw: float = 0
+
+    # deconvolution
     iterations: int = 30000
+    major_cycles: int = 20
+    mgain: float = 0.85
     channels_out: int = 8
     deconvolution_channels: int = 8
-    robust: float = 0.5
-    gain: float = 0.8
-    threshold: float = 3
+    spectral_pol_terms: int = 3
+
+    # masking / thresholds
+    fits_mask: Path | None = None
     mask_threshold: float = 5
-    phasecentre: str = ""
-    subimage_size: int = 1
-    intervals: int = 1
+    auto_threshold: float = 3
+    local_rms_window: int = 25
+
+    # weight / gridding
+    robust: float = 0.5
+    parallel_deconvolution: int | None = None
+    phasecentre: tuple[str] | None = None
+
+    # data selection
+    pol: str = "iquv"
+    data_column: str | None = None
+    minuvw_m: float | None = None
+    minuvw_l: float | None = None
+    intervals_out: int = 1
+
+    # multiscale
+    multiscale: bool = False
+    multiscale_scale_bias: float = 0.7
+    multiscale_max_scales: int = 8
+
+    # I/O
+    reuse_psf: Path | None = None
+    reuse_dirty: Path | None = None
+    no_dirty: bool = False
+    save_source_list: bool = False
+    save_reordered: bool = False
+    reuse_reordered: bool = False
+    temp_dir: Path | None = None
+    out_dir: Path = Path(".")
+
     verbose: bool = False
 
-    def run(self):
-
-        logger.debug(
-            f"Imaging {self.ms} with {self.imsize}x{self.imsize} pixels, {self.cellsize} cellsize, and {self.nterms} Taylor terms."
+    def __post_init__(self):
+        self.optional_args = (
+            "fits_mask",
+            "parallel_deconvolution",
+            "data_column",
+            "minuvw_m",
+            "minuvw_l",
+            "intervals_out",
+            "reuse_psf",
+            "reuse_dirty",
+            "no_dirty",
+            "save_source_list",
+            "save_reordered",
+            "reuse_reordered",
+            "temp_dir",
         )
 
-        verbose = "-quiet" if not self.verbose else ""
-        intervals = f"-intervals-out {self.intervals}" if self.intervals > 1 else ""
+        if self.temp_dir is None:
+            self.temp_dir = self.out_dir
+        self.temp_dir = Path(self.temp_dir).absolute()
+
+    @property
+    def _multiscale_args(self):
+
+        if self.multiscale is None:
+            return ""
+
+        return (
+            "-multiscale "
+            f"-multiscale-scale-bias {self.multiscale_scale_bias} "
+            f"-multiscale-max-scales {self.multiscale_max_scales}"
+        )
+
+    @property
+    def _phasecentre_args(self):
+
+        if self.phasecentre is None:
+            return ""
+
+        ra, dec = self.phasecentre
+        return f"-shift {ra} {dec}"
+
+    @property
+    def _spectral_args(self):
 
         if self.channels_out == 1:
-            chan_str = ""
-        else:
-            chan_str = f"-join-channels -channels-out {self.channels_out} -deconvolution-channels {self.deconvolution_channels}"
+            return ""
 
-        # Run WSclean
+        return (
+            f"-join-channels "
+            f"-channels-out {self.channels_out} "
+            f"-deconvolution-channels {self.deconvolution_channels} "
+            f"-fit-spectral-pol {self.spectral_pol_terms}"
+        )
+
+    @property
+    def _verbosity(self):
+        return "" if self.verbose else "-quiet"
+
+    def _format_optional_argument(self, arg: str):
+
+        val = getattr(self, arg)
+        if val is None:
+            return ""
+
+        # Convert to WSclean argument format
+        arg = arg.replace("_", "-")
+
+        # Strip boolean flags of value
+        if isinstance(val, bool):
+            return f"-{arg}" if val else ""
+
+        return f"-{arg} {val}"
+
+    def run(self, ms: Path, name: str):
+
+        logger.debug(
+            f"Imaging {ms} with {self.imsize}x{self.imsize} pixels, {self.cellsize} cellsize, and {self.spectral_pol_terms} spectral terms."
+        )
+
+        # Add all essential arguments
         wsclean_cmd = [
             "wsclean",
-            f"--size {self.imsize} {self.imsize}",
+            f"-name {name}",
+            f"-size {self.imsize} {self.imsize}",
             f"-scale {self.cellsize}",
-            "-multiscale",
             f"-niter {self.iterations}",
-            f"-mgain {self.gain}",
-            f"-auto-threshold {self.threshold}",
-            f"-auto-mask {self.mask_threshold}",
-            "-pol iquv",
-            chan_str,
-            f"-minuvw-m {self.minuvw}",
+            f"-nmiter {self.major_cycles}",
+            f"-mgain {self.mgain}",
+            f"-pol {self.pol}",
             f"-weight briggs {self.robust}",
-            f"-fit-spectral-pol {self.nterms}",
-            f"-parallel-deconvolution {self.subimage_size} ",
-            intervals,
-            self.phasecentre,
-            f"-name {self.name}",
-            verbose,
-            f"{self.ms}",
+            f"-auto-threshold {self.auto_threshold}",
+            f"-auto-mask {self.mask_threshold}",
+            f"-local-rms-window {self.local_rms_window}",
+            self._phasecentre_args,
+            self._multiscale_args,
+            self._spectral_args,
+            self._verbosity,
         ]
+
+        # Add provided optional keyword arguments
+        for arg in self.optional_args:
+            argstr = self._format_optional_argument(arg)
+            wsclean_cmd.append(argstr)
+
+        # Add MS positional argument
+        ms = Path(ms).absolute()
+        wsclean_cmd.append(str(ms))
         wsclean_cmd = " ".join(wsclean_cmd)
-        os.system(wsclean_cmd)
+
+        # Create output directory
+        model_path = ms.parent.absolute() / self.out_dir
+        model_path.mkdir(exist_ok=True)
+
+        # Move into working directory to store imaging products
+        cwd = Path(".").absolute()
+        os.chdir(model_path)
+
+        # Run WSclean
+        p = subprocess.Popen(
+            wsclean_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
+
+        parse_stdout_stderr(p, logger, print_stdout=False)
+
+        # Return to start directory
+        os.chdir(cwd)
 
         return
 
 
-def plot_gain_solutions(
-    caltable: str,
-    calmode: str,
-    nspws: int,
-    colorbyant: bool = False,
-) -> None:
-
-    # Read time and gains from calibration table
-    t = table(caltable)
-
-    time = t.getcol("TIME")
-    spw_ids = t.getcol("SPECTRAL_WINDOW_ID")
-    gains = t.getcol("CPARAM")
-
-    npols = gains.shape[0]
-    nants = len(np.unique(t.getcol("ANTENNA1")))
-
-    t.close()
-
-    # Calculate phase / amplitude from complex gain solutions
-    if calmode == "p":
-        gains = xr.apply_ufunc(
-            da.angle,
-            gains,
-            dask="allowed",
-            kwargs=dict(deg=True),
-        )
-    elif calmode == "a":
-        gains = da.absolute(gains)
-    else:
-        raise ValueError("Parameter 'calmode' must be 'p' or 'a'.")
-
-    # Plot solutions against time
-    fig = plt.figure(figsize=(12, 8))
-    gs = GridSpec(2, 3)
-
-    colors = ("k", "r")
-
-    for antaxis in range(nants):
-        row = antaxis // 3
-        col = antaxis % 3
-        ax = fig.add_subplot(gs[row, col])
-
-        for spw in range(nspws):
-
-            t = time[np.where(spw_ids == spw)]
-            time_start = Time(t[0] / 3600 / 24, format="mjd", scale="utc").iso
-            t -= t[0]
-
-            for polaxis in range(npols):
-
-                # Select polarisation and current SPW
-                g = gains[polaxis, 0, np.where(spw_ids == spw)]
-
-                # Select current antenna
-                g = g.reshape(-1, nants)[:, antaxis]
-                t = t.reshape(-1, nants)[:, antaxis]
-
-                # color = None if colorbyant else colors[polaxis]
-
-                ax.scatter(
-                    t / 3600,
-                    g,
-                    # color=color,
-                    s=1,
-                    alpha=0.2,
-                )
-
-                ax.set_xlabel(f"Hours from UTC {time_start}")
-                if calmode == "p":
-                    maxval = np.abs(gains).max()
-                    ax.set_ylabel("Phase [deg]")
-                    ax.set_ylim(-maxval, maxval)
-                else:
-                    maxval = 1 - gains.max()
-                    ax.set_ylabel("Amplitude")
-                    ax.set_ylim(1 - 2 * maxval, 1 + 2 * maxval)
-
-    fig.tight_layout()
-
-    savefile = caltable.replace(".cal", ".cal.png")
-    fig.savefig(savefile, format="png")
-
-    return
-
-
-def run_selfcal(
-    ms: Path,
-    calmode: str,
-    gaintype: str,
-    interval: str,
-    split_data: bool,
-    interactive: bool,
-    nspws: int = 1,
-) -> None:
-    """Perform self-calibration on MS with field model in the MODEL_DATA column."""
-
-    try:
-        unit = "min" if "min" in interval else "s" if "s" in interval else ""
-        int(interval.replace(unit, ""))
-    except ValueError:
-        raise ValueError(
-            "Argument 'interval' must have format <int>[min/s] (e.g. 10s, 1min, 5min)."
-        )
-
-    # TODO: Write check for existence of MODEL_DATA column
-
-    path = ms.parent.absolute()
-
-    # Select reference antenna
-    flagstats = flagdata(vis=str(ms), mode="summary")
-    df = pd.DataFrame(flagstats["antenna"]).T.reset_index(names="antenna")
-    df["percentage"] = (100 * df.flagged / df.total).round(1)
-    logger.info(f"Antenna flagging statistics:\n{df}")
-
-    if interactive:
-        refant = input("Select reference antenna: ")
-        while refant not in flagstats["antenna"]:
-            print(f"Reference antenna must be in: {flagstats['antenna']}")
-            refant = input("Select reference antenna: ")
-    else:
-        refant = df.sort_values("percentage", ascending=True).iloc[0].antenna
-
-    # Produce MS with multiple spectral windows
-    if nspws > 1:
-        mms = ms.with_suffix(".temp.ms")
-
-        logger.info(f"Transforming from 1 to {nspws} spectral windows")
-        mstransform(
-            vis=str(ms),
-            outputvis=str(mms),
-            regridms=True,
-            nspw=nspws,
-            mode="channel",
-            nchan=-1,
-            start=0,
-            width=1,
-            chanbin=1,
-            createmms=False,
-            datacolumn="all",
-            combinespws=False,
-        )
-
-        # Replace original MS with multi-SPW copy
-        os.system(f"rm -r {ms}")
-        os.system(f"mv {mms} {ms}")
-
-    logger.info(f"Solving for gains using antenna {refant} as reference antenna...")
-
-    # Solve for self calibration solutions
-    cal_table = ms.with_suffix(".cal")
-    gaincal(
-        vis=str(ms),
-        caltable=str(cal_table),
-        solint=interval,
-        minblperant=3,
-        refant=refant,
-        calmode=calmode,
-        gaintype=gaintype,
-    )
-
-    # Generate phase and amplitude calibration plots
-    for mode in calmode:
-        plot_gain_solutions(
-            caltable=str(cal_table),
-            calmode=mode,
-            nspws=nspws,
-        )
-
-    if interactive:
-        plt.show(block=False)
-
-    # Confirm solution is good before applying
-    cal_good = prompt(
-        msg="Apply gain solutions?",
-        bypass=not interactive,
-        default_response=True,
-    )
-
-    if not cal_good:
-        os.system(f"rm -r {cal_table}")
-        return
-
-    # Apply calibration solutions
-    applycal(
-        vis=str(ms),
-        gaintable=[str(cal_table)],
-        interp="linear",
-    )
-
-    # Transform back to single SPW MS
-    if nspws > 1:
-        outms = ms.with_suffix(".temp.ms")
-        logger.info(f"Transforming from {nspws} to 1 spectral windows")
-        cvel(
-            vis=str(ms),
-            outputvis=str(outms),
-            mode="channel_b",
-        )
-
-        # Replace multi-SPW ms with combined copy
-        os.system(f"rm -r {ms}")
-        os.system(f"mv {outms} {ms}")
-
-    if split_data:
-        outms = ms.with_suffix(f".{calmode}-selfcal.ms")
-        split(
-            vis=str(ms),
-            outputvis=str(outms),
-            datacolumn="corrected",
-        )
-
-    return
-
-
-def get_pb_correction(primary_beam, ra, dec):
-
-    if primary_beam is None:
-        return 1
+def get_pb_correction(primary_beam: Path, ra: str, dec: str) -> float:
 
     position = SkyCoord(ra=ra, dec=dec, unit=("hourangle", "deg"))
 
-    if ".fits" not in primary_beam:
-        pbfits = primary_beam + ".dstools.fits"
+    # If PB image is CASA format, create a temporary FITS copy
+    if primary_beam.suffix != ".fits":
+        pbfits = primary_beam.with_suffix(".dstools.fits")
         exportfits(
             imagename=primary_beam,
             fitsimage=pbfits,
@@ -532,9 +428,11 @@ def get_pb_correction(primary_beam, ra, dec):
         header, data = hdul[0].header, hdul[0].data
         data = data[0, 0, :, :]
 
-    if "dstools" in primary_beam:
-        os.system(f"rm {pbfits} 2>/dev/null")
+    # Remove temporary FITS file
+    if "dstools" in primary_beam.name:
+        os.system(f"rm {primary_beam} 2>/dev/null")
 
+    # Find pixel coordinates of position in FITS image
     wcs = WCS(header, naxis=2)
     x, y = wcs.wcs_world2pix(position.ra, position.dec, 1)
     x, y = int(x // 1), int(y // 1)

@@ -1,8 +1,14 @@
 import logging
 from dataclasses import dataclass
+from pathlib import Path
+
+from casaconfig import config
+
+config.logfile = "/dev/null"
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+from casatools import table
 
 CONFIGS = ["6km", "750_no6", "750_6", "H168"]
 BANDS = [
@@ -21,7 +27,24 @@ BANDS = [
 logger = logging.getLogger(__name__)
 
 
-def parse_coordinates(coord: tuple) -> tuple[str, str]:
+class DataError(Exception):
+    pass
+
+
+def validate_column(ms: Path, column: str) -> None:
+
+    t = table()
+    t.open(str(ms))
+    columns = t.colnames()
+    t.close()
+
+    if not column in columns:
+        raise DataError(f"{ms.name} does not contain {column} column.")
+
+    return
+
+
+def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:
     """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
 
     ra, dec = coord

@@ -2,8 +2,9 @@ import logging
 from pathlib import Path
 
 import click
-from dstools.imaging import run_selfcal
 from dstools.logger import setupLogger
+from dstools.selfcal import run_selfcal
+from dstools.utils import DataError
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,13 @@ logger = logging.getLogger(__name__)
     type=str,
     default="10s",
     help="Time interval over which to solve for gains in format <int>[min/s].",
+)
+@click.option(
+    "-r",
+    "--refant",
+    type=str,
+    default=None,
+    help="Name of reference antenna.",
 )
 @click.option(
     "-P",
@@ -51,7 +59,7 @@ logger = logging.getLogger(__name__)
     help="Number of spectral windows to derive indepdendent gain solutions within.",
 )
 @click.argument("ms", type=Path)
-def main(ms, calmode, interval, combine_pols, split_data, interactive, nspws):
+def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, nspws):
 
     setupLogger(verbose=False)
 
@@ -62,11 +70,12 @@ def main(ms, calmode, interval, combine_pols, split_data, interactive, nspws):
             calmode=calmode,
             gaintype=gaintype,
             interval=interval,
+            refant=refant,
             split_data=split_data,
             interactive=interactive,
             nspws=nspws,
         )
-    except ValueError as exc:
+    except (ValueError, DataError) as exc:
         logger.error(exc)
         exit(1)
 
