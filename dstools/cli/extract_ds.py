@@ -11,6 +11,7 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.wcs import FITSFixedWarning
 from casaconfig import config
+from numpy.typing import ArrayLike
 
 config.logfile = "/dev/null"
 from importlib.metadata import version
@@ -26,11 +27,11 @@ warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 logger = logging.getLogger(__name__)
 
 
-def average_baselines(ms, minuvdist=0):
+def average_baselines(ms: Path, minuvdist: float = 0) -> Path:
     logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
-    outputvis = ms.replace(".ms", ".dstools-temp.baseavg.ms")
+    outputvis = ms.with_suffix(f".dstools-temp.baseavg{ms.suffix}")
 
-    intab = table(ms, nomodify=False)
+    intab = table(str(ms), nomodify=False)
 
     ant1 = intab.getcol("ANTENNA1")
     ant2 = intab.getcol("ANTENNA2")
@@ -45,8 +46,8 @@ def average_baselines(ms, minuvdist=0):
     timebin = "{}s".format(min(interval) * 1e-2)
 
     mstransform(
-        vis=ms,
-        outputvis=outputvis,
+        vis=str(ms),
+        outputvis=str(outputvis),
         datacolumn="all",
         uvrange=f">{minuvdist}m",
         timeaverage=True,
@@ -64,7 +65,7 @@ def average_baselines(ms, minuvdist=0):
     return outputvis
 
 
-def get_header_properties(ms, datacolumn, pb_scale):
+def get_header_properties(ms: Path, datacolumn: str, pb_scale: float) -> dict:
 
     # Calculate data dimensions
     times, freqs, antennas, nbaselines = get_data_dimensions(ms)
@@ -106,7 +107,7 @@ def get_header_properties(ms, datacolumn, pb_scale):
     return header
 
 
-def get_feed_polarisation(ms):
+def get_feed_polarisation(ms: Path) -> str:
 
     tf = table(f"{ms}/FEED", ack=False)
     feedtype = tf.getcol("POLARIZATION_TYPE")[0, 0]
@@ -127,9 +128,9 @@ def get_feed_polarisation(ms):
     return feedtype
 
 
-def combine_spws(ms):
+def combine_spws(ms: Path) -> Path:
 
-    outvis = ms.replace(".ms", ".dstools-temp.comb.ms")
+    outvis = ms.with_suffix(f".dstools-temp.comb{ms.suffix}")
 
     # Determine number of spectral windows
     tab = table(f"{ms}/SPECTRAL_WINDOW")
@@ -142,19 +143,19 @@ def combine_spws(ms):
     # Combine spectral windows if more than 1
     combine = nspws > 1
     mstransform(
-        vis=ms,
+        vis=str(ms),
         combinespws=combine,
         datacolumn="all",
-        outputvis=outvis,
+        outputvis=str(outvis),
     )
 
     return outvis
 
 
-def get_data_dimensions(ms):
+def get_data_dimensions(ms: Path) -> tuple[ArrayLike, ArrayLike, ArrayLike, int]:
 
     # Get antenna count and time / frequency arrays
-    tab = table(ms, ack=False)
+    tab = table(str(ms), ack=False)
 
     # Throw away autocorrelations
     tab = tab.query("ANTENNA1 != ANTENNA2")
@@ -180,26 +181,31 @@ def get_data_dimensions(ms):
     return times, freqs, antennas, nbaselines
 
 
-def rotate_phasecentre(ms, ra, dec):
+def rotate_phasecentre(ms: Path, ra, dec) -> Path:
     logger.debug(f"Rotating phasecentre to {ra} {dec}")
 
     # Apply phasecentre rotation
-    rotated_ms = ms.replace(".ms", ".dstools-temp.rotated.ms")
+    rotated_ms = ms.with_suffix(f".dstools-temp.rotated{ms.suffix}")
 
     phaseshift(
-        vis=ms,
-        outputvis=rotated_ms,
+        vis=str(ms),
+        outputvis=str(rotated_ms),
         phasecenter=f"J2000 {ra} {dec}",
     )
 
     return rotated_ms
 
 
-def process_baseline(ms, times, baseline, datacolumn):
+def process_baseline(
+    ms: Path,
+    times: ArrayLike,
+    baseline: tuple[str, str],
+    datacolumn: str,
+) -> dict:
 
     i, (ant1, ant2) = baseline
 
-    tab = table(ms, ack=False)
+    tab = table(str(ms), ack=False)
     bl_tab = tab.query(f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})")
 
     # Identify missing integrations on this baseline
@@ -263,7 +269,7 @@ def process_baseline(ms, times, baseline, datacolumn):
     "--baseline-average",
     is_flag=True,
     default=True,
-    help="Disable averaging over baseline axis.",
+    help="Average over baseline axis.",
 )
 @click.option(
     "-u",
@@ -279,9 +285,11 @@ def process_baseline(ms, times, baseline, datacolumn):
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms")
-@click.argument("outfile")
+@click.argument("ms", type=Path)
+@click.argument("outfile", type=Path)
 def main(
+    ms,
+    outfile,
     datacolumn,
     phasecentre,
     primary_beam,
@@ -289,8 +297,6 @@ def main(
     baseline_average,
     minuvdist,
     verbose,
-    ms,
-    outfile,
 ):
 
     setupLogger(verbose=verbose)
@@ -313,11 +319,12 @@ def main(
     ms = combine_spws(ms)
 
     # Optionally rotate phasecentre to new coordinates
-    pb_scale = 1
     if phasecentre is not None:
         ra, dec = parse_coordinates(phasecentre)
         ms = rotate_phasecentre(ms, ra, dec)
-        pb_scale = get_pb_correction(primary_beam, ra, dec)
+
+    # Get primary beam correction
+    pb_scale = get_pb_correction(primary_beam, ra, dec) if primary_beam else 1
 
     # Construct header with observation properties
     header = get_header_properties(ms, datacolumn, pb_scale)
@@ -378,7 +385,7 @@ def main(
         f.create_dataset("flux", data=waterfall)
 
     # Clean up intermediate files
-    ms_dir = Path(ms).parent
+    ms_dir = ms.parent
     os.system(f"rm -r {ms_dir}/*dstools-temp*.ms 2>/dev/null")
     os.system("rm *.pre *.last 2>/dev/null")
 
