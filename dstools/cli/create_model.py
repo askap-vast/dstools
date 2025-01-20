@@ -192,7 +192,8 @@ def main(
     verbose,
 ):
 
-    logfile = out_dir / "rt-peel.log" if savelogs else None
+    os.system(f"mkdir -p {ms.parent.absolute() / out_dir}")
+    logfile = ms.parent.absolute() / out_dir / "rt-peel.log" if savelogs else None
     setupLogger(verbose=verbose, filename=logfile)
 
     # Set imaging parameters:

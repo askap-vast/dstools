@@ -258,7 +258,7 @@ class WSClean:
 
     # deconvolution
     iterations: int = 30000
-    major_cycles: int = 20
+    mniter: int | None = None
     mgain: float = 0.85
     channels_out: int = 8
     deconvolution_channels: int = 8
@@ -269,7 +269,7 @@ class WSClean:
     galvin_clip_mask: Path | None = None
     mask_threshold: float = 5
     auto_threshold: float = 3
-    local_rms_window: int = 25
+    local_rms_window: int | None = None
 
     # weight / gridding
     robust: float = 0.5
@@ -281,7 +281,7 @@ class WSClean:
     data_column: str | None = None
     minuvw_m: float | None = None
     minuvw_l: float | None = None
-    intervals_out: int = 1
+    intervals_out: int | None = None
 
     # multiscale
     multiscale: bool = False
@@ -289,19 +289,21 @@ class WSClean:
     multiscale_max_scales: int = 8
 
     # I/O
+    out_dir: Path = Path(".")
+    temp_dir: Path | None = None
     reuse_psf: Path | None = None
     reuse_dirty: Path | None = None
     no_dirty: bool = False
     save_source_list: bool = False
     save_reordered: bool = False
     reuse_reordered: bool = False
-    temp_dir: Path | None = None
-    out_dir: Path = Path(".")
 
     verbose: bool = False
 
     def __post_init__(self):
         self.optional_args = (
+            "mniter",
+            "local_rms_window",
             "parallel_deconvolution",
             "data_column",
             "minuvw_m",
@@ -406,8 +408,8 @@ class WSClean:
 
     def run(self, ms: Path, name: str):
 
-        logger.debug(
-            f"Imaging {ms} with {self.imsize}x{self.imsize} pixels, {self.cellsize} cellsize, and {self.spectral_pol_terms} spectral terms."
+        logger.info(
+            f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, {self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
         )
 
         # Add all essential arguments
@@ -417,13 +419,11 @@ class WSClean:
             f"-size {self.imsize} {self.imsize}",
             f"-scale {self.cellsize}",
             f"-niter {self.iterations}",
-            f"-nmiter {self.major_cycles}",
             f"-mgain {self.mgain}",
             f"-pol {self.pol}",
             f"-weight briggs {self.robust}",
             f"-auto-threshold {self.auto_threshold}",
             f"-auto-mask {self.mask_threshold}",
-            f"-local-rms-window {self.local_rms_window}",
             self._phasecentre_args,
             self._multiscale_args,
             self._spectral_args,
@@ -451,6 +451,8 @@ class WSClean:
         # Move into working directory to store imaging products
         cwd = Path(".").absolute()
         os.chdir(model_path)
+
+        logger.debug(wsclean_cmd)
 
         # Run WSclean
         p = subprocess.Popen(
