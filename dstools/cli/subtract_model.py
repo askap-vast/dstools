@@ -11,7 +11,7 @@ config.logfile = "/dev/null"
 from casatasks import split, uvsub
 from dstools.imaging import CASAModel, WSCleanModel
 from dstools.logger import setupLogger
-from dstools.utils import parse_coordinates
+from dstools.utils import column_exists, parse_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,18 @@ logger = logging.getLogger(__name__)
 )
 @click.argument("ms")
 def main(
+    ms,
     split_data,
     verbose,
-    ms,
 ):
 
     setupLogger(verbose=verbose)
+
+    if not column_exists(ms, column="MODEL_DATA"):
+        logger.error(
+            f"{ms} does not contain a MODEL_DATA column. Create or insert a model first!"
+        )
+        exit(1)
 
     # Perform field model subtraction
     # ------------------------------

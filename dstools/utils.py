@@ -31,17 +31,14 @@ class DataError(Exception):
     pass
 
 
-def validate_column(ms: Path, column: str) -> None:
+def column_exists(ms: Path, column: str) -> bool:
 
     t = table()
     t.open(str(ms))
     columns = t.colnames()
     t.close()
 
-    if not column in columns:
-        raise DataError(f"{ms.name} does not contain {column} column.")
-
-    return
+    return column in columns
 
 
 def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:

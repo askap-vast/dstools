@@ -19,7 +19,7 @@ from casatasks import mstransform, phaseshift
 from casatools import table
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
-from dstools.utils import parse_coordinates
+from dstools.utils import column_exists, parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
@@ -180,15 +180,6 @@ def get_data_dimensions(ms):
     return times, freqs, antennas, nbaselines
 
 
-def validate_datacolumn(ms, datacolumn):
-
-    tab = table(ms, ack=False)
-    col_exists = datacolumn in tab.colnames()
-    tab.close()
-
-    return col_exists
-
-
 def rotate_phasecentre(ms, ra, dec):
     logger.debug(f"Rotating phasecentre to {ra} {dec}")
 
@@ -312,8 +303,8 @@ def main(
     datacolumn = columns[datacolumn]
 
     # Check that selected column exists in MS
-    if not validate_datacolumn(ms, datacolumn):
-        logger.error(f"{datacolumn} column does not exist in {ms}")
+    if not column_exists(ms, datacolumn):
+        logger.error(f"{ms} does not contain {datacolumn} column.")
         exit(1)
 
     # Combine multiple spectral windows (e.g. VLA)

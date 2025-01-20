@@ -17,7 +17,7 @@ import xarray as xr
 from astropy.time import Time
 from casatasks import applycal, cvel, flagdata, gaincal, mstransform, split
 from casatools import table
-from dstools.utils import prompt, validate_column
+from dstools.utils import DataError, column_exists, prompt
 from matplotlib.gridspec import GridSpec
 from numpy.typing import ArrayLike
 
@@ -41,7 +41,6 @@ def plot_gain_solutions(
     caltable: str,
     calmode: str,
     nspws: int,
-    colorbyant: bool = False,
 ) -> None:
 
     # Read time and gains from calibration table
@@ -73,7 +72,9 @@ def plot_gain_solutions(
     fig = plt.figure(figsize=(12, 8))
     gs = GridSpec(2, 3)
 
+    # Color based on number of instrumental pols
     colors = ("k", "r")
+    pol = ("X", "Y") if npols == 2 else ("X+Y",)
 
     for antaxis in range(nants):
         row = antaxis // 3
@@ -82,11 +83,11 @@ def plot_gain_solutions(
 
         for spw in range(nspws):
 
-            t = time[np.where(spw_ids == spw)]
-            time_start = Time(t[0] / 3600 / 24, format="mjd", scale="utc").iso
-            t -= t[0]
-
             for polaxis in range(npols):
+
+                t = time[np.where(spw_ids == spw)]
+                time_start = Time(t[0] * u.s.to(u.day), format="mjd", scale="utc").iso
+                t -= t[0]
 
                 # Select polarisation and current SPW
                 g = gains[polaxis, 0, np.where(spw_ids == spw)]
@@ -95,15 +96,20 @@ def plot_gain_solutions(
                 g = g.reshape(-1, nants)[:, antaxis]
                 t = t.reshape(-1, nants)[:, antaxis]
 
-                # color = None if colorbyant else colors[polaxis]
+                color = None if nspws > 1 else colors[polaxis]
+                label = None if nspws > 1 else pol[polaxis]
 
                 ax.scatter(
                     t / 3600,
                     g,
-                    # color=color,
+                    color=color,
                     s=1,
                     alpha=0.2,
+                    label=label,
                 )
+
+                if nspws == 1:
+                    ax.legend()
 
                 ax.set_xlabel(f"Hours from UTC {time_start}")
                 if calmode == "p":
@@ -111,13 +117,13 @@ def plot_gain_solutions(
                     ax.set_ylabel("Phase [deg]")
                     ax.set_ylim(-maxval, maxval)
                 else:
-                    maxval = 1 - gains.max()
+                    maxval = gains.max() - 1
                     ax.set_ylabel("Amplitude")
                     ax.set_ylim(1 - 2 * maxval, 1 + 2 * maxval)
 
     fig.tight_layout()
 
-    savefile = caltable.replace(".cal", ".cal.png")
+    savefile = caltable.replace(".cal", f".{calmode}.cal.png")
     fig.savefig(savefile, format="png")
 
     return
@@ -143,16 +149,23 @@ def run_selfcal(
             "Argument 'interval' must have format <int>[min/s] (e.g. 10s, 1min, 5min)."
         )
 
-    validate_column(ms, "MODEL_DATA")
+    if not column_exists(ms, "MODEL_DATA"):
+        raise DataError(f"{ms} does not contain a MODEL_DATA column.")
 
     # Select reference antenna
-    flagstats = flagdata(vis=str(ms), mode="summary")
-    df = pd.DataFrame(flagstats["antenna"]).T.reset_index(names="antenna")
-    df["percentage"] = (100 * df.flagged / df.total).round(1)
-    logger.info(f"Antenna flagging statistics:\n{df}")
-
     if refant is None:
         if interactive:
+
+            # Calculate antenna flagging statistics
+            flagstats = flagdata(vis=str(ms), mode="summary")
+            df = pd.DataFrame(flagstats["antenna"]).T.reset_index(names="antenna")
+            df["percentage"] = (100 * df.flagged / df.total).round(1)
+
+            # Hide index to avoid confusing prompt
+            df.index = [""] * len(df)
+
+            print(f"Antenna flagging statistics:\n{df}")
+
             refant = input("Select reference antenna: ")
             while refant not in flagstats["antenna"]:
                 print(f"Reference antenna must be in: {flagstats['antenna']}")
@@ -175,10 +188,11 @@ def run_selfcal(
         )
 
         # Replace original MS with multi-SPW copy
-        os.system(f"rm -r {ms}")
-        os.system(f"mv {mms} {ms}")
+        temp = ms
+        ms = mms
 
-    logger.info(f"Solving for gains using antenna {refant} as reference antenna...")
+    gains = "phase" if calmode == "p" else "amp + phase"
+    logger.info(f"Solving for {gains} over {nspws} spws and {interval} intervals")
 
     # Solve for self calibration solutions
     cal_table = ms.with_suffix(".cal")
@@ -211,31 +225,40 @@ def run_selfcal(
         default_response=True,
     )
 
-    if cal_good:
-        applycal(
-            vis=str(ms),
-            gaintable=[str(cal_table)],
-            interp="linear",
-        )
-    else:
+    # If unacceptable, remove calibration tables and multi-spw MS and return
+    if not cal_good:
+        if nspws > 1:
+            os.system(f"rm -r {mms}")
+            ms = temp
+
         os.system(f"rm -r {cal_table}")
+
+        return ms
+
+    # Otherwise proceed with applying calibration solutions
+    applycal(
+        vis=str(ms),
+        gaintable=[str(cal_table)],
+        interp="linear",
+    )
 
     # Transform back to single SPW MS
     if nspws > 1:
-        outms = ms.with_suffix(".temp.ms")
         logger.info(f"Transforming from {nspws} to 1 spectral windows")
+
+        os.system(f"rm -r {temp}")
         cvel(
             vis=str(ms),
-            outputvis=str(outms),
+            outputvis=str(temp),
             mode="channel_b",
         )
 
         # Replace multi-SPW ms with combined copy
         os.system(f"rm -r {ms}")
-        os.system(f"mv {outms} {ms}")
+        ms = temp
 
     # Split out calibrated MS
-    if cal_good and split_data:
+    if split_data:
 
         outms = increment_selfcal_round(ms)
 
