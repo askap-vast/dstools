@@ -10,6 +10,7 @@ config.logfile = "/dev/null"
 
 from pathlib import Path
 
+import astropy.units as u
 import dask.array as da
 import matplotlib.pyplot as plt
 import pandas as pd
