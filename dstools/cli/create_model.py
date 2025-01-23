@@ -92,6 +92,25 @@ logger = logging.getLogger(__name__)
     help="Minimum uv distance in wavelengths.",
 )
 @click.option(
+    "-S",
+    "--multiscale",
+    is_flag=True,
+    default=False,
+    help="Enable multiscale deconvolution",
+)
+@click.option(
+    "--multiscale-scale-bias",
+    type=float,
+    default=0.7,
+    help="Deconvolution scale bias. Higher values give more weight to large scales.",
+)
+@click.option(
+    "--multiscale-max-scales",
+    type=int,
+    default=8,
+    help="Maximum number of multiscale scales to use in deconvolution.",
+)
+@click.option(
     "-M",
     "--fits-mask",
     default=None,
@@ -108,7 +127,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--local-rms-window",
     type=int,
-    default=25,
+    default=None,
     help="Window size in multiples of PSF over which to calculate local RMS.",
 )
 @click.option(
@@ -174,6 +193,9 @@ def main(
     mgain,
     minuvw_m,
     minuvw_l,
+    multiscale,
+    multiscale_scale_bias,
+    multiscale_max_scales,
     fits_mask,
     galvin_clip_mask,
     threshold,
@@ -220,6 +242,9 @@ def main(
         spectral_pol_terms=spectral_pol_terms,
         minuvw_m=minuvw_m,
         minuvw_l=minuvw_l,
+        multiscale=multiscale,
+        multiscale_scale_bias=multiscale_scale_bias,
+        multiscale_max_scales=multiscale_max_scales,
         iterations=iterations,
         channels_out=channels_out,
         deconvolution_channels=deconvolution_channels,
@@ -227,6 +252,7 @@ def main(
         mgain=mgain,
         auto_threshold=threshold,
         mask_threshold=mask_threshold,
+        local_rms_window=local_rms_window,
         fits_mask=fits_mask,
         galvin_clip_mask=galvin_clip_mask,
         phasecentre=phasecentre,

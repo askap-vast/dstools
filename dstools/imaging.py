@@ -279,6 +279,9 @@ class WSClean:
     channels_out: int = 8
     deconvolution_channels: int = 8
     spectral_pol_terms: int = 3
+    multiscale: bool = False
+    multiscale_scale_bias: float = 0.7
+    multiscale_max_scales: int = 8
 
     # masking / thresholds
     fits_mask: Path | None = None
@@ -298,11 +301,6 @@ class WSClean:
     minuvw_m: float | None = None
     minuvw_l: float | None = None
     intervals_out: int | None = None
-
-    # multiscale
-    multiscale: bool = False
-    multiscale_scale_bias: float = 0.7
-    multiscale_max_scales: int = 8
 
     # I/O
     out_dir: Path = Path(".")
@@ -341,7 +339,7 @@ class WSClean:
     @property
     def _multiscale_args(self):
 
-        if self.multiscale is None:
+        if not self.multiscale:
             return ""
 
         return (
