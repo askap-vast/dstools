@@ -8,20 +8,25 @@ function load_data {
     shiftdec=$6
 
     mkdir -p $proj_dir/miriad
-    cd $proj_dir/miriad
     
     if $noflag; then
 	atlod_options=noauto,xycorr,notsys
     else
 	atlod_options=birdie,rfiflag,noauto,xycorr,notsys
     fi
+
+    # Move into data directory to avoid absolute path names which overflow the atlod input parameter
+    cd $data_dir
     
     # Identify RPFITS files from top-level data directory so that backup scans (e.g. 1934)
     # can sit in subdirectories of the data directory without being auto-imported
-    infiles=$(find -L $data_dir/* -maxdepth 1 -type f | grep $pcode | tr '\n' ',' | head -c -1)
+    infiles=$(find -L * -maxdepth 1 -type f | grep $pcode | tr '\n' ',' | head -c -1)
     
     atlod in=$infiles out=$pcode.uv ifsel=$ifsel options=$atlod_options
     
+    mv $pcode.uv $proj_dir/miriad/.
+    cd $proj_dir/miriad
+
     # Optionally shift phasecenter. This is to be used when you have offset the phasecenter
     # during an observation (e.g. by -120 arcsec in declination) to avoid DC correlator
     # errors. Correction would be to shift by +120 arcsec here.

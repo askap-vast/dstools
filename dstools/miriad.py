@@ -86,7 +86,7 @@ class MiriadWrapper:
             "load_data",
             args=[
                 str(self.out_dir.absolute()),
-                str(self.data_dir.absolute()),
+                str(self.data_dir),
                 "true" if self.noflag else "false",
                 str(self.project_code),
                 shiftra,
