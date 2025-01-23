@@ -18,6 +18,7 @@ from astropy.time import Time
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from numpy.typing import ArrayLike
 from scipy.signal import correlate, find_peaks
 
 from dstools.rm import PolObservation
@@ -45,8 +46,11 @@ LOCATIONS = {
 }
 
 
-def snr_mask(data, noise, n_sigma):
-    """Mask data array below n_sigma based on imaginary component of stokes array."""
+def snr_mask(data: ArrayLike, noise: ArrayLike, n_sigma: float) -> ArrayLike:
+    """
+    Mask an array below n_sigma * SNR, where SNR is determined from imaginary component
+    of a secondary "noise" array (i.e. to mask various arrays based on Stokes I SNR)
+    """
 
     mask = np.abs(noise.real) < n_sigma * np.nanstd(noise.imag)
     data[mask] = np.nan
@@ -54,7 +58,7 @@ def snr_mask(data, noise, n_sigma):
     return data
 
 
-def rebin(o, n, axis):
+def rebin(o: int, n: int, axis: int) -> ArrayLike:
     """Create l1-norm preserving array compression matrix from o -> n length.
 
     if rebinning along row axis we want:
@@ -117,7 +121,7 @@ def rebin(o, n, axis):
     return compressor if axis == 0 else compressor.T
 
 
-def rebin2D(array, new_shape):
+def rebin2D(array: ArrayLike, new_shape: tuple[int, int]) -> ArrayLike:
     """Re-bin along time / frequency axes conserving flux."""
 
     # Convert from masked array to pure numpy array
@@ -143,7 +147,13 @@ def rebin2D(array, new_shape):
     return result
 
 
-def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
+def slice_array(
+    a: ArrayLike,
+    ax1_min: int,
+    ax1_max: int,
+    ax2_min: int = None,
+    ax2_max: int = None,
+) -> ArrayLike:
     """Slice 1D or 2D array with variable lower and upper boundaries."""
 
     if ax2_min is None and ax2_max is None:
@@ -153,48 +163,6 @@ def slice_array(a, ax1_min, ax1_max, ax2_min=None, ax2_max=None):
         a = a[:, ax2_min:] if ax2_max == 0 else a[:, ax2_min:ax2_max]
 
     return a
-
-
-def make_summary_plot(ds, stokes, cmax, imag):
-    """Plot all-stokes dynamic spectra and averaged light-curve / spectrum."""
-
-    fig = plt.figure(figsize=(14, 15))
-    gs = GridSpec(3, 2, figure=fig)
-
-    I_ax = fig.add_subplot(gs[0, 0])
-    Q_ax = fig.add_subplot(gs[0, 1])
-    U_ax = fig.add_subplot(gs[1, 0])
-    V_ax = fig.add_subplot(gs[1, 1])
-    lc_ax = fig.add_subplot(gs[2, 0])
-    sp_ax = fig.add_subplot(gs[2, 1])
-
-    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax["I"], fig=fig, ax=I_ax, imag=imag)
-    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax["Q"], fig=fig, ax=Q_ax, imag=imag)
-    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax["U"], fig=fig, ax=U_ax, imag=imag)
-    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax["V"], fig=fig, ax=V_ax, imag=imag)
-
-    fig, sp_ax = ds.plot_spectrum(
-        stokes=stokes,
-        fig=fig,
-        ax=sp_ax,
-        imag=imag,
-    )
-    fig, lc_ax = ds.plot_lightcurve(
-        stokes=stokes,
-        fig=fig,
-        ax=lc_ax,
-        polangle=False,
-        imag=imag,
-    )
-
-    fig.subplots_adjust(
-        left=0.06,
-        top=0.94,
-        right=0.96,
-        bottom=0.05,
-    )
-
-    return fig
 
 
 @dataclass
@@ -1146,3 +1114,50 @@ class Spectrum(TimeFreqSeries):
         super().plot()
 
         return self.fig, self.ax
+
+
+def make_summary_plot(
+    ds: DynamicSpectrum,
+    stokes: str,
+    cmax: float,
+    imag: bool,
+) -> plt.figure:
+    """Plot all-stokes dynamic spectra and averaged light-curve / spectrum."""
+
+    fig = plt.figure(figsize=(14, 15))
+    gs = GridSpec(3, 2, figure=fig)
+
+    I_ax = fig.add_subplot(gs[0, 0])
+    Q_ax = fig.add_subplot(gs[0, 1])
+    U_ax = fig.add_subplot(gs[1, 0])
+    V_ax = fig.add_subplot(gs[1, 1])
+    lc_ax = fig.add_subplot(gs[2, 0])
+    sp_ax = fig.add_subplot(gs[2, 1])
+
+    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax["I"], fig=fig, ax=I_ax, imag=imag)
+    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax["Q"], fig=fig, ax=Q_ax, imag=imag)
+    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax["U"], fig=fig, ax=U_ax, imag=imag)
+    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax["V"], fig=fig, ax=V_ax, imag=imag)
+
+    fig, sp_ax = ds.plot_spectrum(
+        stokes=stokes,
+        fig=fig,
+        ax=sp_ax,
+        imag=imag,
+    )
+    fig, lc_ax = ds.plot_lightcurve(
+        stokes=stokes,
+        fig=fig,
+        ax=lc_ax,
+        polangle=False,
+        imag=imag,
+    )
+
+    fig.subplots_adjust(
+        left=0.06,
+        top=0.94,
+        right=0.96,
+        bottom=0.05,
+    )
+
+    return fig

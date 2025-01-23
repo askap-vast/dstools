@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 stokes_choices = [
     "".join(stokes)
     for stokes in chain(
-        *(list(combinations(["I", "Q", "U", "V", "L"], i + 1)) for i in range(5))
+        *(list(combinations(["I", "Q", "U", "V", "L"], i)) for i in range(1, 6))
     )
 ]
 
@@ -191,11 +191,10 @@ stokes_choices = [
     help="Remove flagged channels at top/bottom of band.",
 )
 @click.option(
-    "-F",
     "--fold",
     is_flag=True,
     default=False,
-    help="Toggle to enable folding of data. Must also provide period with -T.",
+    help="Toggle to enable folding of data.",
 )
 @click.option(
     "-R",
@@ -228,14 +227,14 @@ stokes_choices = [
     "--period",
     default=None,
     type=float,
-    help="Period to use when folding data.",
+    help="Period to use when folding.",
 )
 @click.option(
     "-o",
     "--period_offset",
     default=0,
     type=float,
-    help="Period phase offset to use when folding data.",
+    help="Period phase offset to use when folding.",
 )
 @click.option(
     "-B",
@@ -249,7 +248,7 @@ stokes_choices = [
     "--calscans",
     is_flag=True,
     default=True,
-    help="Toggle inclusion of null-valued time chunks while off-source (e.g. calibrator scans, wind stows)",
+    help="Toggle inclusion of null-valued time chunks while off-source.",
 )
 @click.option(
     "-Y",
