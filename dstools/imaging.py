@@ -199,6 +199,8 @@ class WSCleanModel(Model):
 
         self.model_images = [p for p in self.model_dir.glob("*-model.fits")]
 
+        self.get_phasecentre()
+
     def _validate(self):
 
         # Check for existence of sub-channel model images
@@ -214,6 +216,19 @@ class WSCleanModel(Model):
 
         return
 
+    def get_phasecentre(self):
+
+        with fits.open(self.model) as hdul:
+            header = hdul[0].header
+            wcs = WCS(header)
+
+        pix_x, pix_y = header["NAXIS1"] // 2, header["NAXIS2"] // 2
+        self.phasecentre = wcs.pixel_to_world(pix_x, pix_y, 1, 1)[0].to_string(
+            style="hmsdms"
+        )
+
+        return
+
     def insert_into(self, ms: str):
 
         wsclean_cmd = [
@@ -223,6 +238,7 @@ class WSCleanModel(Model):
             f"-name {self.name}",
             f"-channels-out {self.channels_out}",
             "-predict",
+            f"-shift {self.phasecentre}",
             # "-quiet",
             f"{ms}",
         ]
@@ -274,7 +290,7 @@ class WSClean:
     # weight / gridding
     robust: float = 0.5
     parallel_deconvolution: int | None = None
-    phasecentre: tuple[str] | None = None
+    phasecentre: tuple[str, str] | None = None
 
     # data selection
     pol: str = "iquv"
