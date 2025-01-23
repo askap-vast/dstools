@@ -1011,25 +1011,24 @@ class TimeFreqSeries(ABC):
 class LightCurve(TimeFreqSeries):
     ds: DynamicSpectrum
     stokes: str
-    pa_sigma: int = 2
     imag: bool = False
 
     def __post_init__(self):
         self.column = "time"
         self.unit = self.ds.tunit
-        self.valstart = self.ds.header["time_start"]
+        self.valstart = Time(self.ds.header["time_start"])
 
-        # Set time/phase axis limits if folded
-        phasemax = 0.5 * self.ds.fold_periods
-        valmin, valmax = (
-            (-phasemax, phasemax) if self.ds.fold else (self.ds.tmin, self.ds.tmax)
-        )
+        # Construct time and flux axes, using phase if folding enabled
+        if self.ds.fold:
+            phasemax = 0.5 * self.ds.fold_periods
+            phasebins = self.ds.data["I"].shape[0]
+            self.x = np.linspace(-phasemax, phasemax, phasebins)
+        else:
+            self.x = self.ds.time
 
-        # Construct time and flux axes
-        bins = self.ds.data["I"].shape[0]
-        interval = (valmax - valmin) / bins
-        self.x = np.array([valmin + i * interval for i in range(bins)])
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
+
+    def add_polarisation_angle(self, pa_sigma=2):
 
         Q = self.ds.data["Q"]
         U = self.ds.data["U"]
@@ -1043,9 +1042,35 @@ class LightCurve(TimeFreqSeries):
             U = np.nanmean(U.real, axis=1)
 
         # Mask low signifigance PA
-        self.polangle = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
-        mask = signal_L < self.pa_sigma * noise_L
-        self.polangle[mask] = np.nan
+        polangle = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
+        mask = signal_L < pa_sigma * noise_L
+        polangle[mask] = np.nan
+
+        divider = make_axes_locatable(self.ax)
+        ax2 = divider.append_axes("top", size="25%", pad=0.1)
+
+        ax2.scatter(
+            self.x,
+            polangle,
+            color="k",
+            marker="o",
+            s=1,
+        )
+        ax2.axhline(
+            0,
+            ls=":",
+            color="k",
+            alpha=0.5,
+        )
+        ax2.set_xticklabels([])
+
+        pad = (self.x.max() - self.x.min()) * 0.05
+        ax2.set_xlim([self.x.min() - pad, self.x.max() + pad])
+        ax2.set_ylim(-120, 120)
+        ax2.set_yticks([-90, 0, 90])
+        ax2.set_ylabel(r"$\chi$ (deg)")
+
+        return
 
     def plot(self, fig, ax, polangle=False):
         self.fig = fig
@@ -1061,27 +1086,7 @@ class LightCurve(TimeFreqSeries):
         self.ax.set_xlim([self.x.min() - pad, self.x.max() + pad])
 
         if polangle:
-            divider = make_axes_locatable(self.ax)
-            ax2 = divider.append_axes("top", size="25%", pad=0.1)
-
-            ax2.scatter(
-                self.x,
-                self.polangle,
-                color="k",
-                marker="o",
-                s=1,
-            )
-            ax2.axhline(
-                0,
-                ls=":",
-                color="k",
-                alpha=0.5,
-            )
-            ax2.set_xticklabels([])
-            ax2.set_xlim([self.x.min() - pad, self.x.max() + pad])
-            ax2.set_ylim(-120, 120)
-            ax2.set_yticks([-90, 0, 90])
-            ax2.set_ylabel(r"$\chi$ (deg)")
+            self.add_polarisation_angle()
 
         return self.fig, self.ax
 
