@@ -207,19 +207,6 @@ class DynamicSpectrum:
         # Insert calibrator scan breaks
         XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
 
-        # Store time and frequency resolution
-        timebins = len(self.time) / self.tavg
-        freqbins = len(self.freq) / self.favg
-
-        self.time_res = (self.tmax - self.tmin) * self.tunit / (timebins - 1)
-        self.freq_res = (self.fmax - self.fmin) * u.MHz / (freqbins - 1)
-        self.header.update(
-            {
-                "time_resolution": f"{self.time_res.to(u.s):.1f}",
-                "freq_resolution": f"{self.freq_res.to(u.MHz):.1f}",
-            }
-        )
-
         # Incoherently dedisperse at DM
         if self.dedisperse and self.DM is not None:
             XX = self._dedisperse(XX)
@@ -241,6 +228,19 @@ class DynamicSpectrum:
 
         # Average data in time and frequency
         XX, XY, YX, YY = self._rebin(XX, XY, YX, YY)
+
+        # Store time and frequency resolution
+        timebins = len(self.time) / self.tavg
+        freqbins = len(self.freq) / self.favg
+
+        self.time_res = (self.time[1] - self.time[0]) * self.tunit
+        self.freq_res = (self.freq[1] - self.freq[0]) * u.MHz
+        self.header.update(
+            {
+                "time_resolution": f"{self.time_res.to(u.s):.3f}",
+                "freq_resolution": f"{self.freq_res.to(u.MHz):.2f}",
+            }
+        )
 
         # Compute Stokes products and store in data attribute
         self._make_stokes(XX, XY, YX, YY)
