@@ -74,6 +74,7 @@ class MiriadWrapper:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
+            executable="/bin/bash",
         )
 
         parse_stdout_stderr(p, logger, print_stdout)

@@ -239,11 +239,22 @@ class WSCleanModel(Model):
             f"-channels-out {self.channels_out}",
             "-predict",
             f"-shift {self.phasecentre}",
-            # "-quiet",
+            "-quiet",
             f"{ms}",
         ]
         wsclean_cmd = " ".join(wsclean_cmd)
-        os.system(wsclean_cmd)
+
+        logger.debug(wsclean_cmd)
+
+        p = subprocess.Popen(
+            wsclean_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+            executable="/bin/bash",
+        )
+
+        parse_stdout_stderr(p, logger, print_stdout=False)
 
         return
 
@@ -474,6 +485,7 @@ class WSClean:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
+            executable="/bin/bash",
         )
 
         parse_stdout_stderr(p, logger, print_stdout=False)
