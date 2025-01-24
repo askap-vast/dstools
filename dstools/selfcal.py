@@ -69,63 +69,72 @@ def plot_gain_solutions(
     else:
         raise ValueError("Parameter 'calmode' must be 'p' or 'a'.")
 
-    # Plot solutions against time
-    fig = plt.figure(figsize=(12, 8))
-    gs = GridSpec(2, 3)
+    # Use figures with 2x3 subplots each
+    num_figures = int(nants // 6)
 
-    # Color based on number of instrumental pols
-    colors = ("k", "r")
-    pol = ("X", "Y") if npols == 2 else ("X+Y",)
+    for subfig in range(num_figures):
 
-    for antaxis in range(nants):
-        row = antaxis // 3
-        col = antaxis % 3
-        ax = fig.add_subplot(gs[row, col])
+        # Plot solutions against time
+        fig = plt.figure(figsize=(12, 8))
+        gs = GridSpec(2, 3)
 
-        for spw in range(nspws):
+        # Color based on number of instrumental pols
+        colors = ("k", "r")
+        pol = ("X", "Y") if npols == 2 else ("X+Y",)
 
-            for polaxis in range(npols):
+        for subplot in range(6):
+            antaxis = subfig * 6 + subplot
+            row = subplot // 3
+            col = subplot % 3
 
-                t = time[np.where(spw_ids == spw)]
-                time_start = Time(t[0] * u.s.to(u.day), format="mjd", scale="utc").iso
-                t -= t[0]
+            ax = fig.add_subplot(gs[row, col])
 
-                # Select polarisation and current SPW
-                g = gains[polaxis, 0, np.where(spw_ids == spw)]
+            for spw in range(nspws):
 
-                # Select current antenna
-                g = g.reshape(-1, nants)[:, antaxis]
-                t = t.reshape(-1, nants)[:, antaxis]
+                for polaxis in range(npols):
 
-                color = None if nspws > 1 else colors[polaxis]
-                label = None if nspws > 1 else pol[polaxis]
+                    t = time[np.where(spw_ids == spw)]
+                    time_start = Time(
+                        t[0] * u.s.to(u.day), format="mjd", scale="utc"
+                    ).iso
+                    t -= t[0]
 
-                ax.scatter(
-                    t / 3600,
-                    g,
-                    color=color,
-                    s=1,
-                    alpha=0.2,
-                    label=label,
-                )
+                    # Select polarisation and current SPW
+                    g = gains[polaxis, 0, np.where(spw_ids == spw)]
 
-                if nspws == 1:
-                    ax.legend()
+                    # Select current antenna
+                    g = g.reshape(-1, nants)[:, antaxis]
+                    t = t.reshape(-1, nants)[:, antaxis]
 
-                ax.set_xlabel(f"Hours from UTC {time_start}")
-                if calmode == "p":
-                    maxval = np.abs(gains).max()
-                    ax.set_ylabel("Phase [deg]")
-                    ax.set_ylim(-maxval, maxval)
-                else:
-                    maxval = gains.max() - 1
-                    ax.set_ylabel("Amplitude")
-                    ax.set_ylim(1 - 2 * maxval, 1 + 2 * maxval)
+                    color = None if nspws > 1 else colors[polaxis]
+                    label = None if nspws > 1 else pol[polaxis]
 
-    fig.tight_layout()
+                    ax.scatter(
+                        t / 3600,
+                        g,
+                        color=color,
+                        s=1,
+                        alpha=0.2,
+                        label=label,
+                    )
 
-    savefile = caltable.replace(".cal", f".{calmode}.cal.png")
-    fig.savefig(savefile, format="png")
+                    if nspws == 1:
+                        ax.legend()
+
+                    ax.set_xlabel(f"Hours from UTC {time_start}")
+                    if calmode == "p":
+                        maxval = np.abs(gains).max()
+                        ax.set_ylabel("Phase [deg]")
+                        ax.set_ylim(-maxval, maxval)
+                    else:
+                        maxval = gains.max() - 1
+                        ax.set_ylabel("Amplitude")
+                        ax.set_ylim(1 - 2 * maxval, 1 + 2 * maxval)
+
+        fig.tight_layout()
+
+        savefile = caltable.replace(".cal", f".{calmode}.cal{subfig}.png")
+        fig.savefig(savefile, format="png")
 
     return
 
@@ -169,7 +178,7 @@ def run_selfcal(
 
             refant = input("Select reference antenna: ")
             while refant not in flagstats["antenna"]:
-                print(f"Reference antenna must be in: {flagstats['antenna']}")
+                print(f"Reference antenna must be in: {set(df.antenna)}")
                 refant = input("Select reference antenna: ")
         else:
             refant = df.sort_values("percentage", ascending=True).iloc[0].antenna
@@ -269,5 +278,7 @@ def run_selfcal(
             datacolumn="corrected",
         )
         ms = outms
+
+    plt.close("all")
 
     return ms
