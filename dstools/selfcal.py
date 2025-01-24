@@ -39,13 +39,13 @@ def increment_selfcal_round(ms: Path) -> Path:
 
 
 def plot_gain_solutions(
-    caltable: str,
+    caltable: Path,
     calmode: str,
     nspws: int,
 ) -> None:
 
     # Read time and gains from calibration table
-    t = table(caltable)
+    t = table(str(caltable))
 
     time = t.getcol("TIME")
     spw_ids = t.getcol("SPECTRAL_WINDOW_ID")
@@ -133,7 +133,8 @@ def plot_gain_solutions(
 
         fig.tight_layout()
 
-        savefile = caltable.replace(".cal", f".{calmode}.cal{subfig}.png")
+        subfig = "" if subfig == 0 else subfig
+        savefile = caltable.with_suffix(f".{calmode}.cal{subfig}.png")
         fig.savefig(savefile, format="png")
 
     return
@@ -183,6 +184,8 @@ def run_selfcal(
         else:
             refant = df.sort_values("percentage", ascending=True).iloc[0].antenna
 
+    cal_table = ms.with_suffix(".cal")
+
     # Produce MS with multiple spectral windows
     if nspws > 1:
         mms = ms.with_suffix(".temp.ms")
@@ -205,8 +208,6 @@ def run_selfcal(
     logger.info(f"Solving for {gains} over {nspws} spws and {interval} intervals")
 
     # Solve for self calibration solutions
-    cal_table = ms.with_suffix(".cal")
-
     gaincal(
         vis=str(ms),
         caltable=str(cal_table),
@@ -220,7 +221,7 @@ def run_selfcal(
     # Generate phase and amplitude calibration plots
     for mode in calmode:
         plot_gain_solutions(
-            caltable=str(cal_table),
+            caltable=cal_table,
             calmode=mode,
             nspws=nspws,
         )
