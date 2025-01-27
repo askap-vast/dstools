@@ -5,10 +5,7 @@ from pathlib import Path
 import astropy.units as u
 import click
 import numpy as np
-from casaconfig import config
-
-config.logfile = "/dev/null"
-from casatasks import split, uvsub
+from dstools.casa import split, uvsub
 from dstools.imaging import CASAModel, WSCleanModel
 from dstools.logger import setupLogger
 from dstools.utils import column_exists, parse_coordinates

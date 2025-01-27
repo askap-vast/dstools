@@ -14,8 +14,8 @@ config.logfile = "/dev/null"
 
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
-from casatasks import exportfits, imsubimage, tclean
 from casatools import table
+from dstools.casa import exportfits, imsubimage, tclean
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import minimum_absolute_clip
 from numpy.typing import ArrayLike

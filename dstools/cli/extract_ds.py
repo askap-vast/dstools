@@ -16,8 +16,8 @@ from numpy.typing import ArrayLike
 config.logfile = "/dev/null"
 from importlib.metadata import version
 
-from casatasks import mstransform, phaseshift
 from casatools import table
+from dstools.casa import mstransform, phaseshift
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
 from dstools.utils import column_exists, parse_coordinates
@@ -31,18 +31,18 @@ def average_baselines(ms: Path, minuvdist: float = 0) -> Path:
     logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
     outputvis = ms.with_suffix(f".dstools-temp.baseavg{ms.suffix}")
 
-    intab = table(str(ms), nomodify=False)
+    tab = table(str(ms), nomodify=False)
 
-    ant1 = intab.getcol("ANTENNA1")
-    ant2 = intab.getcol("ANTENNA2")
+    ant1 = tab.getcol("ANTENNA1")
+    ant2 = tab.getcol("ANTENNA2")
 
     # Set all antenna pairs equal for baseline averaging
-    nrows = intab.nrows()
-    intab.putcol("ANTENNA1", np.zeros(nrows))
-    intab.putcol("ANTENNA2", np.ones(nrows))
+    nrows = tab.nrows()
+    tab.putcol("ANTENNA1", np.zeros(nrows))
+    tab.putcol("ANTENNA2", np.ones(nrows))
 
     # Average over baselines by setting timeaverage interval to less than one scan cycle
-    interval = intab.getcol("INTERVAL")
+    interval = tab.getcol("INTERVAL")
     timebin = "{}s".format(min(interval) * 1e-2)
 
     mstransform(
@@ -56,11 +56,11 @@ def average_baselines(ms: Path, minuvdist: float = 0) -> Path:
     )
 
     # Replace original antenna names
-    intab.putcol("ANTENNA1", ant1)
-    intab.putcol("ANTENNA2", ant2)
+    tab.putcol("ANTENNA1", ant1)
+    tab.putcol("ANTENNA2", ant2)
 
-    intab.unlock()
-    intab.close()
+    tab.unlock()
+    tab.close()
 
     return outputvis
 

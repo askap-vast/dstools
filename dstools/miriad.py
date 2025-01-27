@@ -9,12 +9,9 @@ import astropy.units as u
 import click
 import dstools
 import pandas as pd
-from casaconfig import config
+from dstools.casa import importuvfits, listobs
 from dstools.logger import parse_stdout_stderr, setupLogger
 from dstools.utils import prompt
-
-config.logfile = "/dev/null"
-from casatasks import importuvfits, listobs
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,6 @@ from casaconfig import config
 
 config.logfile = "/dev/null"
 
-
 from pathlib import Path
 
 import astropy.units as u
@@ -16,8 +15,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
 from astropy.time import Time
-from casatasks import applycal, cvel, flagdata, gaincal, mstransform, split
 from casatools import table
+from dstools.casa import applycal, cvel, flagdata, gaincal, mstransform, split
 from dstools.utils import DataError, column_exists, prompt
 from matplotlib.gridspec import GridSpec
 from numpy.typing import ArrayLike
@@ -160,7 +159,9 @@ def plot_gain_solutions(
 
                     t = time[np.where(spw_ids == spw)]
                     time_start = Time(
-                        t[0] * u.s.to(u.day), format="mjd", scale="utc"
+                        t[0] * u.s.to(u.day),
+                        format="mjd",
+                        scale="utc",
                     ).iso
                     t -= t[0]
 
