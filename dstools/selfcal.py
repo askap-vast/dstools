@@ -25,6 +25,71 @@ from numpy.typing import ArrayLike
 logger = logging.getLogger(__name__)
 
 
+def split_multi_spw(ms, nspws):
+
+    if nspws == 1:
+        return ms, None
+
+    logger.info(f"Transforming from 1 to {nspws} spectral windows")
+
+    mms = ms.with_suffix(".temp.ms")
+
+    mstransform(
+        vis=str(ms),
+        outputvis=str(mms),
+        regridms=True,
+        nspw=nspws,
+        mode="channel_b",
+        datacolumn="all",
+        combinespws=False,
+        nchan=-1,
+        start=0,
+        width=1,
+        chanbin=1,
+        createmms=False,
+    )
+
+    # Replace original MS with multi-SPW copy
+    temp = ms
+    ms = mms
+
+    return ms, temp
+
+
+def combine_multi_spw(ms, temp, nspws):
+
+    if nspws == 1:
+        return ms
+
+    logger.info(f"Transforming from {nspws} to 1 spectral windows")
+
+    onespw_ms = ms.with_suffix(".onespw.ms")
+
+    cvel(
+        vis=str(ms),
+        outputvis=str(onespw_ms),
+        mode="channel_b",
+        nchan=-1,
+        start=0,
+        width=1,
+    )
+
+    # The FEED table is corrupted by mstransform / gaincal / applycal / cvel loop
+    # growing in size by a factor of nspws and driving up run-time, so we copy
+    # the original here and overwrite the output FEED table after each loop.
+    feed_table = table(f"{temp}/FEED")
+    feed_table.copy(f"{onespw_ms}/FEED")
+    feed_table.close()
+
+    # Replace multi-SPW ms with combined copy
+    os.system(f"rm -r {ms} {ms.with_suffix('.ms.flagversions')}")
+    os.system(f"rm -r {temp}")
+    os.system(f"mv {onespw_ms} {temp}")
+    ms = temp
+
+    return ms
+
+
 def increment_selfcal_round(ms: Path) -> Path:
 
     # Insert selfcal1 before suffix if first round
@@ -187,22 +252,7 @@ def run_selfcal(
     cal_table = ms.with_suffix(".cal")
 
     # Produce MS with multiple spectral windows
-    if nspws > 1:
-        mms = ms.with_suffix(".temp.ms")
-
-        logger.info(f"Transforming from 1 to {nspws} spectral windows")
-        mstransform(
-            vis=str(ms),
-            outputvis=str(mms),
-            regridms=True,
-            nspw=nspws,
-            mode="channel",
-            datacolumn="all",
-        )
-
-        # Replace original MS with multi-SPW copy
-        temp = ms
-        ms = mms
+    ms, temp = split_multi_spw(ms, nspws)
 
     gains = "phase" if calmode == "p" else "amp + phase"
     logger.info(f"Solving for {gains} over {nspws} spws and {interval} intervals")
@@ -239,7 +289,7 @@ def run_selfcal(
     # If unacceptable, remove calibration tables and multi-spw MS and return
     if not cal_good:
         if nspws > 1:
-            os.system(f"rm -r {mms}")
+            os.system(f"rm -r {mms} {mms.with_suffix('ms.flagversions')}")
             ms = temp
 
         os.system(f"rm -r {cal_table}")
@@ -254,19 +304,7 @@ def run_selfcal(
     )
 
     # Transform back to single SPW MS
-    if nspws > 1:
-        logger.info(f"Transforming from {nspws} to 1 spectral windows")
-
-        os.system(f"rm -r {temp}")
-        cvel(
-            vis=str(ms),
-            outputvis=str(temp),
-            mode="channel_b",
-        )
-
-        # Replace multi-SPW ms with combined copy
-        os.system(f"rm -r {ms}")
-        ms = temp
+    ms = combine_multi_spw(ms, temp, nspws)
 
     # Split out calibrated MS
     if split_data:
