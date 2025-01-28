@@ -25,9 +25,24 @@ class Target:
 
 
 @dataclass
+class Band:
+    freq: str
+    spec: str
+    IF: str
+
+
+BANDS = {
+    "L": Band(freq="2100", spec="2.1", IF="1"),
+    "C": Band(freq="5500", spec="5.5", IF="1"),
+    "X": Band(freq="9000", spec="9.0", IF="2"),
+    "K": Band(freq="12000", spec="12.0", IF="1"),
+}
+
+
+@dataclass
 class MiriadWrapper:
     data_dir: Path
-    band: str
+    band: Band
     project_code: str
     mfinterval: float = 1.0
     bpinterval: float = 1.0

@@ -5,24 +5,9 @@ from pathlib import Path
 
 import click
 from dstools.logger import setupLogger
-from dstools.miriad import CABBContinuumPipeline, MiriadWrapper
+from dstools.miriad import BANDS, CABBContinuumPipeline, MiriadWrapper
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Band:
-    freq: str
-    spec: str
-    IF: str
-
-
-BANDS = {
-    "L": Band(freq="2100", spec="2.1", IF="1"),
-    "C": Band(freq="5500", spec="5.5", IF="1"),
-    "X": Band(freq="9000", spec="9.0", IF="2"),
-    "K": Band(freq="12000", spec="12.0", IF="1"),
-}
 
 
 @click.command(context_settings={"show_default": True})
