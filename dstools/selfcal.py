@@ -31,11 +31,11 @@ def split_multi_spw(ms, nspws):
 
     logger.info(f"Transforming from 1 to {nspws} spectral windows")
 
-    mms = ms.with_suffix(".temp.ms")
+    multi_spw_ms = ms.with_suffix(".multi-spw.ms")
 
     mstransform(
         vis=str(ms),
-        outputvis=str(mms),
+        outputvis=str(multi_spw_ms),
         regridms=True,
         nspw=nspws,
         mode="channel_b",
@@ -49,24 +49,21 @@ def split_multi_spw(ms, nspws):
     )
 
     # Replace original MS with multi-SPW copy
-    temp = ms
-    ms = mms
-
-    return ms, temp
+    return multi_spw_ms, ms
 
 
-def combine_multi_spw(ms, temp, nspws):
+def combine_multi_spw(ms, multi_spw_ms, nspws):
 
     if nspws == 1:
         return ms
 
     logger.info(f"Transforming from {nspws} to 1 spectral windows")
 
-    onespw_ms = ms.with_suffix(".onespw.ms")
+    one_spw_ms = ms.with_suffix(".one-spw.ms")
 
     cvel(
         vis=str(ms),
-        outputvis=str(onespw_ms),
+        outputvis=str(one_spw_ms),
         mode="channel_b",
         nchan=-1,
         start=0,
@@ -76,15 +73,15 @@ def combine_multi_spw(ms, temp, nspws):
     # The FEED table is corrupted by mstransform / gaincal / applycal / cvel loop
     # growing in size by a factor of nspws and driving up run-time, so we copy
     # the original here and overwrite the output FEED table after each loop.
-    feed_table = table(f"{temp}/FEED")
-    feed_table.copy(f"{onespw_ms}/FEED")
+    feed_table = table(f"{multi_spw_ms}/FEED")
+    feed_table.copy(f"{one_spw_ms}/FEED")
     feed_table.close()
 
     # Replace multi-SPW ms with combined copy
     os.system(f"rm -r {ms} {ms.with_suffix('.ms.flagversions')}")
-    os.system(f"rm -r {temp}")
-    os.system(f"mv {onespw_ms} {temp}")
-    ms = temp
+    os.system(f"rm -r {multi_spw_ms}")
+    os.system(f"mv {one_spw_ms} {multi_spw_ms}")
+    ms = multi_spw_ms
 
     return ms
 
@@ -92,7 +89,7 @@ def combine_multi_spw(ms, temp, nspws):
 def increment_selfcal_round(ms: Path) -> Path:
 
     # Insert selfcal1 before suffix if first round
-    if "selfcal" not in ms.name:
+    if not re.match(r"\S*.selfcal\d*.ms", str(ms)):
         return ms.with_suffix(".selfcal1.ms")
 
     # Otherwise increment the round
@@ -253,7 +250,7 @@ def run_selfcal(
     cal_table = ms.with_suffix(".cal")
 
     # Produce MS with multiple spectral windows
-    ms, temp = split_multi_spw(ms, nspws)
+    ms, one_spw_ms = split_multi_spw(ms, nspws)
 
     gains = "phase" if calmode == "p" else "amp + phase"
     logger.info(f"Solving for {gains} over {nspws} spws and {interval} intervals")
@@ -290,8 +287,8 @@ def run_selfcal(
     # If unacceptable, remove calibration tables and multi-spw MS and return
     if not cal_good:
         if nspws > 1:
-            os.system(f"rm -r {mms} {mms.with_suffix('ms.flagversions')}")
-            ms = temp
+            os.system(f"rm -r {ms} {ms.with_suffix('ms.flagversions')}")
+            ms = one_spw_ms
 
         os.system(f"rm -r {cal_table}")
 
@@ -305,7 +302,7 @@ def run_selfcal(
     )
 
     # Transform back to single SPW MS
-    ms = combine_multi_spw(ms, temp, nspws)
+    ms = combine_multi_spw(ms, one_spw_ms, nspws)
 
     # Split out calibrated MS
     if split_data:
