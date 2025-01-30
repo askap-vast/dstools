@@ -31,7 +31,11 @@ def gaincal(*args, **kwargs):
     return casatasks.gaincal(*args, **kwargs)
 
 
-@filter_stdout("XYZHAND keyword not found in AN table.")
+@filter_stdout(
+    "XYZHAND keyword not found in AN table.",
+    "No systemic velocity",
+    "No rest frequency",
+)
 def importuvfits(*args, **kwargs):
     return casatasks.importuvfits(*args, **kwargs)
 

@@ -284,13 +284,15 @@ def run_selfcal(
         default_response=True,
     )
 
-    # If unacceptable, remove calibration tables and multi-spw MS and return
+    # If unacceptable, remove calibration tables, plots, and multi-spw MS and return
     if not cal_good:
-        if nspws > 1:
-            os.system(f"rm -r {ms} {ms.with_suffix('ms.flagversions')}")
-            ms = one_spw_ms
 
         os.system(f"rm -r {cal_table}")
+        os.system(f"rm {ms.stem}*.png")
+
+        if nspws > 1:
+            os.system(f"rm -r {ms} {one_spw_ms.with_suffix('.ms.flagversions')}")
+            ms = one_spw_ms
 
         return ms
 

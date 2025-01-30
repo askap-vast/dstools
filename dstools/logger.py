@@ -110,10 +110,7 @@ def filter_pipe_output(
             if any(substr in line for substr in substrings):
                 continue
             else:
-                if stream == "STDOUT":
-                    logger.debug(line.strip())
-                else:
-                    logger.warning(line.strip())
+                os.write(original_stream_fd, line.encode())
 
     return
 
