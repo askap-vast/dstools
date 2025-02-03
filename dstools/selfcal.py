@@ -70,12 +70,13 @@ def combine_multi_spw(ms, multi_spw_ms, nspws):
         width=1,
     )
 
-    # The FEED table is corrupted by mstransform / gaincal / applycal / cvel loop
+    # The FEED and SOURCE tables are corrupted by mstransform / gaincal / applycal / cvel loop
     # growing in size by a factor of nspws and driving up run-time, so we copy
-    # the original here and overwrite the output FEED table after each loop.
-    feed_table = table(f"{multi_spw_ms}/FEED")
-    feed_table.copy(f"{one_spw_ms}/FEED")
-    feed_table.close()
+    # the originals here and overwrite the output FEED / SOURCE tables after each loop.
+    for ms_table in ("FEED", "SOURCE"):
+        feed_table = table(f"{multi_spw_ms}/{ms_table}")
+        feed_table.copy(f"{one_spw_ms}/{ms_table}")
+        feed_table.close()
 
     # Replace multi-SPW ms with combined copy
     os.system(f"rm -r {ms} {ms.with_suffix('.ms.flagversions')}")
