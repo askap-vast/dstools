@@ -49,15 +49,19 @@ class MiriadWrapper:
     gpinterval: float = 0.1
     nfbin: int = 4
     refant: int = 3
+    IF: str = None
     noflag: bool = False
     strong_pol: bool = False
-    IF: str = None
     out_dir: Path = Path(".")
     verbose: bool = False
 
     def __post_init__(self):
-        if self.IF is None:
-            self.IF = self.band.IF
+
+        # Handle selection of IF in L-band
+        if self.IF is not None and self.band.freq == "2100":
+            self.band.IF = self.IF
+
+        self.IF = self.band.IF
 
         self.uvfile = self.out_dir / "miriad" / f"{self.project_code}.uv"
         self.opts = {

@@ -59,6 +59,12 @@ logger = logging.getLogger(__name__)
     help="Reference antenna.",
 )
 @click.option(
+    "--int-freq",
+    type=str,
+    default=None,
+    help="Intermediate Frequency (IF) to select (only valid for L-band)",
+)
+@click.option(
     "--shiftra",
     type=str,
     default="0",
@@ -144,6 +150,7 @@ def main(
     nfbin,
     num_flag_rounds,
     refant,
+    int_freq,
     shiftra,
     shiftdec,
     noflag,
@@ -172,6 +179,7 @@ def main(
         gpinterval=gpinterval,
         nfbin=nfbin,
         refant=refant,
+        IF=int_freq,
         noflag=noflag,
         verbose=verbose,
     )
