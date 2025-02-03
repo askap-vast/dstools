@@ -184,7 +184,7 @@ class DynamicSpectrum:
     tunit: u.Quantity = u.hour
     corr_dumptime: float = 10.1
 
-    barycentre: bool = True
+    barycentre: bool = False
     derotate: bool = False
     dedisperse: bool = False
     RM: float = None

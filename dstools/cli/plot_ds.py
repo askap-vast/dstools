@@ -240,7 +240,7 @@ stokes_choices = [
     "-B",
     "--barycentre",
     is_flag=True,
-    default=True,
+    default=False,
     help="Toggle Barycentric correction.",
 )
 @click.option(
