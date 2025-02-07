@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 from dstools.logger import setupLogger
+from dstools.ms import MeasurementSet
 from dstools.selfcal import run_selfcal
 from dstools.utils import DataError
 
@@ -58,7 +59,7 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Number of spectral windows to derive indepdendent gain solutions within.",
 )
-@click.argument("ms", type=Path)
+@click.argument("ms", type=MeasurementSet)
 def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, nspws):
 
     setupLogger(verbose=False)

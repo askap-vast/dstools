@@ -6,6 +6,7 @@ import click
 from dstools.imaging import WSClean
 from dstools.logger import setupLogger
 from dstools.utils import BANDS, CONFIGS, Array, parse_coordinates
+from dstools.ms import MeasurementSet
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms", type=Path)
+@click.argument("ms", type=MeasurementSet)
 def main(
     ms,
     imsize,
@@ -214,8 +215,8 @@ def main(
     verbose,
 ):
 
-    os.system(f"mkdir -p {ms.parent.absolute() / out_dir}")
-    logfile = ms.parent.absolute() / out_dir / "rt-peel.log" if savelogs else None
+    os.system(f"mkdir -p {ms.path.parent.absolute() / out_dir}")
+    logfile = ms.path.parent.absolute() / out_dir / "rt-peel.log" if savelogs else None
     setupLogger(verbose=verbose, filename=logfile)
 
     # Set imaging parameters:

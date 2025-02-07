@@ -8,228 +8,68 @@ from pathlib import Path
 import click
 import h5py
 import numpy as np
-from astropy.coordinates import SkyCoord
 from astropy.wcs import FITSFixedWarning
 from casaconfig import config
-from numpy.typing import ArrayLike
 
 config.logfile = "/dev/null"
 from importlib.metadata import version
 
-from casatools import table
-from dstools.casa import mstransform, phaseshift
+from dstools.casa import mstransform
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
-from dstools.utils import column_exists, parse_coordinates
+from dstools.ms import MeasurementSet
+from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
 logger = logging.getLogger(__name__)
 
 
-def average_baselines(ms: Path, minuvdist: float = 0) -> Path:
-    logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
-    outputvis = ms.with_suffix(f".dstools-temp.baseavg{ms.suffix}")
+def combine_spws(ms: MeasurementSet) -> MeasurementSet:
 
-    tab = table(str(ms), nomodify=False)
-
-    ant1 = tab.getcol("ANTENNA1")
-    ant2 = tab.getcol("ANTENNA2")
-
-    # Set all antenna pairs equal for baseline averaging
-    nrows = tab.nrows()
-    tab.putcol("ANTENNA1", np.zeros(nrows))
-    tab.putcol("ANTENNA2", np.ones(nrows))
-
-    # Average over baselines by setting timeaverage interval to less than one scan cycle
-    interval = tab.getcol("INTERVAL")
-    timebin = "{}s".format(min(interval) * 1e-2)
-
-    mstransform(
-        vis=str(ms),
-        outputvis=str(outputvis),
-        datacolumn="all",
-        uvrange=f">{minuvdist}m",
-        timeaverage=True,
-        timebin=timebin,
-        keepflags=False,
-    )
-
-    # Replace original antenna names
-    tab.putcol("ANTENNA1", ant1)
-    tab.putcol("ANTENNA2", ant2)
-
-    tab.unlock()
-    tab.close()
-
-    return outputvis
-
-
-def get_header_properties(ms: Path, datacolumn: str, pb_scale: float) -> dict:
-
-    # Calculate data dimensions
-    times, freqs, antennas, nbaselines = get_data_dimensions(ms)
-
-    # Infer polarisation of feeds
-    feedtype = get_feed_polarisation(ms)
-
-    # Get telescope name
-    ta = table(f"{ms}/OBSERVATION", ack=False)
-    telescope = str(ta.getcol("TELESCOPE_NAME")[0])
-    ta.close()
-
-    # Parse phasecentre direction
-    ta = table(f"{ms}/FIELD", ack=False)
-    phasecentre_coords = ta.getcol("PHASE_DIR")[:, 0, 0]
-    phasecentre = SkyCoord(
-        ra=phasecentre_coords[0],
-        dec=phasecentre_coords[1],
-        unit="rad",
-    )
-    ta.close()
-
-    # Create header
-    ncorrelations = nbaselines * len(freqs) * len(times) * 4
-    header = {
-        "telescope": telescope,
-        "datacolumn": datacolumn,
-        "feeds": feedtype,
-        "antennas": len(antennas),
-        "baselines": nbaselines,
-        "integrations": len(times),
-        "channels": len(freqs),
-        "polarisations": 4,
-        "correlations": ncorrelations,
-        "phasecentre": phasecentre.to_string("hmsdms"),
-        "pb_scale": pb_scale,
-    }
-
-    return header
-
-
-def get_feed_polarisation(ms: Path) -> str:
-
-    tf = table(f"{ms}/FEED", ack=False)
-    feedtype = tf.getcol("POLARIZATION_TYPE")[0, 0]
-    tf.close()
-
-    feedtype = {
-        "X": "linear",
-        "Y": "linear",
-        "R": "circular",
-        "L": "circular",
-    }.get(feedtype)
-
-    if feedtype is None:
-        raise ValueError(
-            f"Feed has polarisation type {feedtype} which cannot be recognised."
-        )
-
-    return feedtype
-
-
-def combine_spws(ms: Path) -> Path:
-
-    outvis = ms.with_suffix(f".dstools-temp.comb{ms.suffix}")
-
-    # Determine number of spectral windows
-    tab = table(f"{ms}/SPECTRAL_WINDOW")
-
-    nspws = len(tab.getcol("FREQ_GROUP_NAME"))
-
-    tab.unlock()
-    tab.close()
+    outvis = ms.path.with_suffix(f".dstools-temp.comb{ms.path.suffix}")
 
     # Combine spectral windows if more than 1
-    combine = nspws > 1
+    combine = ms.nspws > 1
     mstransform(
-        vis=str(ms),
+        vis=str(ms.path),
         combinespws=combine,
         datacolumn="all",
         outputvis=str(outvis),
     )
 
-    return outvis
-
-
-def get_data_dimensions(ms: Path) -> tuple[ArrayLike, ArrayLike, ArrayLike, int]:
-
-    # Get antenna count and time / frequency arrays
-    tab = table(str(ms), ack=False)
-
-    # Throw away autocorrelations
-    tab = tab.query("ANTENNA1 != ANTENNA2")
-
-    # Get time, frequency, and baseline axes
-    times = np.unique(tab.getcol("TIME"))
-    tf = table(f"{ms}/SPECTRAL_WINDOW", ack=False)
-    freqs = tf.getcol("CHAN_FREQ").reshape(-1)
-
-    antennas = np.unique(
-        np.append(
-            tab.getcol("ANTENNA1"),
-            tab.getcol("ANTENNA2"),
-        ),
-    )
-
-    tf.close()
-    tab.close()
-
-    # Calculate number of baselines
-    nbaselines = len(antennas) * (len(antennas) - 1) // 2
-
-    return times, freqs, antennas, nbaselines
-
-
-def rotate_phasecentre(ms: Path, ra, dec) -> Path:
-    logger.debug(f"Rotating phasecentre to {ra} {dec}")
-
-    # Apply phasecentre rotation
-    rotated_ms = ms.with_suffix(f".dstools-temp.rotated{ms.suffix}")
-
-    phaseshift(
-        vis=str(ms),
-        outputvis=str(rotated_ms),
-        phasecenter=f"J2000 {ra} {dec}",
-    )
-
-    return rotated_ms
+    return MeasurementSet(path=outvis)
 
 
 def process_baseline(
-    ms: Path,
-    times: ArrayLike,
+    ms: MeasurementSet,
     baseline: tuple[str, str],
     datacolumn: str,
 ) -> dict:
 
     i, (ant1, ant2) = baseline
 
-    tab = table(str(ms), ack=False)
-    bl_tab = tab.query(f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})")
+    with ms.open_table(query=f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})") as bl_tab:
 
-    # Identify missing integrations on this baseline
-    bl_time = bl_tab.getcol("TIME")
-    missing_times = [t for t in times if t not in bl_time]
+        # Identify missing integrations on this baseline
+        bl_time = bl_tab.getcol("TIME")
+        missing_times = [t for t in ms.times if t not in bl_time]
 
-    # Add back to time column and identify indices of good integrations
-    bl_time = np.sort(np.append(bl_time, missing_times))
-    data_idx = np.argwhere(~np.in1d(bl_time, missing_times)).ravel()
+        # Add back to time column and identify indices of good integrations
+        bl_time = np.sort(np.append(bl_time, missing_times))
+        data_idx = np.argwhere(~np.in1d(bl_time, missing_times)).ravel()
 
-    # Calculate UVrange for each baseline
-    bl_uvw = bl_tab.getcol("UVW").T
-    bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
+        # Calculate UVrange for each baseline
+        bl_uvw = bl_tab.getcol("UVW").T
+        bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
 
-    data = {
-        "baseline": i,
-        "data_idx": data_idx,
-        "data": bl_tab.getcol(datacolumn).T,
-        "flags": bl_tab.getcol("FLAG").T,
-        "uvdist": np.nanmean(bl_uvdist, axis=0),
-    }
-
-    tab.close()
-    bl_tab.close()
+        data = {
+            "baseline": i,
+            "data_idx": data_idx,
+            "data": bl_tab.getcol(datacolumn).T,
+            "flags": bl_tab.getcol("FLAG").T,
+            "uvdist": np.nanmean(bl_uvdist, axis=0),
+        }
 
     return data
 
@@ -285,7 +125,7 @@ def process_baseline(
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms", type=Path)
+@click.argument("ms", type=MeasurementSet)
 @click.argument("outfile", type=Path)
 def main(
     ms,
@@ -309,7 +149,7 @@ def main(
     datacolumn = columns[datacolumn]
 
     # Check that selected column exists in MS
-    if not column_exists(ms, datacolumn):
+    if not ms.column_exists(datacolumn):
         logger.error(f"{ms} does not contain {datacolumn} column.")
         exit(1)
 
@@ -321,26 +161,25 @@ def main(
     # Optionally rotate phasecentre to new coordinates
     if phasecentre is not None:
         ra, dec = parse_coordinates(phasecentre)
-        ms = rotate_phasecentre(ms, ra, dec)
+        ms = ms.rotate_phasecentre(ra, dec)
 
     # Get primary beam correction
     pb_scale = get_pb_correction(primary_beam, ra, dec) if primary_beam else 1
 
     # Construct header with observation properties
-    header = get_header_properties(ms, datacolumn, pb_scale)
+    header = ms.header(
+        datacolumn=datacolumn,
+        pb_scale=pb_scale,
+    )
 
     # Optionally average over baselines
     if baseline_average:
-        ms = average_baselines(ms, minuvdist)
-
-    # Calculate final dimensions of DS
-    times, freqs, antennas, nbaselines = get_data_dimensions(ms)
-    data_shape = (nbaselines, len(times), len(freqs), 4)
+        ms = ms.average_baselines(minuvdist)
 
     # Initialise output arrays
-    waterfall = np.full(data_shape, np.nan, dtype=complex)
-    flags = np.full(data_shape, np.nan, dtype=bool)
-    uvdist = np.full(nbaselines, np.nan)
+    waterfall = np.full(ms.dimensions, np.nan, dtype=complex)
+    flags = np.full(ms.dimensions, np.nan, dtype=bool)
+    uvdist = np.full(ms.nbaselines, np.nan)
 
     # Construct 4D data and flag cubes on each baseline separately
     # to verify indices of missing data (e.g. due to correlator dropouts)
@@ -349,11 +188,10 @@ def main(
             executor.submit(
                 process_baseline,
                 ms,
-                np.copy(times),
                 baseline,
                 datacolumn,
             )
-            for baseline in enumerate(it.combinations(antennas, 2))
+            for baseline in enumerate(it.combinations(ms.antennas, 2))
         ]
         wait(processes)
 
@@ -379,15 +217,13 @@ def main(
         for attr in header:
             f.attrs[attr] = header[attr]
 
-        f.create_dataset("time", data=times)
-        f.create_dataset("frequency", data=freqs)
+        f.create_dataset("time", data=ms.times)
+        f.create_dataset("frequency", data=ms.channels)
         f.create_dataset("uvdist", data=uvdist)
         f.create_dataset("flux", data=waterfall)
 
     # Clean up intermediate files
-    ms_dir = ms.parent
-    os.system(f"rm -r {ms_dir}/*dstools-temp*.ms 2>/dev/null")
-    os.system("rm *.pre *.last 2>/dev/null")
+    os.system(f"rm -r {ms.path.parent}/*dstools-temp*.ms 2>/dev/null")
 
 
 if __name__ == "__main__":

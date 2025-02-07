@@ -15,7 +15,7 @@ from numpy.typing import ArrayLike
 from dstools.casa import exportfits
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import minimum_absolute_clip
-from numpy.typing import ArrayLike
+from dstools.ms import MeasurementSet
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class WSCleanModel(Model):
 
         return
 
-    def insert_into(self, ms: str):
+    def insert_into(self, ms: MeasurementSet):
 
         wsclean_cmd = [
             "wsclean",
@@ -128,11 +128,9 @@ class WSCleanModel(Model):
             "-predict",
             f"-shift {self.phasecentre}",
             "-quiet",
-            f"{ms}",
+            f"{ms.path}",
         ]
         wsclean_cmd = " ".join(wsclean_cmd)
-
-        logger.debug(wsclean_cmd)
 
         p = subprocess.Popen(
             wsclean_cmd,
@@ -319,7 +317,7 @@ class WSClean:
 
         return f"-{arg} {val}"
 
-    def run(self, ms: Path, name: str):
+    def run(self, ms: MeasurementSet, name: str):
 
         logger.info(
             f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, {self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
@@ -353,12 +351,11 @@ class WSClean:
         wsclean_cmd.append(fits_mask)
 
         # Add MS positional argument
-        ms = Path(ms).absolute()
-        wsclean_cmd.append(str(ms))
+        wsclean_cmd.append(str(ms.path.absolute()))
         wsclean_cmd = " ".join(wsclean_cmd)
 
         # Create output directory
-        model_path = ms.parent.absolute() / self.out_dir
+        model_path = ms.path.parent.absolute() / self.out_dir
         model_path.mkdir(exist_ok=True)
 
         # Move into working directory to store imaging products

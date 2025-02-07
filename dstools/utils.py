@@ -31,16 +31,6 @@ class DataError(Exception):
     pass
 
 
-def column_exists(ms: Path, column: str) -> bool:
-
-    t = table()
-    t.open(str(ms))
-    columns = t.colnames()
-    t.close()
-
-    return column in columns
-
-
 def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:
     """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
 

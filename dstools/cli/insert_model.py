@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 from dstools.imaging import WSCleanModel
 from dstools.logger import setupLogger
+from dstools.ms import MeasurementSet
 from dstools.viewer import Image, Viewer
 
 logger = logging.getLogger(__name__)
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 @click.command(context_settings={"show_default": True})
 @click.argument("model_dir", type=Path)
-@click.argument("ms", type=Path)
-def main(model_dir, model_format, ms):
+@click.argument("ms", type=MeasurementSet)
+def main(model_dir, ms):
 
     setupLogger(verbose=False)
 
