@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import click
-from dstools.imaging import CASAModel, WSCleanModel
+from dstools.imaging import WSCleanModel
 from dstools.logger import setupLogger
 from dstools.viewer import Image, Viewer
 
@@ -11,13 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 @click.command(context_settings={"show_default": True})
-@click.option(
-    "-f",
-    "--model-format",
-    type=click.Choice(["wsclean", "casa"]),
-    default="wsclean",
-    help="Format of model images. 'wsclean' models consist of an MFS and multiple channel images. 'casa' models consist of multiple Taylor Term images.",
-)
 @click.argument("model_dir", type=Path)
 @click.argument("ms", type=Path)
 def main(model_dir, model_format, ms):
@@ -29,12 +22,7 @@ def main(model_dir, model_format, ms):
         exit(1)
 
     # Read model images in
-    Model = {
-        "wsclean": WSCleanModel,
-        "casa": CASAModel,
-    }.get(model_format)
-
-    model = Model(model_dir)
+    model = WSCleanModel(model_dir)
 
     # Set up interactive masking session
     logger.info("Launching interactive mask viewer...")

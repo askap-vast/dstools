@@ -6,7 +6,6 @@ import astropy.units as u
 import click
 import numpy as np
 from dstools.casa import split, uvsub
-from dstools.imaging import CASAModel, WSCleanModel
 from dstools.logger import setupLogger
 from dstools.utils import column_exists, parse_coordinates
 

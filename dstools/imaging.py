@@ -8,14 +8,11 @@ from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
-from casaconfig import config
-
-config.logfile = "/dev/null"
-
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
-from casatools import table
-from dstools.casa import exportfits, imsubimage, tclean
+from numpy.typing import ArrayLike
+
+from dstools.casa import exportfits
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import minimum_absolute_clip
 from numpy.typing import ArrayLike
@@ -68,115 +65,6 @@ class Model(ABC):
     @abstractmethod
     def apply_mask(self, mask: ArrayLike):
         """Back up each model image and apply mask."""
-
-
-@dataclass
-class CASAModel(Model):
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.name = str(self.image).replace(".tt0.fits", "")
-
-        self.nterms = len(self.model_images)
-
-    def _load(self):
-        image_path = list(self.model_dir.glob("*.model.tt0"))[0]
-
-        self.model = str(image_path).replace(".model.tt0", ".model.I.tt0.fits")
-        self.image = self.model.replace(".model", ".image")
-        self.residual = self.model.replace(".model", ".residual")
-
-        for imtype in [".model", ".residual", ".image"]:
-
-            im = str(image_path).replace(".model.tt0", f"{imtype}.tt0")
-            stokesI_im = im.replace(f"{imtype}.tt0", f"{imtype}.I.tt0")
-            subim = im.replace(f"{imtype}.tt0", f"{imtype}.I.tt0.fits")
-
-            imsubimage(
-                imagename=im,
-                outfile=stokesI_im,
-                stokes="I",
-                overwrite=True,
-            )
-            exportfits(
-                imagename=stokesI_im,
-                fitsimage=subim,
-                overwrite=True,
-            )
-            os.system(f"rm -r {stokesI_im}")
-
-        self.model_images = list(self.model_dir.glob("*.model.tt*"))
-
-        return
-
-    def _validate(self):
-
-        # Check for existence of tt0 Stokes I FITS image
-        if len(self.image) == 0:
-            msg = f"Path {self.model_dir} does not contain any CASA model images with pattern '*.model.I.tt0.fits'."
-            raise ValueError(msg)
-
-        # Check for existence of TT model images
-        tt_images = [im for im in self.model_images]
-        if len(tt_images) == 0:
-            msg = f"Path {self.model_dir} does not contain any CASA model images with pattern '*.model.tt*'."
-            raise ValueError(msg)
-
-        return
-
-    def insert_into(self, ms):
-
-        image_props = imhead(imagename=self.model)
-        model_base = model[0].replace(".tt0", "")
-
-        imsize = image_props["shape"][0]
-        cell = round(abs(image_props["incr"][0]) * u.rad.to(u.arcsec), 3)
-        freqaxis = np.argwhere(image_props["axisnames"] == "Frequency")
-        freq = image_props["refval"][freqaxis][0, 0] * u.Hz.to(u.MHz)
-
-        cellsize = f"{cell}arcsec"
-        reffreq = f"{freq}MHz"
-
-        tclean(
-            vis=ms,
-            cell=[cellsize],
-            imsize=[imsize],
-            startmodel=[f"{model_base}.tt{i}" for i in range(self.nterms)],
-            savemodel="modelcolumn",
-            niter=0,
-            imagename=f"{maskgen}.im_presub",
-            nterms=self.nterms,
-            deconvolver="mtmfs",
-            reffreq=reffreq,
-            weighting="briggs",
-            stokes="IQUV",
-            robust=0.5,
-            gridder="widefield",
-            wprojplanes=-1,
-            pblimit=-1,
-        )
-        os.system(f"rm -r {maskgen}.im_presub* >/dev/null 2>&1")
-
-        return
-
-    def apply_mask(self, mask: ArrayLike):
-
-        for image in self.model_images:
-            backup = str(image).replace(".model", ".model.premask")
-            if not os.path.exists(backup):
-                os.system(f"cp -r {image} {backup}")
-
-            t = table()
-            t.open(str(image), nomodify=False)
-
-            data = t.getcol("map")
-            data[~mask.T, :, :, :] = 0
-            t.putcol("map", data)
-
-            t.close()
-
-        return
 
 
 @dataclass
