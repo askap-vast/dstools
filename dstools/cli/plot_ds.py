@@ -244,6 +244,12 @@ stokes_choices = [
     help="Toggle Barycentric correction.",
 )
 @click.option(
+    "--absolute-times",
+    is_flag=True,
+    default=True,
+    help="Toggle plotting time axes with absolute vs relative times.",
+)
+@click.option(
     "-C",
     "--calscans",
     is_flag=True,
@@ -293,6 +299,7 @@ def main(
     trim,
     period,
     period_offset,
+    absolute_times,
     calscans,
     summary,
     verbose,
@@ -324,6 +331,7 @@ def main(
         maxtime=tmax,
         tunit=tunit,
         trim=trim,
+        absolute_times=absolute_times,
         calscans=calscans,
         barycentre=barycentre,
         derotate=derotate,

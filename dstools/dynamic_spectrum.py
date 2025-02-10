@@ -9,6 +9,7 @@ from typing import Optional
 import astropy.constants as c
 import astropy.units as u
 import h5py
+import matplotlib.dates as mdates
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
@@ -196,6 +197,7 @@ class DynamicSpectrum:
     period_offset: float = 0.0
     fold_periods: int = 2
 
+    absolute_times: bool = True
     calscans: bool = True
     trim: bool = True
 
@@ -224,6 +226,8 @@ class DynamicSpectrum:
             YX = self._fold(YX)
             YY = self._fold(YY)
 
+            # Disable plotting with absolute times as we will plot phase instead
+            self.absolute_times = False
             self.time = rebin(len(self.time), len(XX), axis=0) @ self.time
 
         # Average data in time and frequency
@@ -757,7 +761,10 @@ class DynamicSpectrum:
 
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(7, 5))
+
         fig, ax = lc.plot(fig, ax, polangle=polangle)
+
+        fig.tight_layout()
 
         return fig, ax
 
@@ -771,7 +778,47 @@ class DynamicSpectrum:
 
         fig, ax = sp.plot(fig, ax)
 
+        fig.tight_layout()
+
         return fig, ax
+
+    def format_timeaxis(self, ax):
+
+        timescale = self.header["time_scale"]
+        timestart = self.header["time_start"]
+        t0 = Time(timestart, format="iso", scale=timescale)
+
+        # Set tick locations
+        locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
+        ax.xaxis.set_major_locator(locator)
+
+        # Determine first occurrences of unique dates
+        tick_dates = [
+            Time(t0 + t * self.tunit).strftime("%Y-%m-%d") for t in ax.get_xticks()
+        ]
+        unique_dates, unique_date_idx = list(np.unique(tick_dates, return_index=True))
+        single_date = len(unique_dates) == 1
+
+        # Set x-axis label to UTC date if data confined to a single day
+        # otherwise we add the date as text overlays at the first xtick occurence in a day
+        xlabel = f"{timescale.upper()} {unique_dates[0]}" if single_date else None
+        ax.set_xlabel(xlabel)
+
+        # Add custom timestamp formatter
+        def timestamp_formatter(x, pos):
+            t = t0 + x * self.tunit
+            mpl_date = mdates.num2date(t.plot_date)
+
+            if not single_date and pos in unique_date_idx:
+                fmt = f"%H:%M\n{timescale.upper()} %Y-%m-%d"
+            else:
+                fmt = "%H:%M"
+
+            return mpl_date.strftime(fmt)
+
+        ax.xaxis.set_major_formatter(timestamp_formatter)
+
+        return
 
     def _plot_ds(self, data, cmin, cmax, cmap, fig, ax):
         if fig is None or ax is None:
@@ -798,6 +845,9 @@ class DynamicSpectrum:
 
         ax.set_xlabel(self._timelabel)
         ax.set_ylabel("Frequency (MHz)")
+
+        if self.absolute_times:
+            self.format_timeaxis(ax)
 
         return fig, ax, im
 
@@ -826,6 +876,8 @@ class DynamicSpectrum:
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label("Flux Density (mJy)")
 
+        fig.tight_layout()
+
         return fig, ax
 
     def plot_pol_ds(self, fig=None, ax=None, mask_sigma=1):
@@ -851,6 +903,8 @@ class DynamicSpectrum:
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label("Fractional Polarisation")
+
+        fig.tight_layout()
 
         return fig, ax
 
@@ -884,6 +938,8 @@ class DynamicSpectrum:
         )
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.set_label("PA (deg)")
+
+        fig.tight_layout()
 
         return fig, ax
 
@@ -1088,6 +1144,9 @@ class LightCurve(TimeFreqSeries):
         if polangle:
             self.add_polarisation_angle()
 
+        if self.ds.absolute_times:
+            self.ds.format_timeaxis(self.ax)
+
         return self.fig, self.ax
 
 
@@ -1160,9 +1219,11 @@ def make_summary_plot(
 
     fig.subplots_adjust(
         left=0.06,
-        top=0.94,
+        top=0.98,
         right=0.96,
         bottom=0.05,
+        hspace=0.18,
+        wspace=0.24,
     )
 
     return fig
