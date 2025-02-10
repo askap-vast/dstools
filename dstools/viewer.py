@@ -44,23 +44,67 @@ class Viewer:
             cmap="plasma",
         )
 
+        mask = np.ma.masked_where(self.mask, ~self.mask) * 1
         self.mask_plot = self.ax.imshow(
-            np.ma.masked_where(self.mask, ~self.mask),
+            mask,
             cmap="bwr_r",
-            alpha=0.4,
+            alpha=0.5,
         )
 
-        # self.add_slider()
-
+        self.add_norm_buttons()
         self.add_click_handler()
 
         plt.show()
 
-    def _update_colorscale(self):
+    def add_norm_buttons(self):
+        """Add buttons for switching color scales."""
+
+        scales = [0.9, 0.95, 0.99, 0.995, 0.999, 0.9999]
+        text_ax = inset_axes(
+            self.ax,
+            width="40%",
+            height="3%",
+            loc="lower left",
+            bbox_to_anchor=(0.74, -0.05, 1, 1),
+            bbox_transform=self.ax.transAxes,
+        )
+        text_ax.text(
+            0,
+            0,
+            "Colormap Normalisation Scale",
+            horizontalalignment="center",
+            size=11,
+        )
+
+        text_ax.set_xticks([])
+        text_ax.set_yticks([])
+        text_ax.set_frame_on(False)
+
+        for i, scale in enumerate(scales):
+
+            xpos = i * 0.08
+            button_ax = inset_axes(
+                self.ax,
+                width="7%",
+                height="7%",
+                loc="lower left",
+                bbox_to_anchor=(0.5 + xpos, -0.15, 1, 1),
+                bbox_transform=self.ax.transAxes,
+            )
+
+            toggle = Button(button_ax, f"{scale*100:.10g}%")
+            toggle.on_clicked(self._update_colorscale(scale * 100))
+            setattr(self, f"scale{scale}_toggle", toggle)
+
+    def _update_colorscale(self, percentile):
+
+        data = self.image_object.get_array().data
+        vmin = np.nanpercentile(data, 100 - percentile)
+        vmax = np.nanpercentile(data, percentile)
 
         def _update(val):
-            self.image_object.norm.vmin = val[0]
-            self.image_object.norm.vmax = val[1]
+            self.image_object.norm.vmin = vmin
+            self.image_object.norm.vmax = vmax
 
             # Redraw the figure to ensure it updates
             self.fig.canvas.draw_idle()
@@ -115,12 +159,11 @@ class Viewer:
 
         mask = np.ma.masked_where(self.mask, ~self.mask)
         image = self.active_image.data
-        image[~self.mask] = np.nan
 
         self.image_object.set_data(image)
         self.image_object.norm = self.active_image.norm
 
-        self.mask_plot.set_data(mask)
+        self.mask_plot.set_data(mask * 1)
 
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
