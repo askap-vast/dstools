@@ -202,7 +202,6 @@ class DynamicSpectrum:
     trim: bool = True
 
     def __post_init__(self):
-
         # Load instrumental polarisation time/frequency/uvdist arrays
         XX, XY, YX, YY = self._load_data()
 
@@ -234,9 +233,6 @@ class DynamicSpectrum:
         XX, XY, YX, YY = self._rebin(XX, XY, YX, YY)
 
         # Store time and frequency resolution
-        timebins = len(self.time) / self.tavg
-        freqbins = len(self.freq) / self.favg
-
         self.time_res = (self.time[1] - self.time[0]) * self.tunit
         self.freq_res = (self.freq[1] - self.freq[0]) * u.MHz
         self.header.update(
@@ -304,7 +300,6 @@ class DynamicSpectrum:
         return scan_start_idx, scan_end_idx
 
     def _validate(self, datafile):
-
         # Check if baselines have been pre-averaged and disable uvdist selection if so
         default_uv_params = [
             self.minuvdist == 0,
@@ -317,7 +312,7 @@ class DynamicSpectrum:
 
         if made_uvdist_selection and baseline_averaged:
             logger.warning(
-                f"DS is already baseline averaged, disabling uvdist selection."
+                "DS is already baseline averaged, disabling uvdist selection."
             )
             self.minuvdist = 0
             self.maxuvdist = np.inf
@@ -338,7 +333,6 @@ class DynamicSpectrum:
 
         # Import instrumental polarisations and time/frequency/uvdist arrays
         with h5py.File(self.ds_path, "r") as f:
-
             self._validate(f)
 
             # Read header
@@ -474,7 +468,6 @@ class DynamicSpectrum:
         return XX, XY, YX, YY
 
     def _barycentre_times(self, time: Time):
-
         ra, dec = self.header.get("phasecentre").split()
         location = LOCATIONS.get(self.header.get("telescope"))
 
@@ -615,7 +608,6 @@ class DynamicSpectrum:
         L = Q.real + 1j * U.real
 
         if self.derotate:
-
             if self.RM is None:
                 self.RM = self.rm_synthesis(I, Q, U)
 
@@ -670,7 +662,6 @@ class DynamicSpectrum:
         return acf2d
 
     def rm_synthesis(self, I, Q, U):
-
         # Zero out null values in Stokes arrays
         I[np.isnan(I)] = 0 + 0j
         Q[np.isnan(Q)] = 0 + 0j
@@ -783,7 +774,6 @@ class DynamicSpectrum:
         return fig, ax
 
     def format_timeaxis(self, ax):
-
         timescale = self.header["time_scale"]
         timestart = self.header["time_start"]
         t0 = Time(timestart, format="iso", scale=timescale)
@@ -996,13 +986,13 @@ class DynamicSpectrum:
             ls="--",
         )
 
-        logger.debug(f"Stokes {stokes} ACF peak at {self.peak_lags[0]*self.tunit:.3f}")
+        peak_lag = self.peak_lags[0] * self.tunit
+        logger.debug(f"Stokes {stokes} ACF peak at {peak_lag:.3f}")
 
         return acf_fig, acf_ax, acfz_fig, acfz_ax
 
 
 class TimeFreqSeries(ABC):
-
     def _construct_yaxis(self, avg_axis):
         """Construct y-axis averaging flux over x-axis."""
 
@@ -1029,10 +1019,8 @@ class TimeFreqSeries(ABC):
         return y, yerr
 
     def plot(self):
-
         # Overplot each specified polarisation
         for stokes in self.stokes:
-
             # Plot time/frequency series
             self.ax.errorbar(
                 self.x,
@@ -1085,7 +1073,6 @@ class LightCurve(TimeFreqSeries):
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
 
     def add_polarisation_angle(self, pa_sigma=2):
-
         Q = self.ds.data["Q"]
         U = self.ds.data["U"]
         L = self.ds.data["L"]

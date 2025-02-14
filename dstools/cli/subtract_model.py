@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 )
 @click.argument("ms", type=MeasurementSet)
 def main(ms, split_ms):
-
     setupLogger(verbose=False)
 
     # Perform field model subtraction

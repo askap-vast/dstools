@@ -3,16 +3,13 @@ import logging
 import os
 import warnings
 from concurrent.futures import ProcessPoolExecutor, wait
+from importlib.metadata import version
 from pathlib import Path
 
 import click
 import h5py
 import numpy as np
 from astropy.wcs import FITSFixedWarning
-from casaconfig import config
-
-config.logfile = "/dev/null"
-from importlib.metadata import version
 
 from dstools.casa import mstransform
 from dstools.imaging import get_pb_correction
@@ -26,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 def combine_spws(ms: MeasurementSet) -> MeasurementSet:
-
     outvis = ms.path.with_suffix(f".dstools-temp.comb{ms.path.suffix}")
 
     # Combine spectral windows if more than 1
@@ -46,11 +42,9 @@ def process_baseline(
     baseline: tuple[str, str],
     datacolumn: str,
 ) -> dict:
-
     i, (ant1, ant2) = baseline
 
     with ms.open_table(query=f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})") as bl_tab:
-
         # Identify missing integrations on this baseline
         bl_time = bl_tab.getcol("TIME")
         missing_times = [t for t in ms.times if t not in bl_time]
@@ -138,7 +132,6 @@ def main(
     minuvdist,
     verbose,
 ):
-
     setupLogger(verbose=verbose)
 
     columns = {
@@ -212,7 +205,6 @@ def main(
 
     # Write all data to file
     with h5py.File(outfile, "w", track_order=True) as f:
-
         f.attrs["dstools_version"] = version("radio-dstools")
         for attr in header:
             f.attrs[attr] = header[attr]

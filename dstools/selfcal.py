@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+
 from dstools.ms import MeasurementSet
 from dstools.utils import DataError, prompt
 
@@ -60,12 +61,10 @@ def run_selfcal(
 
     # If unacceptable, remove calibration tables, plots, and multi-spw MS and return
     if not cal_good:
-
         os.system(f"rm -r {ms.caltable.path}")
         os.system(f"rm {ms.path.stem}*.png")
 
         if nspws > 1:
-
             os.system(f"rm -r {ms.path} ")
             ms.path = ms.original_path
             ms.original_path = None

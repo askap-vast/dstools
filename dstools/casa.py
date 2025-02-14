@@ -1,8 +1,9 @@
 from casaconfig import config
 
 config.logfile = "/dev/null"
-import casatasks
-from dstools.logger import filter_stdout
+import casatasks  # noqa: E402
+
+from dstools.logger import filter_stdout  # noqa: E402
 
 
 def applycal(*args, **kwargs):

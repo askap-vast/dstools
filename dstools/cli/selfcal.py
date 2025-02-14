@@ -1,7 +1,7 @@
 import logging
-from pathlib import Path
 
 import click
+
 from dstools.logger import setupLogger
 from dstools.ms import MeasurementSet
 from dstools.selfcal import run_selfcal
@@ -61,7 +61,6 @@ logger = logging.getLogger(__name__)
 )
 @click.argument("ms", type=MeasurementSet)
 def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, nspws):
-
     setupLogger(verbose=False)
 
     gaintype = "T" if combine_pols else "G"

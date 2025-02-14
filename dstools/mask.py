@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -26,10 +25,10 @@ def create_boxcar_skew_mask(
     box_size: int,
 ) -> np.ndarray:
     assert 0.0 < skew_delta < 0.5, f"{skew_delta=}, but should be 0.0 to 0.5"
-    assert (
-        len(image.shape) == 2
-    ), f"Expected two dimensions, got image shape of {image.shape}"
-    logger.info(f"Computing boxcar skew with {box_size=} and {skew_delta=}")
+    assert len(image.shape) == 2, (
+        f"Expected two dimensions, got image shape of {image.shape}"
+    )
+    logger.debug(f"Computing boxcar skew with {box_size=} and {skew_delta=}")
     positive_pixels = (image > 0.0).astype(np.float32)
 
     # Counting positive pixel fraction here. The su
@@ -42,7 +41,7 @@ def create_boxcar_skew_mask(
     )  # trust nothing
 
     skew_mask = positive_pixel_fraction > (0.5 + skew_delta)
-    logger.info(f"{np.sum(skew_mask)} pixels above {skew_delta=} with {box_size=}")
+    logger.debug(f"{np.sum(skew_mask)} pixels above {skew_delta=} with {box_size=}")
 
     return SkewResult(
         positive_pixel_frac=positive_pixel_fraction,
@@ -85,7 +84,7 @@ def _adaptive_minimum_absolute_clip(
     adaptive_box_step: float = 2.0,
     adaptive_skew_delta: float = 0.2,
 ) -> np.ndarray:
-    logger.info(
+    logger.debug(
         f"Using adaptive minimum absolute clip with {box_size=} {adaptive_skew_delta=}"
     )
     min_value = minimum_filter(image, size=box_size)
@@ -97,13 +96,13 @@ def _adaptive_minimum_absolute_clip(
             box_size=box_size,
         )
         if np.all(~skew_results.skew_mask):
-            logger.info("No skewed islands detected")
+            logger.debug("No skewed islands detected")
             break
         if any([box_size > dim for dim in image.shape]):
-            logger.info(f"{box_size=} larger than a dimension in {image.shape=}")
+            logger.debug(f"{box_size=} larger than a dimension in {image.shape=}")
             break
 
-        logger.info(f"({box_round}) Growing {box_size=} {adaptive_box_step=}")
+        logger.debug(f"({box_round}) Growing {box_size=} {adaptive_box_step=}")
         box_size = int(box_size * adaptive_box_step)
         _min_value = minimum_filter(image, box_size)
         logger.debug("Slicing minimum values into place")

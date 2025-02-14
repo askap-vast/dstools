@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import astropy.units as u
-import click
-import dstools
 import pandas as pd
+
+import dstools
 from dstools.casa import importuvfits, listobs
-from dstools.logger import parse_stdout_stderr, setupLogger
+from dstools.logger import parse_stdout_stderr
 from dstools.utils import prompt
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,6 @@ class MiriadWrapper:
     verbose: bool = False
 
     def __post_init__(self):
-
         # Handle selection of IF in L-band
         if self.IF is not None and self.band.freq == "2100":
             self.band.IF = self.IF
@@ -73,7 +72,7 @@ class MiriadWrapper:
             "spec": self.band.spec,
             "refant": self.refant,
         }
-        logger.debug(f"Miriad options set to:")
+        logger.debug("Miriad options set to:")
         for k, v in self.opts.items():
             logger.debug(f"{k}={v}")
 
@@ -127,7 +126,6 @@ class MiriadWrapper:
         target: str = None,
         leakage_cal: str = None,
     ):
-
         ms = self.generate_ms(self.uvfile)
 
         # Read and store scan summary
@@ -391,7 +389,7 @@ class CABBContinuumPipeline:
         )
 
         # Remove all sub-band phase/xy-phase solution plots
-        for plot in glob.glob(f"diagnostics/*png_*"):
+        for plot in glob.glob("diagnostics/*png_*"):
             self.miriad.run_command(f"rm {plot}")
 
         os.chdir(cwd)
@@ -399,7 +397,6 @@ class CABBContinuumPipeline:
         return
 
     def run(self):
-
         primary_cal = self.miriad.target_paths.get("primary_cal").path
         gain_cal = self.miriad.target_paths.get("gain_cal").path
         target = self.miriad.target_paths.get("target").path
@@ -438,7 +435,6 @@ class CABBContinuumPipeline:
         # Leakage calibrator
         # ------------------
         if leakage_cal is not None:
-
             self.miriad.copycal(primary_cal, leakage_cal)
 
             # Flag and solve for gains / leakages / xy-phase on leakage calibrator
@@ -499,7 +495,3 @@ class CABBContinuumPipeline:
         )
 
         return
-
-
-if __name__ == "__main__":
-    main()

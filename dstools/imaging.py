@@ -1,4 +1,3 @@
-import glob
 import logging
 import os
 import subprocess
@@ -6,7 +5,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
@@ -29,7 +27,6 @@ class Image:
         self._load()
 
     def _load(self):
-
         with fits.open(self.path) as hdul:
             self.header, data = hdul[0].header, hdul[0].data
             self.data = data[0, 0, :, :] if data.ndim == 4 else data
@@ -43,7 +40,6 @@ class Image:
 
 @dataclass
 class Model(ABC):
-
     model_dir: Path
 
     def __post_init__(self):
@@ -69,7 +65,6 @@ class Model(ABC):
 
 @dataclass
 class WSCleanModel(Model):
-
     def __post_init__(self):
         super().__post_init__()
 
@@ -90,7 +85,6 @@ class WSCleanModel(Model):
         self.get_phasecentre()
 
     def _validate(self):
-
         # Check for existence of sub-channel model images
         if len(self.image) == 0:
             msg = f"Path {self.model_dir} does not contain any wsclean model images with pattern '*-MFS-I-model.fits'."
@@ -105,7 +99,6 @@ class WSCleanModel(Model):
         return
 
     def get_phasecentre(self):
-
         with fits.open(self.model) as hdul:
             header = hdul[0].header
             wcs = WCS(header)
@@ -118,7 +111,6 @@ class WSCleanModel(Model):
         return
 
     def insert_into(self, ms: MeasurementSet):
-
         wsclean_cmd = [
             "wsclean",
             "-multiscale",
@@ -145,7 +137,6 @@ class WSCleanModel(Model):
         return
 
     def apply_mask(self, mask: ArrayLike):
-
         error_msg = "Cannot mask image of shape {} with mask of shape {}"
 
         for image in self.model_images:
@@ -165,7 +156,6 @@ class WSCleanModel(Model):
 
 @dataclass
 class WSClean:
-
     imsize: int
     cellsize: str
 
@@ -235,7 +225,6 @@ class WSClean:
 
     @property
     def _multiscale_args(self):
-
         if not self.multiscale:
             return ""
 
@@ -247,7 +236,6 @@ class WSClean:
 
     @property
     def _phasecentre_args(self):
-
         if self.phasecentre is None:
             return ""
 
@@ -256,7 +244,6 @@ class WSClean:
 
     @property
     def _spectral_args(self):
-
         if self.channels_out == 1:
             return ""
 
@@ -282,7 +269,6 @@ class WSClean:
         return
 
     def _get_fits_mask(self):
-
         if self.fits_mask is None:
             return ""
 
@@ -318,11 +304,6 @@ class WSClean:
         return f"-{arg} {val}"
 
     def run(self, ms: MeasurementSet, name: str):
-
-        logger.info(
-            f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, {self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
-        )
-
         # Add all essential arguments
         wsclean_cmd = [
             "wsclean",
@@ -362,6 +343,9 @@ class WSClean:
         cwd = Path(".").absolute()
         os.chdir(model_path)
 
+        logger.info(
+            f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, {self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
+        )
         logger.debug(wsclean_cmd)
 
         # Run WSclean
@@ -382,7 +366,6 @@ class WSClean:
 
 
 def get_pb_correction(primary_beam: Path, ra: str, dec: str) -> float:
-
     position = SkyCoord(ra=ra, dec=dec, unit=("hourangle", "deg"))
 
     # If PB image is CASA format, create a temporary FITS copy

@@ -1,11 +1,9 @@
 import logging
 import os
 import selectors
-import sys
 import threading
 from contextlib import contextmanager
 from functools import wraps
-from io import StringIO
 from typing import Callable, Iterable, Optional
 
 import colorlog
@@ -82,7 +80,7 @@ def parse_stdout_stderr(process, logger, print_stdout: bool = False):
                 break
 
             line = line.decode().rstrip()
-            debug_line = any(l in line for l in debug_lines)
+            debug_line = any(debug_str in line for debug_str in debug_lines)
 
             if print_stdout:
                 print(line)
@@ -151,7 +149,6 @@ def redirect_c_output(
         stderr_thread.start()
 
     try:
-
         # Redirect STDOUT / STDERR to pipe for filtering
         if filter_stdout:
             os.dup2(stdout_pipe_w, 1)
@@ -161,7 +158,6 @@ def redirect_c_output(
         yield
 
     finally:
-
         # Restore original file descriptors
         if filter_stdout:
             os.dup2(original_stdout_fd, 1)

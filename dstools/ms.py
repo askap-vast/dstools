@@ -38,7 +38,6 @@ class Table:
     path: Path | str
 
     def __post_init__(self):
-
         if not os.path.exists(self.path):
             raise FileNotFoundError(f"MeasurementSet {self.path} not found")
 
@@ -70,7 +69,6 @@ class Table:
 
     @property
     def antennas(self):
-
         # Throw away autocorrelations and get list of all antennas
         with self.open_table(query="ANTENNA1 != ANTENNA2") as t:
             ant1 = t.getcol("ANTENNA1")
@@ -126,7 +124,6 @@ class CalTable(Table):
         return da.absolute(self.gains)
 
     def plot_solutions(self, calmode: str) -> None:
-
         # Calculate phase / amplitude from complex gain solutions
         if calmode == "p":
             gains = self.phase_solutions
@@ -139,7 +136,6 @@ class CalTable(Table):
         num_figures = int(self.nantennas // 6)
 
         for subfig in range(num_figures):
-
             # Plot solutions against time
             fig = plt.figure(figsize=(12, 8))
             gs = GridSpec(2, 3)
@@ -156,9 +152,7 @@ class CalTable(Table):
                 ax = fig.add_subplot(gs[row, col])
 
                 for spw in range(self.nspws):
-
                     for polaxis in range(self.npols):
-
                         t = self.times[np.where(self.spw_ids == spw)]
                         time_start = Time(
                             t[0] * u.s.to(u.day),
@@ -209,7 +203,6 @@ class CalTable(Table):
 
 
 class MeasurementSet(Table):
-
     def __post_init__(self):
         super().__post_init__()
         self.original_path = None
@@ -247,7 +240,6 @@ class MeasurementSet(Table):
 
     @property
     def feedtype(self):
-
         feedtype = self.getcolumn("POLARIZATION_TYPE", subtable="FEED")[0, 0]
 
         feedtype = {
@@ -306,9 +298,8 @@ class MeasurementSet(Table):
         return header
 
     def _combine_multi_spw(self) -> None:
-
         if self.original_path is None:
-            raise DataError(f"This MS has not been split with .to_nspws()")
+            raise DataError("This MS has not been split with .to_nspws()")
 
         logger.info(f"Transforming from {self.nspws} to 1 spectral windows")
 
@@ -346,7 +337,6 @@ class MeasurementSet(Table):
         return
 
     def _split_multi_spw(self, nspws):
-
         logger.info(f"Transforming from 1 to {nspws} spectral windows")
 
         multi_spw_ms = self.path.with_suffix(f".{nspws}spw.ms")
@@ -373,7 +363,6 @@ class MeasurementSet(Table):
         return
 
     def to_nspws(self, nspws: int) -> None:
-
         if nspws == 1 and self.nspws == 1:
             return
 
@@ -390,7 +379,6 @@ class MeasurementSet(Table):
         )
 
     def rotate_phasecentre(self, ra, dec, inplace=False):
-
         if inplace:
             raise NotImplementedError(
                 "Have not yet implemented inplace phasecentre rotation"
@@ -410,13 +398,11 @@ class MeasurementSet(Table):
         return MeasurementSet(path=rotated_ms)
 
     def average_baselines(self, minuvdist: float = 0):
-
         logger.debug(f"Averaging over baseline axis with uvdist > {minuvdist}m")
         outputvis = self.path.with_suffix(f".dstools-temp.baseavg{self.path.suffix}")
 
         # Set antenna pairs equal to prepare for baseline averaging
         with self.open_table(nomodify=False) as t:
-
             ant1 = t.getcol("ANTENNA1")
             ant2 = t.getcol("ANTENNA2")
 
@@ -447,10 +433,9 @@ class MeasurementSet(Table):
         return MeasurementSet(path=outputvis)
 
     def subtract_model(self, split_ms: bool = False):
-
         if not self.column_exists("MODEL_DATA"):
             raise DataError(
-                f"{ms} does not contain a MODEL_DATA column. Create or insert a model first!"
+                f"{self.path} does not contain a MODEL_DATA column. Create or insert a model first!"
             )
 
         uvsub(str(self.path))
@@ -468,19 +453,17 @@ class MeasurementSet(Table):
         return MeasurementSet(peeled_ms)
 
     def increment_selfcal_round(self) -> Path:
-
         # Insert selfcal1 before suffix if first round
         if not re.match(r"\S*.selfcal\d*.ms", str(self.path)):
             return self.path.with_suffix(".selfcal1.ms")
 
         # Otherwise increment the round
         r = int(re.sub(r"\S*.selfcal(\d*).ms", r"\1", self.path.name))
-        round_name = self.path.name.replace(f"selfcal{r}", f"selfcal{r+1}")
+        round_name = self.path.name.replace(f"selfcal{r}", f"selfcal{r + 1}")
 
         return self.path.with_name(round_name)
 
     def calc_flag_statistics(self) -> pd.DataFrame:
-
         # Calculate antenna flagging statistics
         flagstats = flagdata(vis=str(self.path), mode="summary")
         df = pd.DataFrame(flagstats["antenna"]).T.reset_index(names="antenna")
@@ -516,7 +499,6 @@ class MeasurementSet(Table):
         refant: str = None,
         interactive: bool = False,
     ):
-
         # Select reference antenna
         if refant is None:
             refant = self.get_reference_antenna(interactive=interactive)

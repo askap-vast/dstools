@@ -1,8 +1,8 @@
 import logging
-import os
 from pathlib import Path
 
 import click
+
 from dstools.imaging import WSCleanModel
 from dstools.logger import setupLogger
 from dstools.ms import MeasurementSet
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 @click.argument("model_dir", type=Path)
 @click.argument("ms", type=MeasurementSet)
 def main(model_dir, ms):
-
     setupLogger(verbose=False)
 
     if not model_dir.exists():

@@ -18,7 +18,7 @@ def main(ms):
     root = dstools.__path__[0]
 
     if tableexists(f"{ms}/FIELD_OLD"):
-        logger.error(f"ASKAP beam pointing and flux re-scaling already applied.")
+        logger.error("ASKAP beam pointing and flux re-scaling already applied.")
         exit(1)
 
     # Fix beam pointing

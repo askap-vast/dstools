@@ -1,9 +1,9 @@
 import logging
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 import click
+
 from dstools.logger import setupLogger
 from dstools.miriad import BANDS, CABBContinuumPipeline, MiriadWrapper
 
@@ -162,7 +162,6 @@ def main(
     keep_intermediate,
     verbose,
 ):
-
     os.system(f"mkdir -p {out_dir}")
 
     logfile = out_dir / "atca-cal.log" if savelogs else None

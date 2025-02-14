@@ -1,14 +1,8 @@
 import logging
 from dataclasses import dataclass
-from pathlib import Path
-
-from casaconfig import config
-
-config.logfile = "/dev/null"
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
-from casatools import table
 
 CONFIGS = ["6km", "750_no6", "750_6", "H168"]
 BANDS = [
@@ -43,7 +37,6 @@ def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:
 
 
 def prompt(msg, bypass=False, bypass_msg=None, default_response=True):
-
     if bypass:
         if bypass_msg is not None:
             logger.warning(bypass_msg)
@@ -67,27 +60,6 @@ class Array:
         telescope = self.band.split("_")[0]
         self.config = self.config if telescope == "AT" else telescope
 
-        # Wavelengths are taken at top of the band to calculate resolution
-        wavelengths = {
-            "AK_low": 0.4026,
-            "AK_mid": 0.2450,
-            "AK_high": 0.1983,
-            "AT_L": 0.0967,
-            "AT_C": 0.0461,
-            "AT_X": 0.0300,
-            "AT_K": 0.0167,
-            "MKT_UHF": 0.2954,
-            "MKT_L": 0.1795,
-        }
-        max_baselines = {
-            "MKT": 8000,
-            "AK": 6000,
-            "6km": 6000,
-            "750_no6": 750,
-            "750_6": 5020,
-            "H168": 185,
-        }
-
         # Frequencies are taken at centre of band for Taylor expansion
         frequencies = {
             "AK_low": "888.49",
@@ -101,19 +73,6 @@ class Array:
             "MKT_L": "1285",
         }
 
-        # Primary beam taken as half-power at bottom of the band,
-        # though ATCA C/X band are narrower as the source density is low
-        primary_beams = {
-            "AK_low": 1.111,
-            "AK_mid": 0.84,
-            "AK_high": 0.84,
-            "AT_L": 0.825,
-            "AT_C": 0.2225,
-            "AT_X": 0.1460,
-            "AT_K": 0.0333,
-            "MKT_UHF": 2.56,
-            "MKT_L": 2.56,
-        }
         imsize = {
             "AK_low": 6144,
             "AK_mid": 4500,

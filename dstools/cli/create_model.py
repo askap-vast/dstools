@@ -3,10 +3,11 @@ import os
 from pathlib import Path
 
 import click
+
 from dstools.imaging import WSClean
 from dstools.logger import setupLogger
-from dstools.utils import BANDS, CONFIGS, Array, parse_coordinates
 from dstools.ms import MeasurementSet
+from dstools.utils import BANDS, CONFIGS, Array
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,6 @@ def main(
     savelogs,
     verbose,
 ):
-
     os.system(f"mkdir -p {ms.path.parent.absolute() / out_dir}")
     logfile = ms.path.parent.absolute() / out_dir / "rt-peel.log" if savelogs else None
     setupLogger(verbose=verbose, filename=logfile)

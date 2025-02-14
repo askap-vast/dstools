@@ -1,28 +1,24 @@
-import time
 import warnings
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.io import fits
-from astropy.visualization import ImageNormalize, ZScaleInterval
-from astropy.wcs import WCS, FITSFixedWarning
-from dstools.imaging import Image
+from astropy.wcs import FITSFixedWarning
 from matplotlib.path import Path as Polypath
-from matplotlib.widgets import Button, RangeSlider
+from matplotlib.widgets import Button
 from mpl_point_clicker import clicker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+from dstools.imaging import Image
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
 
 @dataclass
 class Viewer:
-
     images: list[Image]
 
     def __post_init__(self):
-
         for image in self.images:
             setattr(self, f"{image.name}_image", image)
 
@@ -81,7 +77,6 @@ class Viewer:
         text_ax.set_frame_on(False)
 
         for i, scale in enumerate(scales):
-
             xpos = i * 0.08
             button_ax = inset_axes(
                 self.ax,
@@ -92,12 +87,11 @@ class Viewer:
                 bbox_transform=self.ax.transAxes,
             )
 
-            toggle = Button(button_ax, f"{scale*100:.10g}%")
+            toggle = Button(button_ax, f"{scale * 100:.10g}%")
             toggle.on_clicked(self._update_colorscale(scale * 100))
             setattr(self, f"scale{scale}_toggle", toggle)
 
     def _update_colorscale(self, percentile):
-
         data = self.image_object.get_array().data
         vmin = np.nanpercentile(data, 100 - percentile)
         vmax = np.nanpercentile(data, percentile)
@@ -114,7 +108,6 @@ class Viewer:
         return _update
 
     def _setup(self):
-
         self.fig = plt.figure(figsize=(8, 9))
         self.ax = self.fig.add_subplot(111, projection=self.images[0].wcs)
         self.axes.append(self.ax)
@@ -156,7 +149,6 @@ class Viewer:
         )
 
     def _update_images(self):
-
         mask = np.ma.masked_where(self.mask, ~self.mask)
         image = self.active_image.data
 
@@ -179,7 +171,6 @@ class Viewer:
         points = self.clicker.get_positions()["mask"]
 
         if len(points) > 2:
-
             # Generate polygon from selected points to mask model
             polygon = Polypath(points)
             inside_polygon = polygon.contains_points(self.coords).reshape(
@@ -233,9 +224,7 @@ class Viewer:
         return button_ax, toggle
 
     def _switch_image(self, image):
-
         def callback(event):
-
             self.active_image = image
             self._update_images()
 
