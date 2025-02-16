@@ -1,9 +1,12 @@
 import logging
 from typing import NamedTuple
 
+import astropy.units as u
 import numpy as np
 from astropy.io import fits
-from scipy.ndimage import minimum_filter
+from radio_beam import Beam
+from scipy.ndimage import binary_erosion, minimum_filter
+from scipy.signal import fftconvolve
 
 logger = logging.getLogger(__name__)
 
@@ -173,3 +176,96 @@ def minimum_absolute_clip(
         adaptive_box_step=adaptive_box_step,
         adaptive_skew_delta=adaptive_skew_delta,
     )
+
+
+def create_beam_mask_kernel(
+    fits_header: fits.Header,
+    kernel_size=100,
+    minimum_response: float = 0.6,
+) -> np.ndarray:
+    """Make a mask using the shape of a beam in a FITS Header object. The
+    beam properties in the ehader are used to generate the two-dimensional
+    Gaussian main lobe, from which a cut is made based on the minimum
+    power.
+
+    Args:
+        fits_header (fits.Header): The FITS header to create beam from
+        kernel_size (int, optional): Size of the output kernel in pixels. Will be a square. Defaults to 100.
+        minimum_response (float, optional): Minimum response of the beam shape for the mask to be constructed from. Defaults to 0.6.
+
+    Raises:
+        KeyError: Raised if CDELT1 and CDELT2 missing
+
+    Returns:
+        np.ndarray: Boolean mask of the kernel shape
+    """
+    assert 0.0 < minimum_response < 1.0, (
+        f"{minimum_response=}, should be between 0 to 1 (exclusive)"
+    )
+
+    POSITION_KEYS = ("CDELT1", "CDELT2")
+    if not all([key in fits_header for key in POSITION_KEYS]):
+        raise KeyError(f"{POSITION_KEYS=}  all need to be present")
+
+    beam = Beam.from_fits_header(fits_header)
+    assert isinstance(beam, Beam)
+
+    cdelt1, cdelt2 = np.abs(fits_header["CDELT1"]), np.abs(fits_header["CDELT2"])  # type: ignore
+    assert np.isclose(cdelt1, cdelt2), (
+        f"Pixel scales {cdelt1=} {cdelt2=}, but must be equal"
+    )
+
+    k = beam.as_kernel(
+        pixscale=cdelt1 * u.Unit("deg"),
+        x_size=kernel_size,
+        y_size=kernel_size,
+    )
+
+    return k.array > (np.max(k.array) * minimum_response)
+
+
+def beam_shape_erode(
+    mask: np.ndarray,
+    fits_header: fits.Header,
+    minimum_response: float = 0.6,
+) -> np.ndarray:
+    """Construct a kernel representing the shape of the restoring beam at
+    a particular level, and use it as the basis of a binary erosion of the
+    input mask.
+
+    The ``fits_header`` is used to construct the beam shape that matches the
+    same pixel size
+
+    Args:
+        mask (np.ndarray): The current mask that will be eroded based on the beam shape
+        fits_header (fits.Header): The fits header of the mask used to generate the beam kernel shape
+        minimum_response (float, optional): The minimum response of the main restoring beam to craft the shape from. Defaults to 0.6.
+
+    Returns:
+        np.ndarray: The eroded beam shape
+    """
+
+    if not all([key in fits_header for key in ["BMAJ", "BMIN", "BPA"]]):
+        logger.warning(
+            "Beam parameters missing. Not performing the beam shape erosion. "
+        )
+        return mask
+
+    logger.debug(f"Eroding the mask using the beam shape with {minimum_response=}")
+    beam_mask_kernel = create_beam_mask_kernel(
+        fits_header=fits_header,
+        minimum_response=minimum_response,
+    )
+
+    # This handles any unsqueezed dimensions
+    beam_mask_kernel = beam_mask_kernel.reshape(
+        mask.shape[:-2] + beam_mask_kernel.shape
+    )
+
+    erode_mask = binary_erosion(
+        input=mask,
+        iterations=1,
+        structure=beam_mask_kernel,
+    )
+
+    return erode_mask.astype(mask.dtype)

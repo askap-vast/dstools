@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
@@ -12,7 +13,7 @@ from numpy.typing import ArrayLike
 
 from dstools.casa import exportfits
 from dstools.logger import parse_stdout_stderr
-from dstools.mask import minimum_absolute_clip
+from dstools.mask import beam_shape_erode, minimum_absolute_clip
 from dstools.ms import MeasurementSet
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Image:
-    name: str
     path: str
+    name: str = ""
 
     def __post_init__(self):
         self._load()
@@ -173,6 +174,7 @@ class WSClean:
     # masking / thresholds
     fits_mask: Path | None = None
     galvin_clip_mask: Path | None = None
+    erode_beam_shape: bool = False
     mask_threshold: float = 5
     auto_threshold: float = 3
     local_rms_window: int | None = None
@@ -272,24 +274,37 @@ class WSClean:
         if self.fits_mask is None:
             return ""
 
-        fits_mask = self.fits_mask.absolute()
+        # Initialise user-provided deconvolution mask
+        mask_path = self.fits_mask.absolute()
+        mask_image = Image(mask_path)
 
+        # Initialise mask with optional Galvin clip
         if self.galvin_clip_mask is not None:
-
-            mask_image = minimum_absolute_clip(
-                Image("mask", self.galvin_clip_mask.absolute()).data,
+            galvin_image = Image(self.galvin_clip_mask.absolute())
+            mask_array = minimum_absolute_clip(
+                galvin_image.data,
                 box_size=100,
+                adaptive_max_depth=3,
+            )
+        else:
+            mask_array = mask_image.data
+
+        # Erode the beam shape
+        if self.erode_beam_shape:
+            mask_array = beam_shape_erode(
+                mask=mask_array,
+                fits_header=mask_image.header,
             )
 
-            with fits.open(fits_mask, mode="update") as hdul:
-                data = hdul[0].data
-                data[0, 0, ~mask_image] = 0
-                hdul[0].data = data
+        # Apply final masking to WSclean FITS mask
+        with fits.open(mask_path, mode="update") as hdul:
+            data = hdul[0].data
+            data[0, 0, ~mask_array] = 0
+            hdul[0].data = data
 
-        return f"-fits-mask {fits_mask}"
+        return f"-fits-mask {mask_path}"
 
     def _format_optional_argument(self, arg: str):
-
         val = getattr(self, arg)
         if val is None:
             return ""

@@ -127,6 +127,12 @@ logger = logging.getLogger(__name__)
     help="FITS image to use in minimum absolute clip mask.",
 )
 @click.option(
+    "--erode-beam-shape",
+    is_flag=True,
+    default=False,
+    help="Enable binary erosion of deconvolution mask with synthesised beam kernel.",
+)
+@click.option(
     "--local-rms-window",
     type=int,
     default=None,
@@ -200,6 +206,7 @@ def main(
     multiscale_max_scales,
     fits_mask,
     galvin_clip_mask,
+    erode_beam_shape,
     threshold,
     mask_threshold,
     local_rms_window,
@@ -256,6 +263,7 @@ def main(
         local_rms_window=local_rms_window,
         fits_mask=fits_mask,
         galvin_clip_mask=galvin_clip_mask,
+        erode_beam_shape=erode_beam_shape,
         phasecentre=phasecentre,
         parallel_deconvolution=parallel_deconvolution,
         out_dir=out_dir,

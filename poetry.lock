@@ -1408,6 +1408,27 @@ files = [
 ]
 
 [[package]]
+name = "radio-beam"
+version = "0.3.8"
+description = "Operations for radio astronomy beams with astropy"
+optional = false
+python-versions = "*"
+files = [
+    {file = "radio_beam-0.3.8-py3-none-any.whl", hash = "sha256:cb5e9015cc84f3938b2a54643adee759e7b4b678c9fe9fdacb17d79d30a2c7c0"},
+    {file = "radio_beam-0.3.8.tar.gz", hash = "sha256:084feb71828edc3bb3e73c26278804baa3a83b7532eec8f03a2f7a1cfd18e770"},
+]
+
+[package.dependencies]
+astropy = "*"
+numpy = ">=1.8.0"
+scipy = "*"
+
+[package.extras]
+all = ["matplotlib", "scipy"]
+docs = ["matplotlib", "sphinx-astropy"]
+test = ["matplotlib", "pytest-astropy", "pytest-cov"]
+
+[[package]]
 name = "ruff"
 version = "0.9.6"
 description = "An extremely fast Python linter and code formatter, written in Rust."
