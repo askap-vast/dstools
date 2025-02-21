@@ -321,9 +321,10 @@ class DynamicSpectrum:
 
         ds_version = datafile.attrs.get("dstools_version", "1.0.0")
         dstools_version = version("radio-dstools")
+
         if ds_version != dstools_version:
             logger.warning(
-                f"Attempting to open DS generated with DStools v{ds_version} with DStools v{dstools_version}."
+                f"Attempting to open v{ds_version} DS with DStools v{dstools_version}."
             )
 
         return
@@ -519,19 +520,22 @@ class DynamicSpectrum:
         time_end_break = self.time[scan_start_idx[1:]]
         time_start_break = self.time[scan_end_idx[:-1]]
 
+        # Count number of samples within each calibrator / stow break
         dt = self.time[1] - self.time[0]
         num_break_cycles = np.append((time_end_break - time_start_break), 0) / dt
         num_channels = self.header["channels"]
 
         # Create initial time-slice to start stacking target and calibrator scans together
-        new_data_XX = new_data_XY = new_data_YX = new_data_YY = np.zeros(
+        stacked_XX = stacked_XY = stacked_YX = stacked_YY = np.zeros(
             (1, num_channels),
             dtype=complex,
         )
-        new_time = np.zeros(1)
+        stacked_time = np.zeros(1)
 
         for start_index, end_index, num_scans in zip(
-            scan_start_idx, scan_end_idx, num_break_cycles
+            scan_start_idx,
+            scan_end_idx,
+            num_break_cycles,
         ):
             # Select each contiguous on-target chunk of data
             XX_chunk = XX[start_index : end_index + 1, :]
@@ -541,9 +545,14 @@ class DynamicSpectrum:
             time_chunk = self.time[start_index : end_index + 1]
 
             # Make array of complex NaN's for subsequent calibrator / stow gaps
-            # and append to each on-target chunk of data
+            # and append to each on-target chunk of data.
             if self.calscans and num_scans > 0:
-                num_nans = (int(round(num_scans) - 1), num_channels)
+                # We round down to the nearest integer number of correlator cycles
+                # to populate the nan-break. The final cycle will therefore be slightly
+                # longer than the rest, but this only affects the visual presentation
+                # of the lightcurve / dynamic spectrum, not the timestamps.
+                num_timesteps = int(round(num_scans) - 1)
+                num_nans = (num_timesteps, num_channels)
                 nan_chunk = np.full(num_nans, np.nan + np.nan * 1j)
 
                 XX_chunk = np.ma.vstack([XX_chunk, nan_chunk])
@@ -555,20 +564,21 @@ class DynamicSpectrum:
                 time_break_scans = time_break_start + np.arange(num_nans[0]) * dt
                 time_chunk = np.append(time_chunk, time_break_scans)
 
-            new_data_XX = np.ma.vstack([new_data_XX, XX_chunk])
-            new_data_XY = np.ma.vstack([new_data_XY, XY_chunk])
-            new_data_YX = np.ma.vstack([new_data_YX, YX_chunk])
-            new_data_YY = np.ma.vstack([new_data_YY, YY_chunk])
-            new_time = np.append(new_time, time_chunk)
+            stacked_XX = np.ma.vstack([stacked_XX, XX_chunk])
+            stacked_XY = np.ma.vstack([stacked_XY, XY_chunk])
+            stacked_YX = np.ma.vstack([stacked_YX, YX_chunk])
+            stacked_YY = np.ma.vstack([stacked_YY, YY_chunk])
+            stacked_time = np.append(stacked_time, time_chunk)
 
-        new_data_XX = new_data_XX[1:]
-        new_data_XY = new_data_XY[1:]
-        new_data_YX = new_data_YX[1:]
-        new_data_YY = new_data_YY[1:]
+        stacked_XX = stacked_XX[1:]
+        stacked_XY = stacked_XY[1:]
+        stacked_YX = stacked_YX[1:]
+        stacked_YY = stacked_YY[1:]
 
-        self.time = new_time[1:]
+        self.time = stacked_time[1:]
+        self.dts = self.time[1:] - self.time[:-1]
 
-        return new_data_XX, new_data_XY, new_data_YX, new_data_YY
+        return stacked_XX, stacked_XY, stacked_YX, stacked_YY
 
     def _rebin(self, XX, XY, YX, YY):
         num_tsamples, num_channels = XX.shape
