@@ -10,7 +10,6 @@ import click
 import h5py
 import numpy as np
 from astropy.wcs import FITSFixedWarning
-
 from dstools.casa import mstransform
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
@@ -215,7 +214,7 @@ def main(
         f.create_dataset("flux", data=waterfall)
 
     # Clean up intermediate files
-    os.system(f"rm -r {ms.path.parent}/*dstools-temp*.ms 2>/dev/null")
+    os.system(f"rm -r {ms.path.parent}/*dstools-temp*.*ms 2>/dev/null")
 
 
 if __name__ == "__main__":
