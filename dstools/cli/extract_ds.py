@@ -1,8 +1,9 @@
 import itertools as it
 import logging
+import multiprocessing
 import os
 import warnings
-from concurrent.futures import ProcessPoolExecutor, wait
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from importlib.metadata import version
 from pathlib import Path
 
@@ -21,8 +22,15 @@ warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 logger = logging.getLogger(__name__)
 
 
+def get_available_cpus():
+    """Returns the number of CPUs allocated by SLURM or falls back to system count."""
 
-    return MeasurementSet(path=outvis)
+    if "SLURM_CPUS_PER_TASK" in os.environ:
+        return int(os.environ["SLURM_CPUS_PER_TASK"])
+    elif "SLURM_CPUS_ON_NODE" in os.environ:
+        return int(os.environ["SLURM_CPUS_ON_NODE"])
+    else:
+        return multiprocessing.cpu_count()
 
 
 def process_baseline(
@@ -33,7 +41,7 @@ def process_baseline(
     i, (ant1, ant2) = baseline
 
     with ms.open_table(query=f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})") as bl_tab:
-        # Identify missing integrations on this baseline
+        # Identify missing integrations on this baseline (e.g. caused by correlator dropouts)
         bl_time = bl_tab.getcol("TIME")
         missing_times = [t for t in ms.times if t not in bl_time]
 
@@ -45,15 +53,41 @@ def process_baseline(
         bl_uvw = bl_tab.getcol("UVW").T
         bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
 
+        data_col = bl_tab.getcol(datacolumn).T
+
         data = {
             "baseline": i,
             "data_idx": data_idx,
-            "data": bl_tab.getcol(datacolumn).T,
+            "data": data_col,
             "flags": bl_tab.getcol("FLAG").T,
             "uvdist": np.nanmean(bl_uvdist, axis=0),
         }
 
     return data
+
+
+def extract_baselines(ms: MeasurementSet, datacolumn: str) -> list[dict]:
+    baselines = list(it.combinations(ms.antennas, 2))
+    nbaselines = len(baselines)
+
+    # If more than 1 CPU available, use multiple processes to extract baselines in parallel
+    ncpus = get_available_cpus()
+    if ncpus > 1 and nbaselines > 1:
+        with ProcessPoolExecutor(max_workers=ncpus) as executor:
+            processes = executor.map(
+                process_baseline,
+                [ms] * nbaselines,
+                enumerate(baselines),
+                [datacolumn] * nbaselines,
+            )
+            results = [p for p in as_completed(processes)]
+    else:
+        results = [
+            process_baseline(ms, baseline, datacolumn)
+            for baseline in enumerate(baselines)
+        ]
+
+    return results
 
 
 @click.command(context_settings={"show_default": True})
@@ -158,38 +192,26 @@ def main(
         ms = ms.average_baselines(minuvdist)
 
     # Initialise output arrays
-    waterfall = np.full(ms.dimensions, np.nan, dtype=complex)
+    visibilities = np.full(ms.dimensions, np.nan, dtype=complex)
     flags = np.full(ms.dimensions, np.nan, dtype=bool)
     uvdist = np.full(ms.nbaselines, np.nan)
 
     # Construct 4D data and flag cubes on each baseline separately
     # to verify indices of missing data (e.g. due to correlator dropouts)
-    with ProcessPoolExecutor(max_workers=15) as executor:
-        processes = [
-            executor.submit(
-                process_baseline,
-                ms,
-                baseline,
-                datacolumn,
-            )
-            for baseline in enumerate(it.combinations(ms.antennas, 2))
-        ]
-        wait(processes)
+    results = extract_baselines(ms, datacolumn)
 
-    # Insert data into 4D data / flag cubes
-    results = [p.result() for p in processes]
     for baseline in results:
         baseline_idx, data_idx = baseline["baseline"], baseline["data_idx"]
-        waterfall[baseline_idx, data_idx] = baseline["data"]
+        visibilities[baseline_idx, data_idx] = baseline["data"]
         flags[baseline_idx, data_idx] = baseline["flags"]
         uvdist[baseline_idx] = baseline["uvdist"]
 
     # Apply flags
     if not noflag:
-        waterfall[flags] = np.nan
+        visibilities[flags] = np.nan
 
     # Apply primary beam correction
-    waterfall /= header["pb_scale"]
+    visibilities /= header["pb_scale"]
 
     # Write all data to file
     with h5py.File(outfile, "w", track_order=True) as f:
@@ -200,7 +222,7 @@ def main(
         f.create_dataset("time", data=ms.times)
         f.create_dataset("frequency", data=ms.channels)
         f.create_dataset("uvdist", data=uvdist)
-        f.create_dataset("flux", data=waterfall)
+        f.create_dataset("flux", data=visibilities)
 
     # Clean up intermediate files
     os.system(f"rm -r {ms.path.parent}/*dstools-temp*.*ms 2>/dev/null")
