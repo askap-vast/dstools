@@ -1,6 +1,6 @@
 import logging
 import warnings
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from importlib.metadata import version
@@ -574,45 +574,101 @@ class DynamicSpectrum:
         return L
 
 
-
-
 class TimeFreqSeries(ABC):
-    def _construct_yaxis(self, avg_axis):
-        """Construct y-axis averaging flux over x-axis."""
+    """Abstract base class for construction of common elements of lightcurves / 1D spectra."""
 
+    @abstractmethod
+    def x(self):
+        """An array representing the x-axis of the averaged data (time or frequency)."""
+
+    def _construct_yaxis(self, avg_axis):
         # Catch RuntimeWarning that occurs when averaging empty time/freq slices
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
 
-            y = defaultdict()
-            yerr = defaultdict()
+            self.flux = defaultdict()
+            self.flux_err = defaultdict()
             sqrtn = np.sqrt(self.ds.data["I"].shape[avg_axis])
 
-            for stokes in self.stokes:
+            # Compute flux / errors in each Stokes parameter averaging over the DS
+            for stokes in "IQUV":
                 data = self.ds.data[stokes]
-                if stokes == "L":
-                    # Compute L as complex magnitude of averaged DS
-                    y[stokes] = np.abs(np.nanmean(data, axis=avg_axis))
-                    yerr[stokes] = np.abs(np.nanstd(data, axis=avg_axis)) / sqrtn
-                else:
-                    ydata = data.imag if self.imag else data.real
+                ydata = data.imag if self.imag else data.real
 
-                    y[stokes] = np.nanmean(ydata, axis=avg_axis)
-                    yerr[stokes] = np.nanstd(data.imag, axis=avg_axis) / sqrtn
+                self.flux[stokes] = np.nanmean(ydata, axis=avg_axis)
+                self.flux_err[stokes] = np.nanstd(data.imag, axis=avg_axis) / sqrtn
 
-        return y, yerr
-
-
+        self._calc_polarisation_params()
 
         return
 
-    def save(self, savepath):
+    def _calc_polarisation_params(self):
+        """Compute polarisation angle, ellipticity, and fractional polarisation."""
+
+        I = self.flux["I"]
+        Ierr = self.flux_err["I"]
+        Q = self.flux["Q"]
+        Qerr = self.flux_err["Q"]
+        U = self.flux["U"]
+        Uerr = self.flux_err["U"]
+        V = self.flux["V"]
+        Verr = self.flux_err["V"]
+        L = self.flux["L"] = np.sqrt(Q**2 + U**2)
+        Lerr = self.flux_err["L"] = 1 / L * np.sqrt((Q * Qerr) ** 2 + (U * Uerr) ** 2)
+
+        P = self.pol_fraction = np.sqrt(L**2 + V**2)
+        self.pol_fraction_err = 1 / P * np.sqrt((L * Lerr) ** 2 + (V * Verr) ** 2)
+
+        self.polangle = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
+        self.ellipticity = 0.5 * np.arctan2(V, L) * u.rad.to(u.deg)
+        self.linear_fraction = np.abs(L / I)
+        self.circular_fraction = np.abs(V / I)
+
+        # Propagate errors
+        qu_err = (Q * Qerr) ** 2 + (U * Uerr) ** 2
+        vl_err = (V * Verr) ** 2 + (L * Lerr) ** 2
+        li_err = (Lerr / L) ** 2 + (Ierr / I) ** 2
+        vi_err = (Verr / V) ** 2 + (Ierr / I) ** 2
+        self.polangle_err = (0.5 * np.sqrt(qu_err) / L**2) * u.rad.to(u.deg)
+        self.ellipticity_err = (0.5 * np.sqrt(vl_err) / P**2) * u.rad.to(u.deg)
+        self.linear_fraction_err = np.abs(L / I) * np.sqrt(li_err)
+        self.circular_fraction_err = np.abs(V / I) * np.sqrt(vi_err)
+
+        # Mask low signifiance points
+        mask = I < self.pa_sigma * Ierr
+
+        # Remove any isolated unmasked values (likely noise)
+        isolated = mask[:-2] & mask[2:]
+        mask[1:-1][isolated] = True
+
+        self.polangle[mask] = np.nan
+        self.polangle_err[mask] = np.nan
+        self.ellipticity[mask] = np.nan
+        self.ellipticity_err[mask] = np.nan
+        self.linear_fraction[mask] = np.nan
+        self.linear_fraction_err[mask] = np.nan
+        self.circular_fraction[mask] = np.nan
+        self.circular_fraction_err[mask] = np.nan
+
+        return
+
+    def save(self, savepath, stokes="IQUVL", include_pols: bool = False):
         values = self.valstart + self.x * self.unit
 
         df = pd.DataFrame({self.column: values})
-        for stokes in self.stokes:
-            df[f"flux_density_{stokes}"] = self.y[stokes].real.reshape(1, -1)[0]
-            df[f"flux_density_{stokes}_err"] = self.yerr[stokes]
+        for s in stokes:
+            df[f"flux_density_{s}"] = self.flux[s].real.reshape(1, -1)[0]
+            df[f"flux_density_{s}_err"] = self.flux_err[s]
+
+        if include_pols:
+            df["polarisation_angle"] = self.polangle
+            df["polarisation_angle_err"] = self.polangle_err
+            df["ellipticity"] = self.ellipticity
+            df["ellipticity_err"] = self.ellipticity_err
+            df["linear_fraction"] = self.linear_fraction
+            df["linear_fraction_err"] = self.linear_fraction_err
+            df["circular_fraction"] = self.circular_fraction
+            df["circular_fraction_err"] = self.circular_fraction_err
 
         df.dropna().to_csv(savepath, index=False)
 
@@ -634,16 +690,17 @@ class LightCurve(TimeFreqSeries):
         if self.ds.fold:
             phasemax = 0.5 * self.ds.fold_periods
             phasebins = self.ds.data["I"].shape[0]
-            self.x = np.linspace(-phasemax, phasemax, phasebins)
+            self.time = np.linspace(-phasemax, phasemax, phasebins)
         else:
-            self.x = self.ds.time
-
-        self.y, self.yerr = self._construct_yaxis(avg_axis=1)
+            self.time = self.ds.time
 
         self._construct_yaxis(avg_axis=1)
 
         return
 
+    @property
+    def x(self):
+        return self.time
 
 
 @dataclass
@@ -660,6 +717,9 @@ class Spectrum(TimeFreqSeries):
         # Construct frequency axis
         bins = self.ds.data["I"].shape[1]
         interval = (self.ds.fmax - self.ds.fmin) / bins
-        self.x = np.array([self.ds.fmin + i * interval for i in range(bins)])
-        self.y, self.yerr = self._construct_yaxis(avg_axis=0)
+        self.frequency = np.array([self.ds.fmin + i * interval for i in range(bins)])
+        self._construct_yaxis(avg_axis=0)
 
+    @property
+    def x(self):
+        return self.frequency
