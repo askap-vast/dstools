@@ -365,7 +365,9 @@ class DynamicSpectrum:
         DM = self.DM * u.pc / u.cm**3
         reffreq = self.freq[-1] if self.DM_reffreq is None else self.DM_reffreq
         tau = (self.freq * u.MHz) ** -2 - (reffreq * u.MHz) ** -2
-        dt = (a * DM * tau / self.time_res).to(1)
+
+        time_resolution = (self.time[1] - self.time[0]) * self.tunit
+        dt = (a * DM * tau / time_resolution).to(1)
 
         # FFT
         array = np.fft.fft(array, axis=0)
