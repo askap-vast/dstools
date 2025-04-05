@@ -82,6 +82,9 @@ class DynamicSpectrum:
             YX = self._dedisperse(YX)
             YY = self._dedisperse(YY)
 
+        # Average data in time and frequency
+        XX, XY, YX, YY = self._rebin(XX, XY, YX, YY)
+
         # Fold data to selected period
         if self.fold:
             if not self.period:
@@ -95,9 +98,6 @@ class DynamicSpectrum:
             # Disable plotting with absolute times as we will plot phase instead
             self.absolute_times = False
             self.time = rebin(len(self.time), len(XX), axis=0) @ self.time
-
-        # Average data in time and frequency
-        XX, XY, YX, YY = self._rebin(XX, XY, YX, YY)
 
         # Store time and frequency resolution
         self.time_res = (self.time[1] - self.time[0]) * self.tunit
