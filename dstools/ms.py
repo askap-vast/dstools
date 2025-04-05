@@ -4,6 +4,7 @@ import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import astropy.units as u
 import dask.array as da
@@ -22,9 +23,9 @@ from dstools.casa import (
     flagdata,
     gaincal,
     mstransform,
+    phaseshift,
     split,
     uvsub,
-    phaseshift,
 )
 from dstools.utils import DataError
 
@@ -47,9 +48,9 @@ class Table:
     @contextmanager
     def open_table(
         self,
-        subtable: str = None,
+        subtable: Optional[str] = None,
         nomodify: bool = True,
-        query: str = None,
+        query: Optional[str] = None,
     ):
         path = f"{self.path}/{subtable}" if subtable else str(self.path)
         t = table()
@@ -62,7 +63,7 @@ class Table:
         finally:
             t.close()
 
-    def getcolumn(self, column: str, subtable: str = None):
+    def getcolumn(self, column: str, subtable: Optional[str] = None):
         with self.open_table(subtable=subtable) as t:
             col = t.getcol(column)
         return col
@@ -211,9 +212,9 @@ class MeasurementSet(Table):
         return f"{self.path}"
 
     @property
-    def channels(self):
-        chans = self.getcolumn("CHAN_FREQ", subtable="SPECTRAL_WINDOW")
-        return chans.reshape(-1)
+    def nspws(self):
+        spw_channels = self.getcolumn("NUM_CHAN", subtable="SPECTRAL_WINDOW")
+        return len(spw_channels)
 
     @property
     def nbaselines(self):
@@ -221,18 +222,29 @@ class MeasurementSet(Table):
         return nants * (nants - 1) // 2
 
     @property
+    def integrations(self):
+        return len(self.times)
+
+    @property
+    def channels(self):
+        chans = self.getcolumn("CHAN_FREQ", subtable="SPECTRAL_WINDOW")
+        return chans.reshape(-1)
+
+    @property
+    def nchannels(self):
+        return len(self.channels)
+
+    @property
     def npols(self):
         return 4
 
     @property
-    def phasecentre(self):
-        phasecentre_coords = self.getcolumn("PHASE_DIR", subtable="FIELD")[:, 0, 0]
-        phasecentre = SkyCoord(
-            ra=phasecentre_coords[0],
-            dec=phasecentre_coords[1],
-            unit="rad",
-        )
-        return phasecentre
+    def dimensions(self):
+        return (self.nbaselines, self.integrations, self.nchannels, self.npols)
+
+    @property
+    def ncorrelations(self):
+        return np.prod(self.dimensions)
 
     @property
     def telescope(self):
@@ -257,28 +269,23 @@ class MeasurementSet(Table):
         return feedtype
 
     @property
+    def phasecentre(self):
+        phasecentre_coords = self.getcolumn("PHASE_DIR", subtable="FIELD")[:, 0, 0]
+        phasecentre = SkyCoord(
+            ra=phasecentre_coords[0],
+            dec=phasecentre_coords[1],
+            unit="rad",
+        )
+        return phasecentre
+
+    @property
     def colnames(self):
         with self.open_table() as t:
             columns = t.colnames()
         return columns
 
-    @property
-    def nspws(self):
-        spw_channels = self.getcolumn("NUM_CHAN", subtable="SPECTRAL_WINDOW")
-        return len(spw_channels)
-
-    @property
-    def dimensions(self):
-        return (self.nbaselines, len(self.times), len(self.channels), self.npols)
-
-    @property
-    def ncorrelations(self):
-        return np.prod(self.dimensions)
-
     def column_exists(self, column) -> bool:
-        with self.open_table() as t:
-            exists = column in t.colnames()
-        return exists
+        return column in self.colnames
 
     def header(self, datacolumn: str, pb_scale: float) -> dict:
         header = {
@@ -287,8 +294,8 @@ class MeasurementSet(Table):
             "feeds": self.feedtype,
             "antennas": self.nantennas,
             "baselines": self.nbaselines,
-            "integrations": len(self.times),
-            "channels": len(self.channels),
+            "integrations": self.integrations,
+            "channels": self.channels,
             "polarisations": self.npols,
             "correlations": self.ncorrelations,
             "phasecentre": self.phasecentre.to_string("hmsdms"),
@@ -306,7 +313,7 @@ class MeasurementSet(Table):
         # Our current path is the multi-SPW copy of the data
         multi_spw_ms = self.path
 
-        one_spw_ms = self.path.with_suffix(".one-spw.ms")
+        one_spw_ms = self.path.with_suffix(".1spw.ms")
 
         cvel(
             vis=str(multi_spw_ms),
@@ -443,14 +450,14 @@ class MeasurementSet(Table):
         if not split_ms:
             return self
 
-        peeled_ms = self.path.with_suffix(".subbed.ms")
+        subtracted_ms = self.path.with_suffix(".subbed.ms")
         split(
             str(self.path),
-            outputvis=str(peeled_ms),
+            outputvis=str(subtracted_ms),
             datacolumn="corrected",
         )
 
-        return MeasurementSet(peeled_ms)
+        return MeasurementSet(subtracted_ms)
 
     def increment_selfcal_round(self) -> Path:
         # Insert selfcal1 before suffix if first round
@@ -496,7 +503,7 @@ class MeasurementSet(Table):
         calmode: str,
         gaintype: str,
         minblperant: int = 3,
-        refant: str = None,
+        refant: Optional[str] = None,
         interactive: bool = False,
     ):
         # Select reference antenna
@@ -547,3 +554,19 @@ class MeasurementSet(Table):
         )
 
         return
+
+
+def combine_spws(ms: MeasurementSet) -> MeasurementSet:
+    outvis = ms.path.with_suffix(f".dstools-temp.comb{ms.path.suffix}")
+
+    # Combine spectral windows if more than 1
+    logger.debug("Combining spectral windows")
+    combine = ms.nspws > 1
+    mstransform(
+        vis=str(ms.path),
+        combinespws=combine,
+        datacolumn="all",
+        outputvis=str(outvis),
+    )
+
+    return MeasurementSet(path=outvis)
