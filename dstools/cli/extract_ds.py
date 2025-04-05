@@ -10,10 +10,10 @@ import click
 import h5py
 import numpy as np
 from astropy.wcs import FITSFixedWarning
-from dstools.casa import mstransform
+
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet
+from dstools.ms import MeasurementSet, combine_spws
 from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
@@ -21,17 +21,6 @@ warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 logger = logging.getLogger(__name__)
 
 
-def combine_spws(ms: MeasurementSet) -> MeasurementSet:
-    outvis = ms.path.with_suffix(f".dstools-temp.comb{ms.path.suffix}")
-
-    # Combine spectral windows if more than 1
-    combine = ms.nspws > 1
-    mstransform(
-        vis=str(ms.path),
-        combinespws=combine,
-        datacolumn="all",
-        outputvis=str(outvis),
-    )
 
     return MeasurementSet(path=outvis)
 
