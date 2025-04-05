@@ -9,31 +9,16 @@ from typing import Optional
 import astropy.constants as c
 import astropy.units as u
 import h5py
-import matplotlib.dates as mdates
-import matplotlib.patheffects as pe
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from astropy.coordinates import Angle, EarthLocation, SkyCoord
 from astropy.time import Time
-from astropy.visualization import ImageNormalize, ZScaleInterval
-from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from numpy.typing import ArrayLike
-from scipy.signal import correlate, find_peaks
+from scipy.signal import correlate
 
 from dstools.rm import PolObservation
 from dstools.utils import rebin, rebin2D, slice_array
 
 logger = logging.getLogger(__name__)
-
-COLORS = {
-    "I": "firebrick",
-    "Q": "lightgreen",
-    "U": "darkorchid",
-    "V": "darkorange",
-    "L": "cornflowerblue",
-}
 
 LOCATIONS = {
     "ATCA": EarthLocation(
@@ -516,10 +501,6 @@ class DynamicSpectrum:
         else:
             self.polobs = None
 
-        P = np.sqrt(Q.real**2 + U.real**2 + V.real**2) / I.real
-
-        PA = 0.5 * np.arctan2(U.real, Q.real) * u.rad.to(u.deg)
-
         self.data = {
             "XX": XX,
             "XY": XY,
@@ -530,8 +511,6 @@ class DynamicSpectrum:
             "U": U,
             "V": V,
             "L": L,
-            "P": P,
-            "PA": PA,
         }
 
         return
@@ -585,49 +564,6 @@ class DynamicSpectrum:
 
         return RM
 
-    def plot_fdf(self, fig=None, ax=None):
-        """Plot Faraday dispersion function derived with RMclean (Heald 2009)."""
-
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=(7, 5))
-
-        if not self.polobs:
-            I = self.data["I"]
-            Q = self.data["Q"]
-            U = self.data["U"]
-            _ = self.rm_synthesis(I, Q, U)
-
-        ax.plot(
-            self.polobs.rmsf_phi,
-            np.abs(self.polobs.rmsf),
-            color="k",
-            label="RMSF",
-        )
-        ax.plot(
-            self.polobs.phi,
-            np.abs(self.polobs.fdf),
-            color="r",
-            label="FDF",
-        )
-        ax.plot(
-            self.polobs.phi,
-            np.abs(self.polobs.rm_cleaned),
-            color="b",
-            label="Clean",
-        )
-        ax.plot(
-            self.polobs.phi,
-            np.abs(self.polobs.rm_comps),
-            color="g",
-            label="Model",
-        )
-
-        ax.set_xlabel(r"RM ($rad/m^2$)")
-        ax.set_ylabel("Amplitude")
-
-        ax.legend()
-
-        return fig, ax
 
     def derotate_faraday(self, L):
         """Correct linear polarisation DS for Faraday rotation."""
@@ -637,251 +573,7 @@ class DynamicSpectrum:
 
         return L
 
-    def plot_lightcurve(self, stokes, polangle, fig=None, ax=None, imag=False):
-        """Plot channel-averaged lightcurve."""
 
-        lc = LightCurve(self, stokes, imag=imag)
-
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=(7, 5))
-
-        fig, ax = lc.plot(fig, ax, polangle=polangle)
-
-        fig.tight_layout()
-
-        return fig, ax
-
-    def plot_spectrum(self, stokes, fig=None, ax=None, imag=False):
-        """Plot time-averaged spectrum."""
-
-        sp = Spectrum(self, stokes, imag=imag)
-
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=(7, 5))
-
-        fig, ax = sp.plot(fig, ax)
-
-        fig.tight_layout()
-
-        return fig, ax
-
-    def format_timeaxis(self, ax):
-        timescale = self.header["time_scale"]
-        timestart = self.header["time_start"]
-        t0 = Time(timestart, format="iso", scale=timescale)
-
-        # Set tick locations
-        locator = mdates.AutoDateLocator(minticks=5, maxticks=10)
-        ax.xaxis.set_major_locator(locator)
-
-        # Determine first occurrences of unique dates
-        tick_dates = [
-            Time(t0 + t * self.tunit).strftime("%Y-%m-%d") for t in ax.get_xticks()
-        ]
-        unique_dates, unique_date_idx = list(np.unique(tick_dates, return_index=True))
-        single_date = len(unique_dates) == 1
-
-        # Set x-axis label to UTC date if data confined to a single day
-        # otherwise we add the date as text overlays at the first xtick occurence in a day
-        xlabel = f"{timescale.upper()} {unique_dates[0]}" if single_date else None
-        ax.set_xlabel(xlabel)
-
-        # Add custom timestamp formatter
-        def timestamp_formatter(x, pos):
-            t = t0 + x * self.tunit
-            mpl_date = mdates.num2date(t.plot_date)
-
-            if not single_date and pos in unique_date_idx:
-                fmt = f"%H:%M\n{timescale.upper()} %Y-%m-%d"
-            else:
-                fmt = "%H:%M"
-
-            return mpl_date.strftime(fmt)
-
-        ax.xaxis.set_major_formatter(timestamp_formatter)
-
-        return
-
-    def _plot_ds(self, data, cmin, cmax, cmap, fig, ax):
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=(8, 6))
-
-        phasemax = 0.5 * self.fold_periods
-        tmin, tmax = (-phasemax, phasemax) if self.fold else (self.tmin, self.tmax)
-
-        # Only produce normalisation for products with valid data
-        if not np.isnan(data).all():
-            norm = ImageNormalize(data, interval=ZScaleInterval(contrast=0.2))
-        else:
-            norm = None
-
-        im = ax.imshow(
-            np.transpose(data),
-            extent=[tmin, tmax, self.fmin, self.fmax],
-            aspect="auto",
-            origin="lower",
-            norm=norm,
-            clim=(cmin, cmax),
-            cmap=cmap,
-        )
-
-        ax.set_xlabel(self._timelabel)
-        ax.set_ylabel("Frequency (MHz)")
-
-        if self.absolute_times:
-            self.format_timeaxis(ax)
-
-        return fig, ax, im
-
-    def plot_ds(self, stokes, cmax=20, imag=False, fig=None, ax=None):
-        """Plot dynamic spectrum."""
-
-        if stokes == "L":
-            data = np.abs(self.data[stokes])
-        else:
-            data = self.data[stokes].imag if imag else self.data[stokes].real
-
-        cmap = "plasma" if stokes in ["I", "L"] else "coolwarm"
-        cmin = -2 if stokes in ["I", "L"] else -cmax
-
-        fig, ax, im = self._plot_ds(data, cmin, cmax, cmap, fig, ax)
-
-        ax.text(
-            0.05,
-            0.95,
-            f"Stokes {stokes}",
-            color="white",
-            weight="heavy",
-            path_effects=[pe.withStroke(linewidth=2, foreground="black")],
-            transform=ax.transAxes,
-        )
-        cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-        cb.set_label("Flux Density (mJy)")
-
-        fig.tight_layout()
-
-        return fig, ax
-
-    def plot_pol_ds(self, fig=None, ax=None, mask_sigma=1):
-        """Plot dynamic spectrum of polarisation fraction."""
-
-        # Mask based on Stokes I RMS
-        P = snr_mask(
-            data=self.data["P"],
-            noise=self.data["I"],
-            n_sigma=mask_sigma,
-        )
-
-        fig, ax, im = self._plot_ds(P, 0, 100, "plasma", fig, ax)
-
-        ax.text(
-            0.05,
-            0.95,
-            r"$\sqrt{Q^2 + U^2 + V^2}/I$",
-            color="white",
-            weight="heavy",
-            path_effects=[pe.withStroke(linewidth=2, foreground="black")],
-            transform=ax.transAxes,
-        )
-        cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-        cb.set_label("Fractional Polarisation")
-
-        fig.tight_layout()
-
-        return fig, ax
-
-    def plot_polangle_ds(
-        self,
-        fig=None,
-        ax=None,
-        cmin=-180,
-        cmax=180,
-        mask_sigma=1,
-    ):
-        """Plot dynamic spectrum of polarisation angle."""
-
-        # Mask based on Stokes I RMS
-        PA = snr_mask(
-            data=self.data["PA"],
-            noise=self.data["L"],
-            n_sigma=mask_sigma,
-        )
-
-        fig, ax, im = self._plot_ds(PA, cmin, cmax, "coolwarm", fig, ax)
-
-        ax.text(
-            0.05,
-            0.95,
-            "PA",
-            color="white",
-            weight="heavy",
-            path_effects=[pe.withStroke(linewidth=2, foreground="black")],
-            transform=ax.transAxes,
-        )
-        cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
-        cb.set_label("PA (deg)")
-
-        fig.tight_layout()
-
-        return fig, ax
-
-    def plot_acf(self, stokes="I", contrast=0.4):
-        """Plot 2D auto-correlation function of the dynamic spectrum."""
-
-        acf2d = self.acf(stokes)
-
-        # Plot 2D ACF
-        acf_fig, acf_ax = plt.subplots(figsize=(7, 5))
-
-        norm = ImageNormalize(acf2d, interval=ZScaleInterval(contrast=contrast))
-        im = acf_ax.imshow(
-            acf2d,
-            extent=[0, self.tmax - self.tmin, 0, self.fmax - self.fmin],
-            aspect="auto",
-            norm=norm,
-            cmap="plasma",
-        )
-        cb = acf_fig.colorbar(
-            im,
-            ax=acf_ax,
-            fraction=0.05,
-            pad=0.02,
-        )
-        cb.formatter.set_powerlimits((0, 0))
-        cb.set_label("ACF")
-
-        acf_ax.set_xlabel(f"Time Lag ({self.tunit})")
-        acf_ax.set_ylabel("Frequency Lag (MHz)")
-
-        # Plot zero frequency lag trace
-        acfz_fig, acfz_ax = plt.subplots(figsize=(7, 5))
-
-        zero_trace_acf = acf2d[-1, 1:]
-        time_lag = np.linspace(0, self.tmax - self.tmin, len(zero_trace_acf))
-        acfz_ax.plot(
-            time_lag,
-            zero_trace_acf,
-            color="k",
-        )
-
-        acfz_ax.set_xlabel(f"Time Lag ({self.tunit})")
-        acfz_ax.set_ylabel("ACF")
-
-        acf_peaks, props = find_peaks(zero_trace_acf, prominence=(None, None))
-
-        max_prom = np.argsort(props["prominences"])[::-1]
-        self.peak_lags = time_lag[acf_peaks[max_prom]]
-
-        acfz_ax.axvline(
-            self.peak_lags[0],
-            color="darkorange",
-            ls="--",
-        )
-
-        peak_lag = self.peak_lags[0] * self.tunit
-        logger.debug(f"Stokes {stokes} ACF peak at {peak_lag:.3f}")
-
-        return acf_fig, acf_ax, acfz_fig, acfz_ax
 
 
 class TimeFreqSeries(ABC):
@@ -910,23 +602,7 @@ class TimeFreqSeries(ABC):
 
         return y, yerr
 
-    def plot(self):
-        # Overplot each specified polarisation
-        for stokes in self.stokes:
-            # Plot time/frequency series
-            self.ax.errorbar(
-                self.x,
-                y=self.y[stokes],
-                yerr=self.yerr[stokes],
-                lw=1,
-                color=COLORS[stokes],
-                marker="o",
-                markersize=1,
-                label=stokes,
-            )
 
-        self.ax.set_ylabel("Flux Density (mJy)")
-        self.ax.legend()
 
         return
 
@@ -946,8 +622,8 @@ class TimeFreqSeries(ABC):
 @dataclass
 class LightCurve(TimeFreqSeries):
     ds: DynamicSpectrum
-    stokes: str
     imag: bool = False
+    pa_sigma: int = 5
 
     def __post_init__(self):
         self.column = "time"
@@ -964,76 +640,17 @@ class LightCurve(TimeFreqSeries):
 
         self.y, self.yerr = self._construct_yaxis(avg_axis=1)
 
-    def add_polarisation_angle(self, pa_sigma=2):
-        Q = self.ds.data["Q"]
-        U = self.ds.data["U"]
-        L = self.ds.data["L"]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            signal_L = np.abs(np.nanmean(L, axis=1))
-            noise_L = np.abs(np.nanstd(L, axis=1)) / np.sqrt(L.shape[1])
-            Q = np.nanmean(Q.real, axis=1)
-            U = np.nanmean(U.real, axis=1)
-
-        # Mask low signifigance PA
-        polangle = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
-        mask = signal_L < pa_sigma * noise_L
-        polangle[mask] = np.nan
-
-        divider = make_axes_locatable(self.ax)
-        ax2 = divider.append_axes("top", size="25%", pad=0.1)
-
-        ax2.scatter(
-            self.x,
-            polangle,
-            color="k",
-            marker="o",
-            s=1,
-        )
-        ax2.axhline(
-            0,
-            ls=":",
-            color="k",
-            alpha=0.5,
-        )
-        ax2.set_xticklabels([])
-
-        pad = (self.x.max() - self.x.min()) * 0.05
-        ax2.set_xlim([self.x.min() - pad, self.x.max() + pad])
-        ax2.set_ylim(-120, 120)
-        ax2.set_yticks([-90, 0, 90])
-        ax2.set_ylabel(r"$\chi$ (deg)")
+        self._construct_yaxis(avg_axis=1)
 
         return
 
-    def plot(self, fig, ax, polangle=False):
-        self.fig = fig
-        self.ax = ax
-
-        # Set time axis label
-        self.ax.set_xlabel(self.ds._timelabel)
-
-        # Plot with lightcurve/spectrum independent parameters
-        super().plot()
-
-        pad = (self.x.max() - self.x.min()) * 0.05
-        self.ax.set_xlim([self.x.min() - pad, self.x.max() + pad])
-
-        if polangle:
-            self.add_polarisation_angle()
-
-        if self.ds.absolute_times:
-            self.ds.format_timeaxis(self.ax)
-
-        return self.fig, self.ax
 
 
 @dataclass
 class Spectrum(TimeFreqSeries):
     ds: DynamicSpectrum
-    stokes: str
     imag: bool = False
+    pa_sigma: int = 5
 
     def __post_init__(self):
         self.column = "frequency"
@@ -1046,63 +663,3 @@ class Spectrum(TimeFreqSeries):
         self.x = np.array([self.ds.fmin + i * interval for i in range(bins)])
         self.y, self.yerr = self._construct_yaxis(avg_axis=0)
 
-    def plot(self, fig, ax):
-        self.fig = fig
-        self.ax = ax
-
-        # Set frequency axis label
-        ax.set_xlabel("Frequency (MHz)")
-
-        # Plot with lightcurve/spectrum independent parameters
-        super().plot()
-
-        return self.fig, self.ax
-
-
-def make_summary_plot(
-    ds: DynamicSpectrum,
-    stokes: str,
-    cmax: float,
-    imag: bool,
-) -> plt.figure:
-    """Plot all-stokes dynamic spectra and averaged light-curve / spectrum."""
-
-    fig = plt.figure(figsize=(14, 15))
-    gs = GridSpec(3, 2, figure=fig)
-
-    I_ax = fig.add_subplot(gs[0, 0])
-    Q_ax = fig.add_subplot(gs[0, 1])
-    U_ax = fig.add_subplot(gs[1, 0])
-    V_ax = fig.add_subplot(gs[1, 1])
-    lc_ax = fig.add_subplot(gs[2, 0])
-    sp_ax = fig.add_subplot(gs[2, 1])
-
-    fig, I_ax = ds.plot_ds(stokes="I", cmax=cmax["I"], fig=fig, ax=I_ax, imag=imag)
-    fig, Q_ax = ds.plot_ds(stokes="Q", cmax=cmax["Q"], fig=fig, ax=Q_ax, imag=imag)
-    fig, U_ax = ds.plot_ds(stokes="U", cmax=cmax["U"], fig=fig, ax=U_ax, imag=imag)
-    fig, V_ax = ds.plot_ds(stokes="V", cmax=cmax["V"], fig=fig, ax=V_ax, imag=imag)
-
-    fig, sp_ax = ds.plot_spectrum(
-        stokes=stokes,
-        fig=fig,
-        ax=sp_ax,
-        imag=imag,
-    )
-    fig, lc_ax = ds.plot_lightcurve(
-        stokes=stokes,
-        fig=fig,
-        ax=lc_ax,
-        polangle=False,
-        imag=imag,
-    )
-
-    fig.subplots_adjust(
-        left=0.06,
-        top=0.98,
-        right=0.96,
-        bottom=0.05,
-        hspace=0.18,
-        wspace=0.24,
-    )
-
-    return fig

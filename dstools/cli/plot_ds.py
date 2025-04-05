@@ -8,17 +8,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 from erfa import ErfaWarning
 
-from dstools.dynamic_spectrum import DynamicSpectrum, make_summary_plot
+from dstools.dynamic_spectrum import DynamicSpectrum, LightCurve, Spectrum
 from dstools.logger import setupLogger
+from dstools.plotting import (
+    plot_acf,
+    plot_ds,
+    plot_lightcurve,
+    plot_polarisation_lightcurve,
+    plot_polarisation_spectrum,
+    plot_spectrum,
+    plot_summary,
+)
 
 warnings.filterwarnings("ignore", category=ErfaWarning, append=True)
+warnings.filterwarnings("ignore", category=UserWarning, append=True)
 
 logger = logging.getLogger(__name__)
 
 stokes_choices = [
     "".join(stokes)
     for stokes in chain(
-        *(list(combinations(["I", "Q", "U", "V", "L"], i)) for i in range(1, 6))
+        *(list(combinations(["I", "Q", "U", "V", "L", "P"], i)) for i in range(1, 6))
     )
 ]
 
@@ -96,30 +106,23 @@ stokes_choices = [
 @click.option(
     "-I",
     "--cmax_i",
-    default=30,
+    default=15,
     type=float,
     help="Maximum colormap normalisation in Stokes I.",
 )
 @click.option(
     "-L",
     "--cmax_l",
-    default=50,
+    default=15,
     type=float,
     help="Maximum colormap normalisation in linear polarisations.",
 )
 @click.option(
     "-V",
     "--cmax_v",
-    default=10,
+    default=15,
     type=float,
     help="Maximum colormap normalisation in Stokes V.",
-)
-@click.option(
-    "-r",
-    "--real",
-    is_flag=True,
-    default=True,
-    help="Toggle plotting of real component of visibilities in dynamic spectra.",
 )
 @click.option(
     "-i",
@@ -134,13 +137,6 @@ stokes_choices = [
     default="IQUV",
     type=click.Choice(stokes_choices),
     help="Stokes parameters that will be included in each plot.",
-)
-@click.option(
-    "-P",
-    "--linpols",
-    is_flag=True,
-    default=False,
-    help="Plot linear polarisation fraction and angle dynamic spectra.",
 )
 @click.option(
     "-d",
@@ -164,11 +160,11 @@ stokes_choices = [
     help="Plot time-averaged spectrum.",
 )
 @click.option(
-    "-x",
-    "--polangle",
+    "-P",
+    "--polarisations",
     is_flag=True,
     default=False,
-    help="Include polarisation angle in lightcurve plot.",
+    help="Include polarisation / fraction / angle / ellipticity in lightcurve / spectrum plot.",
 )
 @click.option(
     "--fdf",
@@ -280,9 +276,7 @@ def main(
     cmax_i,
     cmax_l,
     cmax_v,
-    real,
     imag,
-    linpols,
     stokes,
     dspec,
     lightcurve,
@@ -350,29 +344,30 @@ def main(
     # --------------------------------------
     if dspec:
         for s in stokes:
-            if real:
-                ds.plot_ds(stokes=s, cmax=cmax[s])
-            if imag:
-                ds.plot_ds(stokes=s, cmax=cmax[s], imag=True)
-
-    if linpols:
-        ds.plot_pol_ds()
-        ds.plot_polangle_ds()
+            plot_ds(ds, stokes=s, cmax=cmax[s], imag=imag)
 
     # Spectrum
     # --------------------------------------
     if spectrum:
-        ds.plot_spectrum(stokes=stokes)
+        sp = Spectrum(ds)
+        if polarisations:
+            plot_polarisation_spectrum(sp, stokes=stokes, error_alpha=0.4)
+        else:
+            plot_spectrum(sp)
 
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        ds.plot_lightcurve(stokes=stokes, polangle=polangle)
+        lc = LightCurve(ds)
+        if polarisations:
+            plot_polarisation_lightcurve(lc, stokes=stokes, error_alpha=0.4)
+        else:
+            plot_lightcurve(lc)
 
     # Summary plot
     # --------------------------------------
     if summary:
-        make_summary_plot(
+        plot_summary(
             ds,
             stokes,
             cmax,
@@ -383,14 +378,15 @@ def main(
     # --------------------------------------
     if acf:
         for s in stokes:
-            ds.plot_acf(stokes=s, contrast=0.2)
+            plot_acf(ds, stokes=s, contrast=0.2)
 
     # RM FDF and Lightcurve/Dynamic Spectrum of Polarisation Angle
     # --------------------------------------
     if fdf:
-        ds.plot_fdf()
+        plot_fdf(ds)
 
-    plt.show()
+    with warnings.catch_warnings():
+        plt.show()
 
 
 if __name__ == "__main__":
