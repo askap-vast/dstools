@@ -167,7 +167,9 @@ class DynamicSpectrum:
         return scan_start_idx, scan_end_idx
 
     def _validate(self, datafile):
-        # Check if baselines have been pre-averaged and disable uvdist selection if so
+        """Validate the HDF5 DS file."""
+
+        # Check if baselines have been pre-averaged and disable uvdist selection if so.
         default_uv_params = [
             self.minuvdist == 0,
             self.maxuvdist == np.inf,
@@ -186,12 +188,13 @@ class DynamicSpectrum:
             self.minuvwave = 0
             self.maxuvwave = np.inf
 
+        # Check extraction and library versions of DStools
         ds_version = datafile.attrs.get("dstools_version", "1.0.0")
         dstools_version = version("radio-dstools")
 
         if ds_version != dstools_version:
             logger.warning(
-                f"Attempting to open v{ds_version} DS with DStools v{dstools_version}."
+                f"Using DStools v{dstools_version} to open DS extracted with DStools v{ds_version}."
             )
 
         return
@@ -336,6 +339,8 @@ class DynamicSpectrum:
         return XX, XY, YX, YY
 
     def _barycentre_times(self, time: Time):
+        """Apply corrections to Barycentric Dynamical Timescale."""
+
         ra, dec = self.header.get("phasecentre").split()
         location = LOCATIONS.get(self.header.get("telescope"))
 
@@ -448,6 +453,8 @@ class DynamicSpectrum:
         return stacked_XX, stacked_XY, stacked_YX, stacked_YY
 
     def _rebin(self, XX, XY, YX, YY):
+        """Bin data in time and frequency."""
+
         num_tsamples, num_channels = XX.shape
         tbins = num_tsamples // self.tavg
         fbins = num_channels // self.favg
