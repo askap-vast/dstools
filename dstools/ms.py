@@ -79,6 +79,9 @@ class Table:
             np.append(ant1, ant2),
         )
 
+        # Remove flagged antennas with -1 index
+        antennas = antennas[np.where(antennas != -1)]
+
         return antennas
 
     @property
