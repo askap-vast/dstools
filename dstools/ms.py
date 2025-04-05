@@ -193,7 +193,7 @@ class CalTable(Table):
                             ax.set_ylabel("Phase [deg]")
                             ax.set_ylim(-maxval, maxval)
                         else:
-                            maxval = gains.max() - 1
+                            maxval = np.abs(gains - 1).max()
                             ax.set_ylabel("Amplitude")
                             ax.set_ylim(1 - 2 * maxval, 1 + 2 * maxval)
 
