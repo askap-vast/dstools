@@ -23,6 +23,7 @@ from numpy.typing import ArrayLike
 from scipy.signal import correlate, find_peaks
 
 from dstools.rm import PolObservation
+from dstools.utils import rebin, rebin2D, slice_array
 
 logger = logging.getLogger(__name__)
 
@@ -45,125 +46,6 @@ LOCATIONS = {
     "MeerKAT": EarthLocation.of_site("MeerKAT"),
     "ASKAP": EarthLocation.of_site("ASKAP"),
 }
-
-
-def snr_mask(data: ArrayLike, noise: ArrayLike, n_sigma: float) -> ArrayLike:
-    """
-    Mask an array below n_sigma * SNR, where SNR is determined from imaginary component
-    of a secondary "noise" array (i.e. to mask various arrays based on Stokes I SNR)
-    """
-
-    mask = np.abs(noise.real) < n_sigma * np.nanstd(noise.imag)
-    data[mask] = np.nan
-
-    return data
-
-
-def rebin(o: int, n: int, axis: int) -> ArrayLike:
-    """Create l1-norm preserving array compression matrix from o -> n length.
-
-    if rebinning along row axis we want:
-        - (o // n) + 1 entries in each row that sum to unity and preserve l1-norm,
-        - each column to sum to the compression ratio o / n
-        - values distributed along the row in units of o / n until expired
-
-        >>> rebin(5, 3)
-        array([[0.6, 0.4, 0. , 0. , 0. ],
-               [0. , 0.2, 0.6, 0.2, 0. ],
-               [0. , 0. , 0. , 0.4, 0.6]])
-
-        - transpose of this for column rebinning
-
-    The inner product of this compressor with an array will rebin
-    the array conserving the total intensity along the given axis.
-    """
-
-    compressor = np.zeros((n, o))
-
-    # Exit early with empty array if chunk is empty
-    if compressor.size == 0:
-        return compressor
-
-    comp_ratio = n / o
-
-    nrow = 0
-    ncol = 0
-
-    budget = 1
-    overflow = 0
-
-    # While loop to avoid visiting n^2 zero-value cells
-    while nrow < n and ncol < o:
-        # Use overflow if just spilled over from last row
-        if overflow > 0:
-            value = overflow
-            overflow = 0
-            budget -= value
-            row_shift = 0
-            col_shift = 1
-        # Use remaining budget if at end of current row
-        elif budget < comp_ratio:
-            value = budget
-            overflow = comp_ratio - budget
-            budget = 1
-            row_shift = 1
-            col_shift = 0
-        # Otherwise spend n / o and move to next column
-        else:
-            value = comp_ratio
-            budget -= value
-            row_shift = 0
-            col_shift = 1
-
-        compressor[nrow, ncol] = value
-        nrow += row_shift
-        ncol += col_shift
-
-    return compressor if axis == 0 else compressor.T
-
-
-def rebin2D(array: ArrayLike, new_shape: tuple[int, int]) -> ArrayLike:
-    """Re-bin along time / frequency axes conserving flux."""
-
-    # Convert from masked array to pure numpy array
-    if isinstance(array, np.ma.MaskedArray):
-        array[array.mask] = np.nan
-        array = array.data
-
-    if new_shape == array.shape:
-        array[array == 0 + 0j] = np.nan
-        return array
-
-    if new_shape[0] > array.shape[0] or new_shape[1] > array.shape[1]:
-        raise ValueError(
-            "New shape should not be greater than old shape in either dimension"
-        )
-
-    time_comp = rebin(array.shape[0], new_shape[0], axis=0)
-    freq_comp = rebin(array.shape[1], new_shape[1], axis=1)
-    array[np.isnan(array)] = 0 + 0j
-    result = time_comp @ np.array(array) @ freq_comp
-    result[result == 0 + 0j] = np.nan
-
-    return result
-
-
-def slice_array(
-    a: ArrayLike,
-    ax1_min: int,
-    ax1_max: int,
-    ax2_min: int = None,
-    ax2_max: int = None,
-) -> ArrayLike:
-    """Slice 1D or 2D array with variable lower and upper boundaries."""
-
-    if ax2_min is None and ax2_max is None:
-        a = a[ax1_min:] if ax1_max == 0 else a[ax1_min:ax1_max]
-    else:
-        a = a[ax1_min:, :] if ax1_max == 0 else a[ax1_min:ax1_max, :]
-        a = a[:, ax2_min:] if ax2_max == 0 else a[:, ax2_min:ax2_max]
-
-    return a
 
 
 @dataclass
