@@ -121,7 +121,7 @@ class Viewer:
         # Add button toggle for each image
         for i, image in enumerate(self.images):
             xpos = i * 0.15
-            b_ax, toggle = self.add_button(image, xpos=xpos)
+            _, toggle = self.add_button(image, xpos=xpos)
             setattr(self, f"{image.name}_toggle", toggle)
 
         # Set figure borders

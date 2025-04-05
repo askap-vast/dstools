@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, ZScaleInterval
@@ -173,6 +174,7 @@ class WSClean:
 
     # masking / thresholds
     fits_mask: Path | None = None
+    target_mask: Path | None = None
     galvin_clip_mask: Path | None = None
     erode_beam_shape: bool = False
     mask_threshold: float = 5
@@ -274,11 +276,11 @@ class WSClean:
         if self.fits_mask is None:
             return ""
 
-        # Initialise user-provided deconvolution mask
+        # Initialise deconvolution mask
         mask_path = self.fits_mask.absolute()
         mask_image = Image(mask_path)
 
-        # Initialise mask with optional Galvin clip
+        # Apply Galvin clip
         if self.galvin_clip_mask is not None:
             galvin_image = Image(self.galvin_clip_mask.absolute())
             mask_array = minimum_absolute_clip(
@@ -295,6 +297,11 @@ class WSClean:
                 mask=mask_array,
                 fits_header=mask_image.header,
             )
+
+        # Remove user-specified region from mask by selecting pixels
+        # that are in mask_array but not in target_mask
+        if self.target_mask is not None:
+            mask_array = np.logical_and(mask_array, self.target_mask)
 
         # Apply final masking to WSclean FITS mask
         with fits.open(mask_path, mode="update") as hdul:
@@ -342,6 +349,10 @@ class WSClean:
             argstr = self._format_optional_argument(arg)
             wsclean_cmd.append(argstr)
 
+        # Create output directory
+        model_path = ms.path.parent.absolute() / self.out_dir
+        model_path.mkdir(exist_ok=True)
+
         # Add FITS mask argument
         fits_mask = self._get_fits_mask()
         wsclean_cmd.append(fits_mask)
@@ -349,10 +360,6 @@ class WSClean:
         # Add MS positional argument
         wsclean_cmd.append(str(ms.path.absolute()))
         wsclean_cmd = " ".join(wsclean_cmd)
-
-        # Create output directory
-        model_path = ms.path.parent.absolute() / self.out_dir
-        model_path.mkdir(exist_ok=True)
 
         # Move into working directory to store imaging products
         cwd = Path(".").absolute()

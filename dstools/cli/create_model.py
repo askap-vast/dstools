@@ -120,6 +120,13 @@ logger = logging.getLogger(__name__)
     help="FITS image to use as deconvolution mask.",
 )
 @click.option(
+    "-T",
+    "--target-mask",
+    default=None,
+    type=Path,
+    help="FITS image containing target emission pixels to exclude from mask.",
+)
+@click.option(
     "-G",
     "--galvin-clip-mask",
     default=None,
@@ -205,6 +212,7 @@ def main(
     multiscale_scale_bias,
     multiscale_max_scales,
     fits_mask,
+    target_mask,
     galvin_clip_mask,
     erode_beam_shape,
     threshold,
@@ -262,6 +270,7 @@ def main(
         mask_threshold=mask_threshold,
         local_rms_window=local_rms_window,
         fits_mask=fits_mask,
+        target_mask=target_mask,
         galvin_clip_mask=galvin_clip_mask,
         erode_beam_shape=erode_beam_shape,
         phasecentre=phasecentre,
