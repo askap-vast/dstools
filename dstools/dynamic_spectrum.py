@@ -270,10 +270,7 @@ class DynamicSpectrum:
 
             # Set minimum and maximum non-nan channel indices
             minchan = np.argmax(allpols)
-            if np.isnan(allpols[-1]):
-                maxchan = -np.argmax(allpols[::-1]) + 1
-            else:
-                maxchan = 0
+            maxchan = 0 if allpols[-1] else -np.argmax(allpols[::-1]) + 1
         else:
             minchan = 0
             maxchan = 0
