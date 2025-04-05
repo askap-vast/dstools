@@ -3,9 +3,8 @@ import os
 from pathlib import Path
 
 import click
-
-from dstools.logger import setupLogger
-from dstools.miriad import BANDS, CABBContinuumPipeline, MiriadWrapper
+from cal_cabb.logger import setupLogger
+from cal_cabb.miriad import BANDS, CABBContinuumPipeline, MiriadWrapper
 
 logger = logging.getLogger(__name__)
 
