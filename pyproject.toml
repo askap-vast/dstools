@@ -25,6 +25,7 @@ radio-beam = "^0.3.8"
 fixms = "^0.4.0"
 python-casacore = "^3.6.1"
 cal-cabb = {git = "https://github.com/joshoewahp/cal-cabb"}
+rm-lite = "^2025.4.0"
 
 [tool.poetry.scripts]
 dstools-atca-cal = "dstools.cli.atca_cal:main"
