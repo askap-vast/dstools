@@ -57,6 +57,12 @@ reportGeneralTypeIssues = false
 reportOptionalSubscript = false
 reportOptionalMemberAccess = false
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:casaconfig",
+    "ignore:'datfix' made the change.*:astropy.wcs.FITSFixedWarning",
+]
+
 [tool.mypy]
 
 [[tool.mypy.overrides]]
