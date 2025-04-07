@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 from astropy.coordinates import Angle, EarthLocation, SkyCoord
 from astropy.time import Time
+from rm_lite.utils.synthesis import freq_to_lambda2, make_phi_arr, rmsynth_nufft
 from scipy.signal import correlate
 
-from dstools.rm import PolObservation
 from dstools.utils import rebin, rebin2D, slice_array
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,7 @@ class DynamicSpectrum:
     derotate: bool = False
     dedisperse: bool = False
     RM: float = None
+    RM_reffreq: u.Quantity = None
     DM: float = None
     DM_reffreq: u.Quantity = None
 
@@ -492,7 +493,7 @@ class DynamicSpectrum:
 
         if self.derotate:
             if self.RM is None:
-                self.RM = self.rm_synthesis(I, Q, U)
+                self.RM = self.rm_synthesis(I, L.T)
 
             # Build L from imaginary components
             Li = Q.imag + 1j * U.imag
@@ -538,46 +539,40 @@ class DynamicSpectrum:
 
         return acf2d
 
-    def rm_synthesis(self, I, Q, U):
-        # Zero out null values in Stokes arrays
-        I[np.isnan(I)] = 0 + 0j
-        Q[np.isnan(Q)] = 0 + 0j
-        U[np.isnan(U)] = 0 + 0j
-
-        # Compute RM along brightest time-sample
-        tslice = np.argmax(np.nanmean(I.real, axis=1))
-
-        # RM synthesis
-        stokes_arrays = (I[tslice, :].real, Q[tslice, :].real, U[tslice, :].real)
-        self.polobs = PolObservation(
-            self.freq * 1e6,
-            stokes_arrays,
-            verbose=False,
-        )
-
-        phi_axis = np.arange(-2000.0, 2000.1, 0.1)
-        self.polobs.rmsynthesis(
-            phi_axis,
-            verbose=False,
-        )
-        self.polobs.rmclean(
-            cutoff=1.0,
-            verbose=False,
-        )
-
-        RM = self.polobs.phi[np.argmax(abs(self.polobs.fdf))]
-        logger.debug(f"Peak RM of {RM:.1f} rad/m2")
-
-        return RM
-
-
     def derotate_faraday(self, L):
-        """Correct linear polarisation DS for Faraday rotation."""
+        """Correct linear polarisation dynamic spectrum for Faraday rotation."""
 
         lam = (c.c / (self.freq * u.MHz)).to(u.m).value
         L = L * np.exp(-2j * self.RM * lam**2)
 
         return L
+
+    def rm_synthesis(self, I, L):
+        """Perform rotation measure synthesis with RM-lite."""
+
+        # Prepare data for RM synthesis
+        phis = make_phi_arr(2000, 0.1)
+        freq_hz = self.freq * 1e6
+        lam_sq_0_m2 = float(np.mean(freq_to_lambda2(freq_hz)))
+
+        # Perform RM synthesis on the 2D complex polarisation dynamic spectrum
+        fdf_spectrum = rmsynth_nufft(
+            complex_pol_arr=L,
+            lambda_sq_arr_m2=freq_to_lambda2(freq_hz),
+            phi_arr_radm2=phis,
+            weight_arr=np.ones_like(freq_hz),
+            lam_sq_0_m2=lam_sq_0_m2,
+        )
+
+        # Select nominal RM from the peak of the lightcurve. Should later extend this
+        # to pull Q / U from the cleaned RM synthesis FDF spectrum.
+        fdf_peak_timeseries = np.argmax(np.abs(fdf_spectrum), axis=0)
+        peak_rm_spectrum = phis[fdf_peak_timeseries]
+        tslice = np.argmax(np.nanmean(I.real, axis=1))
+        RM = peak_rm_spectrum[tslice]
+        logger.debug(f"Peak RM of {RM:.1f} rad/m2")
+
+        return RM
 
 
 class TimeFreqSeries(ABC):
