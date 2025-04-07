@@ -187,27 +187,6 @@ class Viewer:
 
         return
 
-    # def add_slider(self):
-    #     slider_ax = inset_axes(
-    #         self.ax,
-    #         width="30%",
-    #         height="10%",
-    #         loc="lower left",
-    #         bbox_to_anchor=(0.6, -0.15, 1, 1),
-    #         bbox_transform=self.ax.transAxes,
-    #     )
-
-    #     self.slider = RangeSlider(
-    #         slider_ax,
-    #         "Threshold",
-    #         np.nanmin(self.active_image.data),
-    #         np.nanmax(self.active_image.data),
-    #     )
-
-    #     self.slider.on_changed(self._update_colorscale())
-
-    #     return
-
     def add_button(self, image, xpos):
         button_ax = inset_axes(
             self.ax,
