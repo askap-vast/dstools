@@ -3,8 +3,7 @@ import logging
 import click
 
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet
-from dstools.selfcal import run_selfcal
+from dstools.ms import MeasurementSet, run_selfcal
 from dstools.utils import DataError
 
 logger = logging.getLogger(__name__)
