@@ -78,7 +78,7 @@ class WSCleanModel(Model):
         self.channels_out = len(chan_images)
 
     def _load(self):
-        self.model = [p for p in self.model_dir.glob("*-MFS-I-model.fits")][0]
+        self.model = next(self.model_dir.glob("*-MFS-I-model.fits"))
         self.image = str(self.model).replace("-model", "-image")
         self.residual = str(self.model).replace("-model", "-residual")
 
@@ -89,13 +89,13 @@ class WSCleanModel(Model):
     def _validate(self):
         # Check for existence of sub-channel model images
         if len(self.image) == 0:
-            msg = f"Path {self.model_dir} does not contain any wsclean model images with pattern '*-MFS-I-model.fits'."
+            msg = f"Path {self.model_dir} does not contain images with pattern *-MFS-I-model.fits."
             raise ValueError(msg)
 
         # Check for existence of MFS model image
         chan_images = [im for im in self.model_images if "MFS" not in str(im)]
         if len(chan_images) == 0:
-            msg = f"Path {self.model_dir} does not contain any wsclean model images with pattern '*-model.fits'."
+            msg = f"Path {self.model_dir} does not contain images with pattern *-model.fits."
             raise ValueError(msg)
 
         return
@@ -384,7 +384,7 @@ class WSClean:
         # Return to start directory
         os.chdir(cwd)
 
-        return
+        return wsclean_cmd
 
 
 def get_pb_correction(primary_beam: Path, ra: str, dec: str) -> float:
