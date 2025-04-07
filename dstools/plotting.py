@@ -205,10 +205,13 @@ def _plot_timefreqseries(
 def plot_summary(
     ds: DynamicSpectrum,
     stokes: str,
-    cmax: float,
-    imag: bool,
+    cmax: Optional[dict[float]] = None,
+    imag: bool = False,
 ):
     """Plot all Stokes dynamic spectra and averaged light-curve / spectrum."""
+
+    if cmax is None:
+        cmax = {stokes: 30 for stokes in "IQUV"}
 
     fig = plt.figure(figsize=(14, 15))
     gs = GridSpec(3, 2, figure=fig)
