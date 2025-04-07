@@ -381,11 +381,6 @@ def main(
         for s in stokes:
             plot_acf(ds, stokes=s, contrast=0.2)
 
-    # RM FDF and Lightcurve/Dynamic Spectrum of Polarisation Angle
-    # --------------------------------------
-    if fdf:
-        plot_fdf(ds)
-
     with warnings.catch_warnings():
         plt.show()
 

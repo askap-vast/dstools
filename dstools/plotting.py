@@ -257,11 +257,7 @@ def plot_summary(
 
     return fig, axes
 
-def plot_fdf(ds: DynamicSpectrum, fig=None, ax=None):
-    """Plot Faraday dispersion function."""
 
-    if fig is None or ax is None:
-        fig, ax = plt.subplots(figsize=(7, 5))
 def plot_polarisation_lightcurve(lc: LightCurve, stokes: str, error_alpha: float = 0.4):
     return _plot_polarisations(lc, stokes=stokes, error_alpha=error_alpha)
 
@@ -270,11 +266,6 @@ def plot_polarisation_spectrum(lc: LightCurve, stokes: str, error_alpha: float =
     return _plot_polarisations(lc, stokes=stokes, error_alpha=error_alpha)
 
 
-    if not ds.polobs:
-        I = ds.data["I"]
-        Q = ds.data["Q"]
-        U = ds.data["U"]
-        _ = ds.rm_synthesis(I, Q, U)
 def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
     """Plot lightcurve / spectrum with polarisation parameters."""
 
@@ -286,9 +277,6 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
     ell_ax = fig.add_subplot(gs[1, 0])
     pol_ax = fig.add_subplot(gs[0, 0])
 
-    ax.plot(
-        ds.polobs.rmsf_phi,
-        np.abs(ds.polobs.rmsf),
     # Plot lightcurve / spectrum
     fig, data_ax = _plot_timefreqseries(
         tf,
@@ -304,27 +292,16 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
         yerr=tf.polangle_err,
         alpha=error_alpha,
         color="k",
-        label="RMSF",
         marker="o",
         markersize=1,
         ls="none",
     )
-    ax.plot(
-        ds.polobs.phi,
-        np.abs(ds.polobs.fdf),
-        color="r",
-        label="FDF",
     pa_ax.axhline(
         0,
         ls=":",
         color="k",
         alpha=0.5,
     )
-    ax.plot(
-        ds.polobs.phi,
-        np.abs(ds.polobs.rm_cleaned),
-        color="b",
-        label="Clean",
 
     ell_ax.errorbar(
         tf.x,
@@ -336,11 +313,6 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
         markersize=1,
         ls="none",
     )
-    ax.plot(
-        ds.polobs.phi,
-        np.abs(ds.polobs.rm_comps),
-        color="g",
-        label="Model",
     ell_ax.axhline(
         0,
         ls=":",
@@ -348,8 +320,6 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
         alpha=0.5,
     )
 
-    ax.set_xlabel(r"RM ($rad/m^2$)")
-    ax.set_ylabel("Amplitude")
     pol_ax.errorbar(
         tf.x,
         y=tf.linear_fraction,
@@ -373,13 +343,11 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
         ls="none",
     )
 
-    ax.legend()
     # Apply formatting
     pa_ax.set_xticklabels([])
     ell_ax.set_xticklabels([])
     pol_ax.set_xticklabels([])
 
-    return fig, ax
     pad = (tf.x.max() - tf.x.min()) * 0.05
     pa_ax.set_xlim([tf.x.min() - pad, tf.x.max() + pad])
     ell_ax.set_xlim([tf.x.min() - pad, tf.x.max() + pad])
