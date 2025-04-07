@@ -37,10 +37,14 @@ def create_boxcar_skew_mask(
     # Counting positive pixel fraction here. The su
     window_shape = (box_size, box_size)
     positive_pixel_fraction = fftconvolve(
-        in1=positive_pixels, in2=np.ones(window_shape, dtype=np.float32), mode="same"
+        in1=positive_pixels,
+        in2=np.ones(window_shape, dtype=np.float32),
+        mode="same",
     ) / np.prod(window_shape)
     positive_pixel_fraction = np.clip(
-        positive_pixel_fraction, 0.0, 1.0
+        positive_pixel_fraction,
+        0.0,
+        1.0,
     )  # trust nothing
 
     skew_mask = positive_pixel_fraction > (0.5 + skew_delta)
@@ -65,12 +69,13 @@ def _minimum_absolute_clip(
 
     Args:
         image (np.ndarray): The input array to consider
-        increase_factor (float, optional): How large to scale the absolute minimum by. Defaults to 2.0.
-        box_size (int, optional): Size of the rolling boxcar minimum filtr. Defaults to 100.
+        increase_factor (float, optional): How large to scale the absolute minimum by.
+        box_size (int, optional): Size of the rolling boxcar minimum filter
 
     Returns:
         np.ndarray: The mask of pixels above the locally varying threshold
     """
+
     logger.debug(f"Minimum absolute clip, {increase_factor=} {box_size=}")
     rolling_box_min = minimum_filter(image, box_size)
 
@@ -99,18 +104,18 @@ def _adaptive_minimum_absolute_clip(
             box_size=box_size,
         )
         if np.all(~skew_results.skew_mask):
-            logger.debug("No skewed islands detected")
+            logger.info("No skewed islands detected")
             break
         if any([box_size > dim for dim in image.shape]):
-            logger.debug(f"{box_size=} larger than a dimension in {image.shape=}")
+            logger.info(f"{box_size=} larger than a dimension in {image.shape=}")
             break
 
         logger.debug(f"({box_round}) Growing {box_size=} {adaptive_box_step=}")
         box_size = int(box_size * adaptive_box_step)
-        _min_value = minimum_filter(image, box_size)
+        minval = minimum_filter(image, box_size)
         logger.debug("Slicing minimum values into place")
 
-        min_value[skew_results.skew_mask] = _min_value[skew_results.skew_mask]
+        min_value[skew_results.skew_mask] = minval[skew_results.skew_mask]
 
     mask = image > (np.abs(min_value) * increase_factor)
 
@@ -149,11 +154,17 @@ def minimum_absolute_clip(
 
     Args:
         image (np.ndarray): Image to create a mask for
-        increase_factor (float, optional): The guard factor used to inflate the absolute of the minimum filter. Defaults to 2.0.
-        box_size (int, optional): Size of the box car of the minimum filter. Defaults to 100.
-        adaptive_max_depth (Optional[int], optional): The maximum number of rounds that the adaptive mode is allowed to perform when rescaling boxcar results in certain directions. Defaults to None.
-        adaptive_box_step (float, optional): A multiplicative factor to increase the boxcar size by each round. Defaults to 2.0.
-        adaptive_skew_delta (float, optional): Minimum deviation from 0.5 that needs to be met to classify a region as skewed. Defaults to 0.2.
+        increase_factor (float, optional):
+            The guard factor used to inflate the absolute of the minimum filter.
+        box_size (int, optional):
+            Size of the box car of the minimum filter.
+        adaptive_max_depth (Optional[int], optional):
+            The maximum number of rounds that the adaptive mode is allowed to perform
+            when rescaling boxcar results in certain directions.
+        adaptive_box_step (float, optional):
+            A multiplicative factor to increase the boxcar size by each round.
+        adaptive_skew_delta (float, optional):
+            Minimum deviation from 0.5 that needs to be met to classify a region as skewed.
 
     Returns:
         np.ndarray: Final mask
@@ -184,14 +195,17 @@ def create_beam_mask_kernel(
     minimum_response: float = 0.6,
 ) -> np.ndarray:
     """Make a mask using the shape of a beam in a FITS Header object. The
-    beam properties in the ehader are used to generate the two-dimensional
+    beam properties in the header are used to generate the two-dimensional
     Gaussian main lobe, from which a cut is made based on the minimum
     power.
 
     Args:
-        fits_header (fits.Header): The FITS header to create beam from
-        kernel_size (int, optional): Size of the output kernel in pixels. Will be a square. Defaults to 100.
-        minimum_response (float, optional): Minimum response of the beam shape for the mask to be constructed from. Defaults to 0.6.
+        fits_header (fits.Header):
+            The FITS header to create beam from
+        kernel_size (int, optional):
+            Size of the output kernel in pixels. Will be a square.
+        minimum_response (float, optional):
+            Minimum response of the beam shape for the mask to be constructed from.
 
     Raises:
         KeyError: Raised if CDELT1 and CDELT2 missing
@@ -199,6 +213,7 @@ def create_beam_mask_kernel(
     Returns:
         np.ndarray: Boolean mask of the kernel shape
     """
+
     assert 0.0 < minimum_response < 1.0, (
         f"{minimum_response=}, should be between 0 to 1 (exclusive)"
     )
@@ -237,9 +252,12 @@ def beam_shape_erode(
     same pixel size
 
     Args:
-        mask (np.ndarray): The current mask that will be eroded based on the beam shape
-        fits_header (fits.Header): The fits header of the mask used to generate the beam kernel shape
-        minimum_response (float, optional): The minimum response of the main restoring beam to craft the shape from. Defaults to 0.6.
+        mask (np.ndarray):
+            The current mask that will be eroded based on the beam shape
+        fits_header (fits.Header):
+            The fits header of the mask used to generate the beam kernel shape
+        minimum_response (float, optional):
+            The minimum response of the main restoring beam to craft the shape from.
 
     Returns:
         np.ndarray: The eroded beam shape
