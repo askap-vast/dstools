@@ -127,7 +127,7 @@ def plot_ds(
     ax.set_xlabel(ds._timelabel)
     ax.set_ylabel("Frequency (MHz)")
 
-    if ds.absolute_times:
+    if ds.absolute_times and not ds.fold:
         format_timeaxis(ds, ax)
 
     ax.text(
