@@ -11,6 +11,7 @@ from erfa import ErfaWarning
 from dstools.dynamic_spectrum import DynamicSpectrum, LightCurve, Spectrum
 from dstools.logger import setupLogger
 from dstools.plotting import (
+    _plot_polarisations,
     plot_acf,
     plot_ds,
     plot_fdf,
@@ -159,11 +160,11 @@ stokes_choices = [
     help="Plot time-averaged spectrum.",
 )
 @click.option(
-    "-x",
-    "--polangle",
+    "-P",
+    "--polarisations",
     is_flag=True,
     default=False,
-    help="Include polarisation angle in lightcurve plot.",
+    help="Plot polarisation angle / ellipticity / fractional polarisation in lightcurve/spectrum.",
 )
 @click.option(
     "--fdf",
@@ -280,7 +281,7 @@ def main(
     dspec,
     lightcurve,
     spectrum,
-    polangle,
+    polarisations,
     fdf,
     rm,
     acf,
@@ -349,13 +350,19 @@ def main(
     # --------------------------------------
     if spectrum:
         sp = Spectrum(ds)
-        plot_spectrum(sp)
+        if polarisations:
+            _plot_polarisations(sp, stokes=stokes, error_alpha=0.4)
+        else:
+            plot_spectrum(sp)
 
     # Light Curve
     # --------------------------------------
     if lightcurve:
         lc = LightCurve(ds)
-        plot_lightcurve(lc)
+        if polarisations:
+            _plot_polarisations(lc, stokes=stokes, error_alpha=0.4)
+        else:
+            plot_spectrum(lc)
 
     # Summary plot
     # --------------------------------------
