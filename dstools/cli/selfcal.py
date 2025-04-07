@@ -32,10 +32,9 @@ logger = logging.getLogger(__name__)
     help="Name of reference antenna.",
 )
 @click.option(
-    "-P",
     "--combine-pols/--no-combine-pols",
     is_flag=True,
-    default=False,
+    default=True,
     help="Solve for calibration solutions on combined orthogonal polarisations.",
 )
 @click.option(
