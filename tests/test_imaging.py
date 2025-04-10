@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from dstools.imaging import Image, Model, WSClean, WSCleanModel, get_pb_correction
+from dstools.imaging import Image, WSClean, WSCleanModel
 
 
 def test_image_construction(im_paths):

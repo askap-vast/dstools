@@ -2,9 +2,6 @@ import os
 import warnings
 
 import pytest
-from click.testing import CliRunner
-
-from dstools.cli import subtract_model
 
 warnings.filterwarnings("ignore", category=DeprecationWarning, append=True)
 
