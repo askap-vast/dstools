@@ -4,6 +4,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from astropy.coordinates import SkyCoord
@@ -163,7 +164,7 @@ class WSClean:
 
     # deconvolution
     iterations: int = 30000
-    mniter: int | None = None
+    mniter: Optional[int] = None
     mgain: float = 0.85
     channels_out: int = 8
     deconvolution_channels: int = 8
@@ -173,31 +174,31 @@ class WSClean:
     multiscale_max_scales: int = 8
 
     # masking / thresholds
-    fits_mask: Path | None = None
-    target_mask: Path | None = None
-    galvin_clip_mask: Path | None = None
+    fits_mask: Optional[Path] = None
+    target_mask: Optional[Path] = None
+    galvin_clip_mask: Optional[Path] = None
     erode_beam_shape: bool = False
     mask_threshold: float = 5
     auto_threshold: float = 3
-    local_rms_window: int | None = None
+    local_rms_window: Optional[int] = None
 
     # weight / gridding
     robust: float = 0.5
-    parallel_deconvolution: int | None = None
-    phasecentre: tuple[str, str] | None = None
+    parallel_deconvolution: Optional[int] = None
+    phasecentre: Optional[tuple[str, str]] = None
 
     # data selection
     pol: str = "iquv"
-    data_column: str | None = None
-    minuvw_m: float | None = None
-    minuvw_l: float | None = None
-    intervals_out: int | None = None
+    data_column: Optional[str] = None
+    minuvw_m: Optional[float] = None
+    minuvw_l: Optional[float] = None
+    intervals_out: Optional[int] = None
 
     # I/O
     out_dir: Path = Path(".")
-    temp_dir: Path | None = None
-    reuse_psf: Path | None = None
-    reuse_dirty: Path | None = None
+    temp_dir: Optional[Path] = None
+    reuse_psf: Optional[Path] = None
+    reuse_dirty: Optional[Path] = None
     no_dirty: bool = False
     save_source_list: bool = False
     save_reordered: bool = False

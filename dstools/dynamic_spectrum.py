@@ -55,10 +55,10 @@ class DynamicSpectrum:
     barycentre: bool = False
     derotate: bool = False
     dedisperse: bool = False
-    RM: float = None
-    RM_reffreq: u.Quantity = None
-    DM: float = None
-    DM_reffreq: u.Quantity = None
+    RM: Optional[float] = None
+    RM_reffreq: Optional[u.Quantity] = None
+    DM: Optional[float] = None
+    DM_reffreq: Optional[u.Quantity] = None
 
     fold: bool = False
     period: Optional[float] = None

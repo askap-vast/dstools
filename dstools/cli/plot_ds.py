@@ -11,7 +11,6 @@ from erfa import ErfaWarning
 from dstools.dynamic_spectrum import DynamicSpectrum, LightCurve, Spectrum
 from dstools.logger import setupLogger
 from dstools.plotting import (
-    _plot_polarisations,
     plot_acf,
     plot_ds,
     plot_lightcurve,
@@ -65,25 +64,25 @@ stokes_choices = [
     "--uvmin",
     default=0,
     type=float,
-    help="Selection of minimum projected baseline distance in m.",
+    help="Selection of minimum projected baseline distance in meters.",
 )
 @click.option(
     "--uvmax",
     default=np.inf,
     type=float,
-    help="Selection of maximum projected baseline distance in m.",
+    help="Selection of maximum projected baseline distance in meters.",
 )
 @click.option(
     "--uvwavemin",
     default=0,
     type=float,
-    help="Selection of minimum frequency-dependent projected baseline distance in units of wavelengths.",
+    help="Selection of minimum frequency-dependent projected baseline distance in wavelengths.",
 )
 @click.option(
     "--uvwavemax",
     default=np.inf,
     type=float,
-    help="Selection of maximum frequency-dependent projected baseline distance in units of wavelengths.",
+    help="Selection of maximum frequency-dependent projected baseline distance in wavelengths.",
 )
 @click.option(
     "--tmin",
@@ -116,7 +115,7 @@ stokes_choices = [
     "--cmax_l",
     default=15,
     type=float,
-    help="Maximum colormap normalisation in linear polarisations.",
+    help="Maximum colormap normalisation in Stokes Q/U and L.",
 )
 @click.option(
     "-V",
@@ -130,7 +129,7 @@ stokes_choices = [
     "--imag",
     is_flag=True,
     default=False,
-    help="Toggle plotting of imaginary component of visibilities in dynamic spectra.",
+    help="Toggle plotting of imaginary component of visibilities.",
 )
 @click.option(
     "-s",
@@ -168,12 +167,6 @@ stokes_choices = [
     help="Include polarisation fraction / angle / ellipticity in lightcurve / spectrum plot.",
 )
 @click.option(
-    "--fdf",
-    is_flag=True,
-    default=False,
-    help="Plot RM synthesis Faraday dispersion function.",
-)
-@click.option(
     "-a",
     "--acf",
     is_flag=True,
@@ -194,17 +187,31 @@ stokes_choices = [
     help="Toggle to enable folding of data.",
 )
 @click.option(
+    "-T",
+    "--period",
+    default=None,
+    type=float,
+    help="Period to use when folding.",
+)
+@click.option(
+    "-o",
+    "--period_offset",
+    default=0,
+    type=float,
+    help="Period phase offset to use when folding.",
+)
+@click.option(
     "-R",
     "--derotate",
     is_flag=True,
     default=False,
-    help="Toggle RM de-rotation of Stokes Q/U.",
+    help="Toggle Faraday de-rotation of Stokes Q/U.",
 )
 @click.option(
     "--RM",
     type=float,
     default=None,
-    help="Rotation measure in units of rad/m^2.",
+    help="Rotation measure in units of rad/m^2. Default is to compute via Faraday synthesis.",
 )
 @click.option(
     "-D",
@@ -220,35 +227,20 @@ stokes_choices = [
     help="Dispersion measure in units of pc/cm^3.",
 )
 @click.option(
-    "-T",
-    "--period",
-    default=None,
-    type=float,
-    help="Period to use when folding.",
-)
-@click.option(
-    "-o",
-    "--period_offset",
-    default=0,
-    type=float,
-    help="Period phase offset to use when folding.",
-)
-@click.option(
     "-B",
     "--barycentre",
     is_flag=True,
     default=False,
-    help="Toggle Barycentric correction.",
+    help="Toggle correction to Barycentric frame and coordinate time scale.",
 )
 @click.option(
-    "--absolute-times",
+    "--absolute-times/--relative-times",
     is_flag=True,
     default=True,
     help="Toggle plotting time axes with absolute vs relative times.",
 )
 @click.option(
-    "-C",
-    "--calscans",
+    "--calscans/--no-calscans",
     is_flag=True,
     default=True,
     help="Toggle inclusion of null-valued time chunks while off-source.",
@@ -283,7 +275,6 @@ def main(
     lightcurve,
     spectrum,
     polarisations,
-    fdf,
     rm,
     acf,
     fold,

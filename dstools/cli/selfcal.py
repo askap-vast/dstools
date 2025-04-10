@@ -48,14 +48,14 @@ logger = logging.getLogger(__name__)
     "--interactive/--no-interactive",
     is_flag=True,
     default=True,
-    help="Run interactively to select solution in",
+    help="Run interactively.",
 )
 @click.option(
     "-n",
     "--nspws",
     default=1,
     type=int,
-    help="Number of spectral windows to derive indepdendent gain solutions within.",
+    help="Number of spectral windows in which to derive independent gain solutions.",
 )
 @click.argument("ms", type=MeasurementSet)
 def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, nspws):
