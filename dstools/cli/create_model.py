@@ -81,7 +81,7 @@ logger = logging.getLogger(__name__)
     "-n",
     "--spectral-pol-terms",
     default=3,
-    help="Number of Taylor terms to use in deconvolution.",
+    help="Number of polynomial terms used to model spectral structure in MFS deconvolution.",
 )
 @click.option(
     "--minuvw_m",
@@ -231,7 +231,9 @@ def main(
     verbose,
 ):
     os.system(f"mkdir -p {ms.path.parent.absolute() / out_dir}")
-    logfile = ms.path.parent.absolute() / out_dir / "rt-peel.log" if savelogs else None
+    logfile = (
+        ms.path.parent.absolute() / out_dir / "create-model.log" if savelogs else None
+    )
     setupLogger(verbose=verbose, filename=logfile)
 
     # Set imaging parameters:

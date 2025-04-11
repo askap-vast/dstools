@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
     "-S",
     "--split-ms/--no-split-ms",
     default=False,
-    help="Split subtracted data into DATA column of output MS with .subbed.ms suffix.",
+    help="Split subtracted data into DATA column of output MS with .subtracted.ms suffix.",
 )
 @click.argument("ms", type=MeasurementSet)
 def main(ms, split_ms):
