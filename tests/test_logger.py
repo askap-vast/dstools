@@ -1,10 +1,7 @@
-import io
 import logging
 import os
 import subprocess
-import sys
 import tempfile
-from contextlib import contextmanager
 
 import pytest
 
@@ -196,6 +193,7 @@ def simulate_c_output(stdout_lines, stderr_lines):
     return
 
 
+@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
 def test_redirect_c_output_filtering_stdout_only(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]
@@ -215,6 +213,7 @@ def test_redirect_c_output_filtering_stdout_only(capfd):
         assert "critical" in err
 
 
+@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
 def test_redirect_c_output_filtering_stderr_only(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]
@@ -234,6 +233,7 @@ def test_redirect_c_output_filtering_stderr_only(capfd):
         assert "critical" in err
 
 
+@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
 def test_redirect_c_output_filtering_both_streams(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]

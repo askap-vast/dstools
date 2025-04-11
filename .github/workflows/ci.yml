@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Ensure ~/.casa/data exists
+        run: mkdir -p ~/.casa/data
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Run pytest with coverage
+        run: |
+          poetry run pytest --cov=dstools --cov-report=xml
+
+      - name: Check formatting with ruff
+        run: poetry run ruff check .
+
+      - name: Check import sorting with isort
+        run: poetry run isort --check-only --profile black .
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
