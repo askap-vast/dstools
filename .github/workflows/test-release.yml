@@ -1,0 +1,40 @@
+name: Test Release
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-release:
+    name: Build and Publish to TestPyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Configure Poetry for TestPyPI
+        run: |
+          poetry config repositories.testpypi https://test.pypi.org/legacy/
+          poetry config pypi-token.testpypi ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+      - name: Install dependencies
+        run: poetry install --only main
+
+      - name: Build and verify package
+        run: |
+          poetry build
+          pip install --upgrade build twine
+          twine check dist/*
+
+      - name: Publish to TestPyPI
+        run: poetry publish -r testpypi --skip-existing

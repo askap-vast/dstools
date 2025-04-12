@@ -1,19 +1,21 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag (e.g., v2.0.0)'
+        required: true
 
 jobs:
   release:
-    name: Build and publish with Poetry
+    name: Build and Publish to PyPI
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,20 +27,26 @@ jobs:
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Configure Poetry for TestPyPI
+      - name: Validate tag matches pyproject version
         run: |
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.TEST_PYPI_API_TOKEN }}
+          VERSION=$(poetry version -s)
+          TAG=${{ github.event.inputs.tag }}
+          if [[ "$TAG" != "v$VERSION" ]]; then
+            echo "Tag ($TAG) does not match pyproject.toml version ($VERSION)"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: poetry install --only main
 
       - name: Configure Poetry for PyPI
+        run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Build and verify package
         run: |
-          poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
-
-      - name: Build package
-        run: poetry build
-
-      - name: Publish to TestPyPI
-        run: poetry publish -r testpypi --skip-existing
+          poetry build
+          pip install --upgrade build twine
+          twine check dist/*
 
       - name: Publish to PyPI
         run: poetry publish --skip-existing

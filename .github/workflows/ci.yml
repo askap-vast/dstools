@@ -3,7 +3,6 @@ name: CI
 on:
   push:
   pull_request:
-    branches: [main]
 
 jobs:
   test:
@@ -27,6 +26,15 @@ jobs:
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Cache Poetry virtualenv and packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            poetry-${{ runner.os }}-
+
       - name: Ensure ~/.casa/data exists
         run: mkdir -p ~/.casa/data
 
@@ -47,4 +55,3 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
