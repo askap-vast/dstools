@@ -8,7 +8,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.11,<3.12"
 click = "^8.0.3"
 matplotlib = "^3.8.2"
 numpy = "^2.0.0"
@@ -17,7 +17,7 @@ astropy = "6.1.7"
 pandas = "2.2.3"
 h5py = "^3.11.0"
 colorlog = "^6.8.2"
-casatasks = "^6.6.5.31"
+casatasks = "^6.7"
 dask = "^2024.11.2"
 xarray = "^2024.11.0"
 mpl-point-clicker = "^0.4.1"

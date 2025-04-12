@@ -28,6 +28,8 @@
 * `miriad`
 * `WSclean 3.5`
 
+`DStools` is built on top of modular `CASA` which is presently only available on linux.
+
 ### Installation / Configuration ###
 
 Install `DStools` using `pip` or your preferred package manager:
