@@ -152,10 +152,12 @@ name = "cal-cabb"
 version = "0.1.0"
 description = "ATCA CABB continuum calibration pipeline."
 optional = false
-python-versions = ">=3.11,<3.12"
+python-versions = "<3.12,>=3.11"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "cal_cabb-0.1.0-py3-none-any.whl", hash = "sha256:49afe230959f797150741adcea5cc257f640f23d70b9c841e32e040d266c2081"},
+    {file = "cal_cabb-0.1.0.tar.gz", hash = "sha256:44ebbec8ce99bf2bfa45c95441e7d20f7976d6143bf2cceb361e08915b27b17c"},
+]
 
 [package.dependencies]
 astropy = ">=6.1.7"
@@ -163,12 +165,6 @@ click = ">=8.1.8"
 colorlog = ">=6.9.0"
 pandas = ">=2.2.3"
 pre-commit = ">=4.1.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/joshoewahp/cal-cabb"
-reference = "HEAD"
-resolved_reference = "60c2b047d57396c85638e723efad3ec108a31143"
 
 [[package]]
 name = "casaconfig"
@@ -2264,4 +2260,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.12"
-content-hash = "247bfa6f9a21dff2705c65e6a672de4f3c46ad93def7aa13f3f28708dec41ac5"
+content-hash = "eff2fb4bf7b57eaaab9040e83d83c53d368c76824b5d347d2a0e98b7ad931b20"
