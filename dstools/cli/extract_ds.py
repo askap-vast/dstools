@@ -1,9 +1,6 @@
-import itertools as it
 import logging
-import multiprocessing
 import os
 import warnings
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from importlib.metadata import version
 from pathlib import Path
 
@@ -14,80 +11,12 @@ from astropy.wcs import FITSFixedWarning
 
 from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet, combine_spws
+from dstools.ms import MeasurementSet, combine_spws, extract_baselines
 from dstools.utils import parse_coordinates
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
 logger = logging.getLogger(__name__)
-
-
-def get_available_cpus():
-    """Returns the number of CPUs allocated by SLURM or falls back to system count."""
-
-    if "SLURM_CPUS_PER_TASK" in os.environ:
-        return int(os.environ["SLURM_CPUS_PER_TASK"])
-    elif "SLURM_CPUS_ON_NODE" in os.environ:
-        return int(os.environ["SLURM_CPUS_ON_NODE"])
-    else:
-        return multiprocessing.cpu_count()
-
-
-def process_baseline(
-    ms: MeasurementSet,
-    baseline: tuple[str, str],
-    datacolumn: str,
-) -> dict:
-    i, (ant1, ant2) = baseline
-
-    with ms.open_table(query=f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})") as bl_tab:
-        # Identify missing integrations on this baseline (e.g. caused by correlator dropouts)
-        bl_time = bl_tab.getcol("TIME")
-        missing_times = [t for t in ms.times if t not in bl_time]
-
-        # Add back to time column and identify indices of good integrations
-        bl_time = np.sort(np.append(bl_time, missing_times))
-        data_idx = np.argwhere(~np.in1d(bl_time, missing_times)).ravel()
-
-        # Calculate UVrange for each baseline
-        bl_uvw = bl_tab.getcol("UVW").T
-        bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
-
-        data_col = bl_tab.getcol(datacolumn).T
-
-        data = {
-            "baseline": i,
-            "data_idx": data_idx,
-            "data": data_col,
-            "flags": bl_tab.getcol("FLAG").T,
-            "uvdist": np.nanmean(bl_uvdist, axis=0),
-        }
-
-    return data
-
-
-def extract_baselines(ms: MeasurementSet, datacolumn: str) -> list[dict]:
-    baselines = list(it.combinations(ms.antennas, 2))
-    nbaselines = len(baselines)
-
-    # If more than 1 CPU available, use multiple processes to extract baselines in parallel
-    ncpus = get_available_cpus()
-    if ncpus > 1 and nbaselines > 1:
-        with ProcessPoolExecutor(max_workers=ncpus) as executor:
-            processes = executor.map(
-                process_baseline,
-                [ms] * nbaselines,
-                enumerate(baselines),
-                [datacolumn] * nbaselines,
-            )
-            results = [p for p in as_completed(processes)]
-    else:
-        results = [
-            process_baseline(ms, baseline, datacolumn)
-            for baseline in enumerate(baselines)
-        ]
-
-    return results
 
 
 @click.command(context_settings={"show_default": True})

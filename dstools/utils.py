@@ -1,4 +1,6 @@
 import logging
+import multiprocessing
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -37,6 +39,15 @@ def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:
     ra, dec = pos.to_string(style="hmsdms", precision=3).split()
 
     return ra, dec
+def get_available_cpus():
+    """Returns the number of CPUs allocated by SLURM or falls back to system count."""
+
+    if "SLURM_CPUS_PER_TASK" in os.environ:
+        return int(os.environ["SLURM_CPUS_PER_TASK"])
+    elif "SLURM_CPUS_ON_NODE" in os.environ:
+        return int(os.environ["SLURM_CPUS_ON_NODE"])
+    else:
+        return multiprocessing.cpu_count()
 
 
 def prompt(msg, bypass=False, bypass_msg=None, default_response=True):

@@ -3,8 +3,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from astropy.coordinates import SkyCoord
 
-from dstools.ms import CalTable, MeasurementSet, combine_spws, run_selfcal
+from dstools.ms import (
+    CalTable,
+    MeasurementSet,
+    combine_spws,
+    extract_baseline,
+    extract_baselines,
+    run_selfcal,
+)
 from dstools.utils import DataError
 
 ms_properties = [
@@ -315,3 +323,39 @@ def test_combine_spws(temp_environment):
     combined = combine_spws(ms)
 
     assert combined.path == ms_path.with_suffix(".dstools-temp.comb.ms")
+
+
+def test_extract_baseline(temp_environment):
+    ms = MeasurementSet(temp_environment["minimal"])
+    baseline = 0, (0, 5)
+    data = extract_baseline(
+        ms,
+        baseline=baseline,
+        datacolumn="DATA",
+    )
+
+    assert data["baseline"] == 0
+    assert np.allclose(data["data_idx"], np.array([0, 1]))
+    assert np.all(data["data"] == 0 + 0j)
+    assert np.all(data["flags"])
+
+
+@pytest.mark.parametrize("ncpus", [1, 2])
+def test_extract_baselines_1baseline(ncpus, mocker, temp_environment):
+    mocker.patch("dstools.ms.get_available_cpus", return_value=ncpus)
+
+    ms = MeasurementSet(temp_environment["minimal"])
+    data = extract_baselines(
+        ms,
+        datacolumn="DATA",
+    )
+
+    assert len(data) == 1
+
+    # Check single baseline results
+    data = data[0]
+
+    assert data["baseline"] == 0
+    assert np.allclose(data["data_idx"], np.array([0, 1]))
+    assert np.all(data["data"] == 0 + 0j)
+    assert np.all(data["flags"])

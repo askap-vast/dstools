@@ -1,12 +1,49 @@
+import multiprocessing
+
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 
-from dstools.utils import Array, parse_coordinates, prompt, rebin, rebin2D, slice_array
+from dstools.utils import (
+    Array,
+    get_available_cpus,
+    parse_coordinates,
+    prompt,
+    rebin,
+    rebin2D,
+    slice_array,
+)
 
 
-@pytest.fixture
-def array():
-    return np.random.random((5, 3))
+def test_get_available_cpus_non_slurm():
+    cpus = get_available_cpus()
+
+    assert cpus == multiprocessing.cpu_count()
+
+
+def test_get_available_cpus_slurm_cpus_per_task(monkeypatch):
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "8")
+
+    cpus = get_available_cpus()
+
+    assert cpus == 8
+
+
+def test_get_available_cpus_slurm_cpus_on_node(monkeypatch):
+    monkeypatch.setenv("SLURM_CPUS_ON_NODE", "64")
+
+    cpus = get_available_cpus()
+
+    assert cpus == 64
+
+
+def test_get_available_cpus_slurm_cpus_on_node_and_cpus_per_task(monkeypatch):
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "8")
+    monkeypatch.setenv("SLURM_CPUS_ON_NODE", "64")
+
+    cpus = get_available_cpus()
+
+    assert cpus == 8
 
 
 @pytest.mark.parametrize(
@@ -109,6 +146,11 @@ def test_rebin2D_masked_array():
     binned = rebin2D(masked_array, (3, 3))
 
     assert np.isnan(binned).sum() == 3
+
+
+@pytest.fixture
+def array():
+    return np.random.random((5, 3))
 
 
 def test_rebin2D_same_shape(array):

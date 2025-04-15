@@ -44,6 +44,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     # Copy MSets over
     nspw_ms_path = ms_path.with_suffix(".2spw.ms")
     caltable_path = ms_path.with_suffix(".cal")
+    ms_min_path = ms_path.with_suffix(".minimal.ms")
     rotated_ms_path = ms_path.with_suffix(".dstools-temp.rotated.ms")
     averaged_ms_path = ms_path.with_suffix(".dstools-temp.baseavg.ms")
     subbed_ms_path = ms_path.with_suffix(".subtracted.ms")
@@ -51,6 +52,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     model_path = package_root / "tests/data/images"
 
     tmp_ms_path = tmp_path / "test.ms"
+    tmp_ms_min_path = tmp_path / "test.minimal.ms"
     tmp_caltable_path = tmp_path / "test.cal"
     tmp_selfcal_ms_path = tmp_path / "test.selfcal1.ms"
     tmp_rotated_ms_path = tmp_path / "test.dstools-temp.rotated.ms"
@@ -62,6 +64,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     tmp_model_path = tmp_path / "model"
 
     os.system(f"cp -r {ms_path} {tmp_ms_path}")
+    os.system(f"cp -r {ms_min_path} {tmp_ms_min_path}")
     os.system(f"cp -r {ms_path} {tmp_selfcal_ms_path}")
     os.system(f"cp -r {caltable_path} {tmp_caltable_path}")
     os.system(f"cp -r {ms_path} {tmp_onespw_ms_path}")
@@ -100,6 +103,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
         "twospw": tmp_twospw_ms_path,
         "rotated": tmp_rotated_ms_path,
         "averaged": tmp_averaged_ms_path,
+        "minimal": tmp_ms_min_path,
         "cal": tmp_caltable_path,
         "model": tmp_model_path,
     }

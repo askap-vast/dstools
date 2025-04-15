@@ -1,6 +1,8 @@
+import itertools as it
 import logging
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +29,7 @@ from dstools.casa import (
     split,
     uvsub,
 )
-from dstools.utils import DataError, prompt
+from dstools.utils import DataError, get_available_cpus, prompt
 
 logger = logging.getLogger(__name__)
 
@@ -646,3 +648,61 @@ def run_selfcal(
     plt.close("all")
 
     return ms
+
+
+def extract_baseline(
+    ms: MeasurementSet,
+    baseline: tuple[str, str],
+    datacolumn: str,
+) -> dict:
+    i, (ant1, ant2) = baseline
+
+    with ms.open_table(query=f"(ANTENNA1=={ant1}) && (ANTENNA2=={ant2})") as bl_tab:
+        # Identify missing integrations on this baseline (e.g. caused by correlator dropouts)
+        bl_time = bl_tab.getcol("TIME")
+        missing_times = [t for t in ms.times if t not in bl_time]
+
+        # Add back to time column and identify indices of good integrations
+        bl_time = np.sort(np.append(bl_time, missing_times))
+        data_idx = np.argwhere(~np.isin(bl_time, missing_times)).ravel()
+
+        # Calculate UVrange for each baseline
+        bl_uvw = bl_tab.getcol("UVW").T
+        bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
+
+        data_col = bl_tab.getcol(datacolumn).T
+
+        data = {
+            "baseline": i,
+            "data_idx": data_idx,
+            "data": data_col,
+            "flags": bl_tab.getcol("FLAG").T,
+            "uvdist": np.nanmean(bl_uvdist, axis=0),
+        }
+
+    return data
+
+
+def extract_baselines(ms: MeasurementSet, datacolumn: str) -> list[dict]:
+    baselines = list(it.combinations(ms.antennas, 2))
+    nbaselines = len(baselines)
+
+    # If more than 1 CPU available, use multiple processes to extract baselines in parallel
+    ncpus = get_available_cpus()
+
+    if ncpus > 1 and nbaselines > 1:
+        with ProcessPoolExecutor(max_workers=ncpus) as executor:
+            processes = executor.map(
+                extract_baseline,
+                [ms] * nbaselines,
+                enumerate(baselines),
+                [datacolumn] * nbaselines,
+            )
+            results = [p for p in as_completed(processes)]
+    else:
+        results = [
+            extract_baseline(ms, baseline, datacolumn)
+            for baseline in enumerate(baselines)
+        ]
+
+    return results
