@@ -1,12 +1,15 @@
 name: Test Release
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 jobs:
   test-release:
     name: Build and Publish to TestPyPI
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
