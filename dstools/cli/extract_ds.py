@@ -104,11 +104,14 @@ def main(
 
     # Optionally rotate phasecentre to new coordinates
     if phasecentre is not None:
-        ra, dec = parse_coordinates(phasecentre)
-        ms = ms.rotate_phasecentre(ra, dec)
+        position = parse_coordinates(phasecentre)
+        ms = ms.rotate_phasecentre(position)
 
     # Get primary beam correction
-    pb_scale = get_pb_correction(primary_beam, ra, dec) if primary_beam else 1
+    if primary_beam is not None and phasecentre is not None:
+        pb_scale = get_pb_correction(ms, position, primary_beam)
+    else:
+        pb_scale = 1
 
     # Construct header with observation properties
     header = ms.header(

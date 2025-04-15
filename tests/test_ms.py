@@ -148,15 +148,24 @@ def test_ms_average_baselines(ms):
 
 def test_ms_rotate_phasecentre_inplace(ms):
     with pytest.raises(NotImplementedError):
-        ms.rotate_phasecentre(ra="18h45m00s", dec="-63d57m00s", inplace=True)
+        ms.rotate_phasecentre(ms.phasecentre, inplace=True)
 
 
-def test_ms_rotate_phasecentre(ms):
+def test_ms_rotate_phasecentre_new_location(ms):
     assert ms.phasecentre.to_string("hmsdms") == "18h45m13.62000576s -63d57m34.3899846s"
 
-    baseavg = ms.rotate_phasecentre(ra="18h45m00s", dec="-63d57m00s")
+    phasecentre = SkyCoord(ra="18h45m00s", dec="-63d57m00s", unit="hourangle,deg")
+    baseavg = ms.rotate_phasecentre(phasecentre)
 
-    assert baseavg.phasecentre.to_string("hmsdms") == "18h45m00s -63d57m00s"
+    assert baseavg.phasecentre.to_string("hmsdms") == phasecentre.to_string("hmsdms")
+
+
+def test_ms_rotate_phasecentre_same_location_does_nothing(ms):
+    assert ms.phasecentre.to_string("hmsdms") == "18h45m13.62000576s -63d57m34.3899846s"
+
+    baseavg = ms.rotate_phasecentre(ms.phasecentre)
+
+    assert ms == baseavg
 
 
 def test_subtract_model_no_model_column_raises_error(temp_environment):

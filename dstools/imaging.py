@@ -388,8 +388,6 @@ class WSClean:
         return wsclean_cmd
 
 
-def get_pb_correction(primary_beam: Path, ra: str, dec: str) -> float:
-    position = SkyCoord(ra=ra, dec=dec, unit=("hourangle", "deg"))
 
     # If PB image is CASA format, create a temporary FITS copy
     if primary_beam.suffix != ".fits":
@@ -402,6 +400,11 @@ def get_pb_correction(primary_beam: Path, ra: str, dec: str) -> float:
         primary_beam = pbfits
 
     with fits.open(primary_beam) as hdul:
+def get_pb_correction(
+    ms: MeasurementSet,
+    position: SkyCoord,
+    pb_image: Path,
+):
         header, data = hdul[0].header, hdul[0].data
         data = data[0, 0, :, :]
 

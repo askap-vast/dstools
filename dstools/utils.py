@@ -30,15 +30,16 @@ class DataError(Exception):
     pass
 
 
-def parse_coordinates(coord: tuple[str, str]) -> tuple[str, str]:
-    """Convert decimal degrees or hexagesimal coordinates to hms dms format."""
+def parse_coordinates(coord: tuple[str, str]) -> SkyCoord:
+    """Convert decimal degrees or hexagesimal coordinates to SkyCoord."""
 
-    ra, dec = coord
+    ra, dec = str(coord[0]), str(coord[1])
     raunit = "hourangle" if ":" in ra or "h" in ra else "deg"
-    pos = SkyCoord(ra=ra, dec=dec, unit=(raunit, "deg"))
-    ra, dec = pos.to_string(style="hmsdms", precision=3).split()
+    position = SkyCoord(ra=ra, dec=dec, unit=(raunit, "deg"))
 
-    return ra, dec
+    return position
+
+
 def get_available_cpus():
     """Returns the number of CPUs allocated by SLURM or falls back to system count."""
 

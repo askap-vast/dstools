@@ -390,11 +390,24 @@ class MeasurementSet(Table):
             f"Cannot transform from {self.nspws} to {nspws} spectral windows."
         )
 
-    def rotate_phasecentre(self, ra, dec, inplace=False):
+    def rotate_phasecentre(
+        self,
+        position: SkyCoord,
+        inplace=False,
+        threshold=0.1 * u.arcsec,
+    ):
         if inplace:
             raise NotImplementedError(
                 "Have not yet implemented inplace phasecentre rotation"
             )
+
+        ra, dec = position.to_string(style="hmsdms").split()
+
+        # Ensure new phasecentre differs from current phasecentre to avoid wasted processing
+        if position.separation(self.phasecentre) < threshold:
+            current_ra, current_dec = self.phasecentre.to_string(style="hmsdms").split()
+            logger.debug(f"Phasecentre already set to {current_ra} {current_dec}")
+            return self
 
         logger.debug(f"Rotating phasecentre to {ra} {dec}")
 

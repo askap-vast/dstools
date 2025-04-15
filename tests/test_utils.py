@@ -49,14 +49,17 @@ def test_get_available_cpus_slurm_cpus_on_node_and_cpus_per_task(monkeypatch):
 @pytest.mark.parametrize(
     "coord",
     [
-        ("18:45:05.250", "-63:57:47.450"),
-        ("18h45m05.250s", "-63d57m47.450s"),
+        (281.2719, -63.9632),
+        ("281.2719", "-63.9632"),
+        ("18:45:05.256", "-63:57:47.520"),
+        ("18h45m05.256s", "-63d57m47.520s"),
     ],
 )
 def test_parse_coordinates(coord):
+    c = SkyCoord(ra="18:45:05.256", dec="-63:57:47.520", unit="hourangle,deg")
     parsed = parse_coordinates(coord)
 
-    assert parsed == ("18h45m05.250s", "-63d57m47.450s")
+    assert parsed.to_string("hmsdms") == c.to_string("hmsdms")
 
 
 def test_prompt_no_bypass_yes(mocker):
