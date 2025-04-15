@@ -13,7 +13,7 @@ from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
 from numpy.typing import ArrayLike
 
-from dstools.casa import exportfits
+from dstools.casa import exportfits, tclean
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import beam_shape_erode, minimum_absolute_clip
 from dstools.ms import MeasurementSet
@@ -204,6 +204,10 @@ class WSClean:
     save_reordered: bool = False
     reuse_reordered: bool = False
 
+    # Resources
+    threads: Optional[int] = None
+    abs_mem: Optional[int] = None
+
     verbose: bool = False
 
     def __post_init__(self):
@@ -258,6 +262,19 @@ class WSClean:
             f"-deconvolution-channels {self.deconvolution_channels} "
             f"-fit-spectral-pol {self.spectral_pol_terms}"
         )
+
+    @property
+    def _resource_args(self):
+        thread_str = f"-j {self.threads}" if self.threads else ""
+        mem_str = f"-abs-mem {self.abs_mem}" if self.abs_mem else ""
+
+        # Use available number of threads to reorder / grid MS
+        parallel_str = ""
+        if self.threads:
+            parallel_str += f" -parallel-reordering {self.threads}"
+            parallel_str += f" -parallel-gridding {self.threads}"
+
+        return " ".join([thread_str, mem_str, parallel_str])
 
     @property
     def _verbosity(self):
@@ -342,6 +359,7 @@ class WSClean:
             self._phasecentre_args,
             self._multiscale_args,
             self._spectral_args,
+            self._resource_args,
             self._verbosity,
         ]
 
@@ -388,29 +406,43 @@ class WSClean:
         return wsclean_cmd
 
 
+def make_pb_image(pb_image: Path, ms: MeasurementSet, position: SkyCoord):
+    logger.info(f"Generating PB image at {position.to_string('hmsdms')}")
 
-    # If PB image is CASA format, create a temporary FITS copy
-    if primary_beam.suffix != ".fits":
-        pbfits = primary_beam.with_suffix(".dstools.fits")
-        exportfits(
-            imagename=primary_beam,
-            fitsimage=pbfits,
-            overwrite=True,
-        )
-        primary_beam = pbfits
+    # Compute small image at position to read PB scale
+    tclean(
+        vis=str(ms.path),
+        imsize=100,
+        imagename="dstools-pb",
+        cell="1arcsec",
+        phasecenter=f"J2000 {position.to_string('hmsdms')}",
+        pbcor=True,
+    )
 
-    with fits.open(primary_beam) as hdul:
+    exportfits(
+        imagename="dstools-pb.pb",
+        fitsimage=str(pb_image),
+    )
+
+    # Clean up intermediate files
+    os.system("rm -r dstools-pb*")
+
+    return pb_image
+
+
 def get_pb_correction(
     ms: MeasurementSet,
     position: SkyCoord,
     pb_image: Path,
 ):
+    # If PB image does not exists we create one
+    if not pb_image.exists():
+        pb_image = make_pb_image(pb_image, ms, position)
+
+    # Read PB image scale
+    with fits.open(pb_image) as hdul:
         header, data = hdul[0].header, hdul[0].data
         data = data[0, 0, :, :]
-
-    # Remove temporary FITS file
-    if "dstools" in primary_beam.name:
-        os.system(f"rm {primary_beam} 2>/dev/null")
 
     # Find pixel coordinates of position in FITS image
     wcs = WCS(header, naxis=2)
@@ -426,8 +458,9 @@ def get_pb_correction(
         y > ymax,
     ]
     if any(im_outside_limit):
+        strpos = position.to_string("hmsdms")
         logger.warning(
-            f"Position {ra} {dec} outside of supplied PB image, disabling PB correction."
+            f"Position {strpos} outside of supplied PB image, disabling PB correction."
         )
         return 1
 

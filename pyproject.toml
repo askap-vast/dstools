@@ -61,6 +61,7 @@ reportOptionalMemberAccess = false
 filterwarnings = [
     "ignore::DeprecationWarning:casaconfig",
     "ignore:'datfix' made the change.*:astropy.wcs.FITSFixedWarning",
+    "ignore:'obsfix' made the change.*:astropy.wcs.FITSFixedWarning",
 ]
 
 [tool.mypy]

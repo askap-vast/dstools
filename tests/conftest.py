@@ -50,6 +50,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     subbed_ms_path = ms_path.with_suffix(".subtracted.ms")
 
     model_path = package_root / "tests/data/images"
+    pb_path = model_path / "fred.atca.pb.fits"
 
     tmp_ms_path = tmp_path / "test.ms"
     tmp_ms_min_path = tmp_path / "test.minimal.ms"
@@ -62,6 +63,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     tmp_twospw_ms_path = tmp_path / "test.2spw.ms"
     tmp_subbed_ms_path = tmp_path / "test.subtracted.ms"
     tmp_model_path = tmp_path / "model"
+    tmp_pb_path = tmp_path / "test.pb.fits"
 
     os.system(f"cp -r {ms_path} {tmp_ms_path}")
     os.system(f"cp -r {ms_min_path} {tmp_ms_min_path}")
@@ -74,6 +76,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     os.system(f"cp -r {ms_path} {tmp_combined_ms_path}")
     os.system(f"cp -r {subbed_ms_path} {tmp_subbed_ms_path}")
     os.system(f"cp -r {model_path} {tmp_model_path}")
+    os.system(f"cp -r {pb_path} {tmp_pb_path}")
 
     # Mock CASA tasks and file-system operations, as we will directly compare
     # the MS state to the temporary MS files
@@ -90,6 +93,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     mocker.patch("dstools.casa.casatasks.flagdata", return_value=flagstats)
     mocker.patch("dstools.casa.casatasks.split")
     mocker.patch("dstools.casa.casatasks.gaincal")
+    mocker.patch("dstools.casa.casatasks.tclean")
+    mocker.patch("dstools.casa.casatasks.exportfits")
     mocker.patch("dstools.casa.casatasks.applycal")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
     mocker.patch("casatools.table.table.copy")
@@ -106,6 +111,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
         "minimal": tmp_ms_min_path,
         "cal": tmp_caltable_path,
         "model": tmp_model_path,
+        "pb": tmp_pb_path,
     }
     yield tmp_ms_paths
 

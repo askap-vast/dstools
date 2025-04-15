@@ -59,6 +59,7 @@ def split(*args, **kwargs):
     return casatasks.split(*args, **kwargs)
 
 
+@filter_stdout("Restoring with an empty model image")
 def tclean(*args, **kwargs):
     return casatasks.tclean(*args, **kwargs)
 
