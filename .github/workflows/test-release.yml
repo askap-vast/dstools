@@ -6,9 +6,8 @@ on:
       - main
 
 jobs:
-  sanity-check:
+  test-release:
     name: Build and Verify Artifacts
-    needs: ci
     runs-on: ubuntu-latest
 
     steps:
