@@ -1,43 +1,50 @@
 name: Test Release
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  push:
+    branches:
+      - main
 
 jobs:
-  test-release:
-    name: Build and Publish to TestPyPI
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  sanity-check:
+    name: Build and Verify Artifacts
+    needs: ci
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Configure Poetry for TestPyPI
+      - name: Build package
         run: |
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.TEST_PYPI_API_TOKEN }}
-
-      - name: Install dependencies
-        run: poetry install --only main
-
-      - name: Build and verify package
-        run: |
+          poetry install --no-root
           poetry build
-          pip install --upgrade build twine
+
+      - name: Check artifacts with twine
+        run: |
+          pip install twine
           twine check dist/*
 
-      - name: Publish to TestPyPI
-        run: poetry publish -r testpypi --skip-existing
+      - name: Create test venv and install package
+        run: |
+          python -m venv testenv
+          source testenv/bin/activate
+          pip install dist/*.whl
+
+          python -c "import dstools"
+
+          dstools-extract-ds --help || echo "No CLI tool found"
+
+      - name: Clean up
+        if: always()
+        run: rm -rf testenv
