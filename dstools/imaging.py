@@ -184,7 +184,6 @@ class WSClean:
 
     # weight / gridding
     robust: float = 0.5
-    parallel_deconvolution: Optional[int] = None
     phasecentre: Optional[tuple[str, str]] = None
 
     # data selection
@@ -207,6 +206,9 @@ class WSClean:
     # Resources
     threads: Optional[int] = None
     abs_mem: Optional[int] = None
+    parallel_deconvolution: Optional[int] = None
+    parallel_gridding: Optional[int] = None
+    parallel_reordering: Optional[int] = None
 
     verbose: bool = False
 
@@ -226,6 +228,9 @@ class WSClean:
             "save_reordered",
             "reuse_reordered",
             "temp_dir",
+            "abs_mem",
+            "parallel_gridding",
+            "parallel_reordering",
         )
 
         if self.temp_dir is None:
@@ -264,17 +269,8 @@ class WSClean:
         )
 
     @property
-    def _resource_args(self):
-        thread_str = f"-j {self.threads}" if self.threads else ""
-        mem_str = f"-abs-mem {self.abs_mem}" if self.abs_mem else ""
-
-        # Use available number of threads to reorder / grid MS
-        parallel_str = ""
-        if self.threads:
-            parallel_str += f" -parallel-reordering {self.threads}"
-            parallel_str += f" -parallel-gridding {self.threads}"
-
-        return " ".join([thread_str, mem_str, parallel_str])
+    def _threads(self):
+        return f"-j {self.threads}" if self.threads else ""
 
     @property
     def _verbosity(self):
@@ -359,7 +355,7 @@ class WSClean:
             self._phasecentre_args,
             self._multiscale_args,
             self._spectral_args,
-            self._resource_args,
+            self._threads,
             self._verbosity,
         ]
 

@@ -92,13 +92,18 @@ def test_wsclean_fits_mask(mocker, ms_path, im_paths):
     assert f"-fits-mask {image_path.absolute()}" in cmd
 
 
-def test_wsclean_run_command(mocker, ms_path):
+def test_wsclean_run_command_args(mocker, ms_path):
     mocker.patch("subprocess.Popen")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
 
     wsclean = WSClean(
         imsize=500,
         cellsize="0.66asec",
+        threads=4,
+        abs_mem=50,
+        parallel_deconvolution=100,
+        parallel_gridding=2,
+        parallel_reordering=3,
     )
 
     # Abstract version of MS object, only needs access to path attribute
@@ -106,27 +111,25 @@ def test_wsclean_run_command(mocker, ms_path):
     cmd = wsclean.run(mock_ms, name="test")
 
     assert "-name test" in cmd
+    assert "-j 4" in cmd
+    assert "-abs-mem 50" in cmd
+    assert "-parallel-reordering 3" in cmd
+    assert "-parallel-gridding 2" in cmd
+    assert "-parallel-deconvolution 100" in cmd
 
 
-def test_wsclean_run_command_multi_threads_mem_limit(mocker, ms_path):
     mocker.patch("subprocess.Popen")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
 
     wsclean = WSClean(
         imsize=500,
         cellsize="0.66asec",
-        threads=2,
-        abs_mem=50,
     )
 
     # Abstract version of MS object, only needs access to path attribute
     mock_ms = mocker.Mock(path=ms_path)
     cmd = wsclean.run(mock_ms, name="test")
 
-    assert "-j 2" in cmd
-    assert "-parallel-reordering 2" in cmd
-    assert "-parallel-gridding 2" in cmd
-    assert "-abs-mem 50" in cmd
 
 
 def test_wsclean_run_command_multiscale(mocker, ms_path):

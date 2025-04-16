@@ -191,6 +191,31 @@ logger = logging.getLogger(__name__)
     help="Store processing logs.",
 )
 @click.option(
+    "-j",
+    "--threads",
+    type=int,
+    default=None,
+    help="Number of CPU cores to use.",
+)
+@click.option(
+    "--abs-mem",
+    type=int,
+    default=None,
+    help="Maximum memory limit in gigabytes.",
+)
+@click.option(
+    "--parallel-gridding",
+    type=int,
+    default=None,
+    help="Execute this number of gridders in parallel.",
+)
+@click.option(
+    "--parallel-reordering",
+    type=int,
+    default=None,
+    help="Execute reordering with this number of threads.",
+)
+@click.option(
     "-v",
     "--verbose/--no-verbose",
     is_flag=True,
@@ -228,6 +253,10 @@ def main(
     temp_dir,
     out_dir,
     savelogs,
+    threads,
+    abs_mem,
+    parallel_gridding,
+    parallel_reordering,
     verbose,
 ):
     os.system(f"mkdir -p {ms.path.parent.absolute() / out_dir}")
@@ -276,7 +305,11 @@ def main(
         galvin_clip_mask=galvin_clip_mask,
         erode_beam_shape=erode_beam_shape,
         phasecentre=phasecentre,
+        threads=threads,
+        abs_mem=abs_mem,
         parallel_deconvolution=parallel_deconvolution,
+        parallel_reordering=parallel_reordering,
+        parallel_gridding=parallel_gridding,
         out_dir=out_dir,
         temp_dir=temp_dir,
         verbose=verbose,
