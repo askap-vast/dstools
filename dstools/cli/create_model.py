@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
     "--config",
     type=click.Choice(CONFIGS),
     default="6km",
-    help="Array configuration, used to calculate image and pixel sizes if unspecified. ASKAP is equivalent to 6km.",
+    help=(
+        "Array configuration, used to calculate image and pixel sizes if unspecified. "
+        "ASKAP is equivalent to 6km."
+    ),
 )
 @click.option(
     "-N",
@@ -163,7 +166,10 @@ logger = logging.getLogger(__name__)
     type=str,
     nargs=2,
     default=None,
-    help="Coordinates of imaging phasecentre (provide as separate values, e.g. -p <RA> <DEC>).",
+    help=(
+        "Coordinates of imaging phasecentre. "
+        "Provide as separate values (e.g. -p <RA> <DEC>) in decimal degrees or sexagesimal."
+    ),
 )
 @click.option(
     "--name",

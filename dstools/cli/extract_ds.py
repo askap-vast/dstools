@@ -33,14 +33,20 @@ logger = logging.getLogger(__name__)
     type=str,
     nargs=2,
     default=None,
-    help="Coordinates of phasecentre at which to extract DS (provide as separate values, e.g. -p <RA> <DEC>).",
+    help=(
+        "Coordinates of phasecentre at which to extract DS "
+        "(provide as separate values, e.g. -p <RA> <DEC>)."
+    ),
 )
 @click.option(
     "-P",
     "--primary-beam",
     type=Path,
     default=None,
-    help="Path to primary beam image with which to correct flux scale. Must also provide phasecentre.",
+    help=(
+        "Path to primary beam image with which to correct flux scale. "
+        " Must also provide phasecentre. Provide non-existent path to compute PB separately."
+    ),
 )
 @click.option(
     "-F",

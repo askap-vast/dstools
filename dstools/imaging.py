@@ -17,6 +17,7 @@ from dstools.casa import exportfits, tclean
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import beam_shape_erode, minimum_absolute_clip
 from dstools.ms import MeasurementSet
+from dstools.utils import parse_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +254,8 @@ class WSClean:
         if self.phasecentre is None:
             return ""
 
-        ra, dec = self.phasecentre
+        ra, dec = parse_coordinates(self.phasecentre).to_string("hmsdms").split()
+
         return f"-shift {ra} {dec}"
 
     @property

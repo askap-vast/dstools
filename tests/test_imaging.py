@@ -118,18 +118,30 @@ def test_wsclean_run_command_args(mocker, ms_path):
     assert "-parallel-deconvolution 100" in cmd
 
 
+@pytest.mark.parametrize(
+    "phasecentre",
+    [
+        (281.2719, -63.9632),
+        ("281.2719", "-63.9632"),
+        ("18:45:05.256", "-63:57:47.520"),
+        ("18h45m05.256s", "-63d57m47.520s"),
+    ],
+)
+def test_wsclean_coordinate_parsing(phasecentre, mocker, ms_path):
     mocker.patch("subprocess.Popen")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
 
     wsclean = WSClean(
         imsize=500,
         cellsize="0.66asec",
+        phasecentre=phasecentre,
     )
 
     # Abstract version of MS object, only needs access to path attribute
     mock_ms = mocker.Mock(path=ms_path)
     cmd = wsclean.run(mock_ms, name="test")
 
+    assert "-shift 18h45m05.256s -63d57m47.52s" in cmd
 
 
 def test_wsclean_run_command_multiscale(mocker, ms_path):
