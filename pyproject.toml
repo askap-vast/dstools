@@ -6,6 +6,11 @@ authors = ["Joshua Pritchard <joshua.pritchard@csiro.au>"]
 packages = [
     {include = "dstools"},
 ]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License"
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
