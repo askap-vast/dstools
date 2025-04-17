@@ -50,3 +50,19 @@ jobs:
 
       - name: Publish to PyPI
         run: poetry publish --skip-existing
+
+      - name: Push tag to GitHub
+        run: |
+          git config user.name "Joshua Pritchard"
+          git config user.email "joshua.pritchard@csiro.au"
+          git tag ${{ github.event.inputs.tag }}
+          git push origin ${{ github.event.inputs.tag }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
