@@ -1,6 +1,7 @@
 import astropy.units as u
 import numpy as np
 import pytest
+from astropy.io import fits
 
 from dstools.imaging import (
     Image,
@@ -73,11 +74,11 @@ def test_wsclean_model_applymask_invalid_shape_raises_error(temp_environment):
         model.apply_mask(mask)
 
 
-def test_wsclean_fits_mask(mocker, ms_path, im_paths):
+def test_wsclean_fits_mask(mocker, ms_path, temp_environment):
     mocker.patch("subprocess.Popen")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
 
-    image_path = im_paths["mask"]
+    image_path = temp_environment["clean_mask"]
     wsclean = WSClean(
         imsize=500,
         cellsize="0.66asec",
@@ -90,6 +91,38 @@ def test_wsclean_fits_mask(mocker, ms_path, im_paths):
     cmd = wsclean.run(mock_ms, name="test")
 
     assert f"-fits-mask {image_path.absolute()}" in cmd
+
+
+def test_wsclean_fits_mask_without_target(mocker, ms_path, temp_environment):
+    """Check that the masked pixels in this path agrees with expectations.
+
+    We have initialised wsclean with fits_mask containing non-zero pixels on
+    both the field source to be cleaned and the target, and target_mask
+    with non-zero pixels only covering the target. We expect that after running
+    _get_fits_mask, the final fits_mask should only include the field source pixels.
+    """
+
+    mocker.patch("subprocess.Popen")
+    mocker.patch("dstools.imaging.parse_stdout_stderr")
+
+    clean_mask_path = temp_environment["clean_mask"]
+    target_mask_path = temp_environment["target_mask"]
+
+    wsclean = WSClean(
+        imsize=500,
+        cellsize="0.66asec",
+        fits_mask=clean_mask_path,
+        target_mask=target_mask_path,
+    )
+    wsclean._get_fits_mask()
+
+    final_mask_path = temp_environment["final_mask"]
+    with fits.open(clean_mask_path) as hdul:
+        clean_mask = hdul[0].data
+    with fits.open(final_mask_path) as hdul:
+        fits_mask = hdul[0].data
+
+    assert np.allclose(clean_mask, fits_mask)
 
 
 def test_wsclean_run_command_args(mocker, ms_path):

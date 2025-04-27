@@ -314,15 +314,19 @@ class WSClean:
                 fits_header=mask_image.header,
             )
 
+        mask_array = mask_array.astype(bool)
+
         # Remove user-specified region from mask by selecting pixels
         # that are in mask_array but not in target_mask
         if self.target_mask is not None:
-            mask_array = np.logical_and(mask_array, self.target_mask)
+            target_mask = Image(self.target_mask.absolute()).data.astype(bool)
+            mask_array = np.logical_and(mask_array, ~target_mask)
 
         # Apply final masking to WSclean FITS mask
         with fits.open(mask_path, mode="update") as hdul:
             data = hdul[0].data
             data[0, 0, ~mask_array] = 0
+            data[0, 0, mask_array] = 1
             hdul[0].data = data
 
         return f"-fits-mask {mask_path}"

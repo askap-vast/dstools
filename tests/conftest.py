@@ -25,7 +25,6 @@ def ms_path():
 @pytest.fixture
 def im_paths():
     images = {
-        "mask": package_root / "tests/data/images/mask.fits",
         "image": package_root / "tests/data/images/test-MFS-I-image.fits",
         "model": package_root / "tests/data/images/test-MFS-I-model.fits",
         "residual": package_root / "tests/data/images/test-MFS-I-residual.fits",
@@ -52,6 +51,10 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     model_path = package_root / "tests/data/images"
     pb_path = model_path / "fred.atca.pb.fits"
 
+    target_mask_path = model_path / "target_mask.fits"
+    clean_mask_path = model_path / "clean_mask.fits"
+    final_mask_path = model_path / "final_mask.fits"
+
     tmp_ms_path = tmp_path / "test.ms"
     tmp_ms_min_path = tmp_path / "test.minimal.ms"
     tmp_caltable_path = tmp_path / "test.cal"
@@ -64,6 +67,9 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     tmp_subbed_ms_path = tmp_path / "test.subtracted.ms"
     tmp_model_path = tmp_path / "model"
     tmp_pb_path = tmp_path / "test.pb.fits"
+    tmp_target_mask_path = tmp_path / "target_mask.fits"
+    tmp_clean_mask_path = tmp_path / "clean_mask.fits"
+    tmp_final_mask_path = tmp_path / "final_mask.fits"
 
     os.system(f"cp -r {ms_path} {tmp_ms_path}")
     os.system(f"cp -r {ms_min_path} {tmp_ms_min_path}")
@@ -77,6 +83,9 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     os.system(f"cp -r {subbed_ms_path} {tmp_subbed_ms_path}")
     os.system(f"cp -r {model_path} {tmp_model_path}")
     os.system(f"cp -r {pb_path} {tmp_pb_path}")
+    os.system(f"cp -r {target_mask_path} {tmp_target_mask_path}")
+    os.system(f"cp -r {clean_mask_path} {tmp_clean_mask_path}")
+    os.system(f"cp -r {final_mask_path} {tmp_final_mask_path}")
 
     # Mock CASA tasks and file-system operations, as we will directly compare
     # the MS state to the temporary MS files
@@ -112,6 +121,9 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
         "cal": tmp_caltable_path,
         "model": tmp_model_path,
         "pb": tmp_pb_path,
+        "target_mask": tmp_target_mask_path,
+        "clean_mask": tmp_clean_mask_path,
+        "final_mask": tmp_final_mask_path,
     }
     yield tmp_ms_paths
 
