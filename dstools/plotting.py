@@ -262,8 +262,8 @@ def plot_polarisation_lightcurve(lc: LightCurve, stokes: str, error_alpha: float
     return _plot_polarisations(lc, stokes=stokes, error_alpha=error_alpha)
 
 
-def plot_polarisation_spectrum(lc: LightCurve, stokes: str, error_alpha: float = 0.4):
-    return _plot_polarisations(lc, stokes=stokes, error_alpha=error_alpha)
+def plot_polarisation_spectrum(sp: Spectrum, stokes: str, error_alpha: float = 0.4):
+    return _plot_polarisations(sp, stokes=stokes, error_alpha=error_alpha)
 
 
 def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):

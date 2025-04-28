@@ -341,7 +341,7 @@ def main(
     # Spectrum
     # --------------------------------------
     if spectrum:
-        sp = Spectrum(ds)
+        sp = Spectrum(ds, imag=imag)
         if polarisations:
             plot_polarisation_spectrum(sp, stokes=stokes, error_alpha=0.4)
         else:
@@ -350,7 +350,7 @@ def main(
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        lc = LightCurve(ds)
+        lc = LightCurve(ds, imag=imag)
         if polarisations:
             plot_polarisation_lightcurve(lc, stokes=stokes, error_alpha=0.4)
         else:
