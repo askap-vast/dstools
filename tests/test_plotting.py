@@ -223,6 +223,17 @@ def test_plot_timefreqseries_spectrum():
     assert ax.get_xlabel() == "Frequency (MHz)"
 
 
+def test_plot_timefreqseries_relative_times_no_folding():
+    tf = create_fake_tfseries(
+        absolute_times=False,
+        fold=False,
+        column="time",
+    )
+    _, ax = _plot_timefreqseries(tf, stokes="I")
+
+    assert ax.get_xlabel() == "Time (s)"
+
+
 def test_plot_polarisations():
     lc = create_fake_tfseries(
         absolute_times=True,

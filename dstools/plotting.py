@@ -171,8 +171,6 @@ def _plot_timefreqseries(
     if fig is None or ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
 
-    ax.set_xlabel(tf.ds._timelabel)
-
     # Overplot each specified polarisation
     for s in stokes:
         ax.errorbar(
@@ -194,6 +192,8 @@ def _plot_timefreqseries(
 
     if tf.column == "time" and tf.ds.absolute_times:
         format_timeaxis(tf.ds, ax)
+    elif tf.column == "time":
+        ax.set_xlabel(tf.ds._timelabel)
     else:
         ax.set_xlabel("Frequency (MHz)")
 
