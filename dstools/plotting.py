@@ -348,10 +348,13 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
     ell_ax.set_xticklabels([])
     pol_ax.set_xticklabels([])
 
-    pad = (tf.x.max() - tf.x.min()) * 0.05
-    pa_ax.set_xlim([tf.x.min() - pad, tf.x.max() + pad])
-    ell_ax.set_xlim([tf.x.min() - pad, tf.x.max() + pad])
-    pol_ax.set_xlim([tf.x.min() - pad, tf.x.max() + pad])
+    xmin, xmax = tf.x.min(), tf.x.max()
+
+    pad = (xmax - xmin) * 0.05
+    data_ax.set_xlim([xmin - pad, xmax + pad])
+    pa_ax.set_xlim([xmin - pad, xmax + pad])
+    ell_ax.set_xlim([xmin - pad, xmax + pad])
+    pol_ax.set_xlim([xmin - pad, xmax + pad])
 
     pa_ax.set_ylim(-100, 100)
     ell_ax.set_ylim(-100, 100)

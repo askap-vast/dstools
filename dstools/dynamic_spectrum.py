@@ -64,6 +64,7 @@ class DynamicSpectrum:
     period: Optional[float] = None
     period_offset: float = 0.0
     fold_periods: int = 2
+    phase_bins: Optional[int] = None
 
     absolute_times: bool = True
     calscans: bool = True
@@ -91,6 +92,23 @@ class DynamicSpectrum:
             if not self.period:
                 raise ValueError("Must pass period argument when folding.")
 
+            # Compute folding stats
+            dt = self.time[1] - self.time[0]
+
+            if self.phase_bins is None:
+                self.phase_bins = round(self.period / dt)
+
+            samples_per_period = self.period / dt
+            oversample = self.phase_bins / samples_per_period
+            num_folds = (self.tmax - self.tmin) / self.period
+
+            logger.info(f"Folding at {self.period * self.tunit} period.")
+            logger.info(
+                f"Oversampling by factor of {oversample:.1f} "
+                f"with {num_folds:.1f} folds and {self.phase_bins:.1f} phase bins"
+            )
+
+            # Phase fold instrumental pols
             XX = self._fold(XX)
             XY = self._fold(XY)
             YX = self._fold(YX)
@@ -120,32 +138,40 @@ class DynamicSpectrum:
         return str_rep
 
     def _fold(self, data):
-        """Average chunks of data folding at specified period."""
+        """Fold data at specified period with linearly interpolated phase binning."""
 
-        # Calculate number of pixels in each chunk
-        pixel_duration = self.time[1] - self.time[0]
-        chunk_length = min(int(self.period // pixel_duration), len(data))
+        # Compute fractional phases of each sampled timestep
+        phases = ((self.time - self.time[0]) / self.period + self.period_offset) % 1.0
 
-        # Create left-padded nans, derived from period phase offset
-        offset = (0.5 + self.period_offset) * self.period
-        leftpad_length = int(offset // pixel_duration)
-        leftpad_chunk = np.full((leftpad_length, data.shape[1]), np.nan)
+        # Create bins spanning the phase range
+        bin_floats = phases * self.phase_bins
+        bin_lower = np.floor(bin_floats).astype(int)
+        bin_upper = (bin_lower + 1) % self.phase_bins
 
-        # Create right-padded nans
-        rightpad_length = chunk_length - (leftpad_length + len(data)) % chunk_length
-        rightpad_chunk = np.full((rightpad_length, data.shape[1]), np.nan)
+        # Compute weights for neighbouring bins linearly interpolate sampled point to bin centres
+        weights_upper = bin_floats - bin_lower
+        weights_lower = 1.0 - weights_upper
 
-        # Stack and split data
-        data = np.vstack((leftpad_chunk, data, rightpad_chunk))
-        numsplits = int(data.shape[0] // chunk_length)
-        arrays = np.split(data, numsplits)
+        folded = np.zeros((self.phase_bins, data.shape[1]), dtype=np.complex128)
+        counts = np.zeros((self.phase_bins, data.shape[1]), dtype=np.float64)
 
-        # Compute average along stack axis
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            data = np.nanmean(arrays, axis=0)
+        # Iterate through each timestep assigning weighted contribution to neighbouring phase bins
+        for time in range(data.shape[0]):
+            valid = ~np.isnan(data[time])
 
-        return np.tile(data, (self.fold_periods, 1))
+            folded[bin_lower[time], valid] += data[time, valid] * weights_lower[time]
+            folded[bin_upper[time], valid] += data[time, valid] * weights_upper[time]
+            counts[bin_lower[time], valid] += weights_lower[time]
+            counts[bin_upper[time], valid] += weights_upper[time]
+
+        # Normalise binned counts
+        with np.errstate(invalid="ignore", divide="ignore"):
+            folded = folded / counts
+
+        # Tile number of fold_periods together for display
+        folded = np.tile(folded, (self.fold_periods, 1))
+
+        return folded
 
     def _get_scan_intervals(self):
         """Find indices of start/end of each calibrator scan cycle."""

@@ -105,21 +105,21 @@ stokes_choices = [
 )
 @click.option(
     "-I",
-    "--cmax_i",
+    "--cmax-i",
     default=15,
     type=float,
     help="Maximum colormap normalisation in Stokes I.",
 )
 @click.option(
     "-L",
-    "--cmax_l",
+    "--cmax-l",
     default=15,
     type=float,
     help="Maximum colormap normalisation in Stokes Q/U and L.",
 )
 @click.option(
     "-V",
-    "--cmax_v",
+    "--cmax-v",
     default=15,
     type=float,
     help="Maximum colormap normalisation in Stokes V.",
@@ -194,11 +194,27 @@ stokes_choices = [
     help="Period to use when folding.",
 )
 @click.option(
+    "--fold-periods",
+    type=int,
+    default=1,
+    help="Number of periods to display in folded profile.",
+)
+@click.option(
     "-o",
-    "--period_offset",
+    "--period-offset",
     default=0,
     type=float,
     help="Period phase offset to use when folding.",
+)
+@click.option(
+    "-b",
+    "--phase-bins",
+    type=int,
+    default=None,
+    help=(
+        "Number of phase bins to compute over folded profile. "
+        "Default is period / time resolution."
+    ),
 )
 @click.option(
     "-R",
@@ -285,6 +301,8 @@ def main(
     trim,
     period,
     period_offset,
+    fold_periods,
+    phase_bins,
     absolute_times,
     calscans,
     summary,
@@ -327,6 +345,8 @@ def main(
         fold=fold,
         period=period,
         period_offset=period_offset,
+        fold_periods=fold_periods,
+        phase_bins=phase_bins,
     )
 
     if verbose:
@@ -343,7 +363,7 @@ def main(
     if spectrum:
         sp = Spectrum(ds, imag=imag)
         if polarisations:
-            plot_polarisation_spectrum(sp, stokes=stokes, error_alpha=0.4)
+            plot_polarisation_spectrum(sp, stokes=stokes)
         else:
             plot_spectrum(sp, stokes=stokes)
 
@@ -352,7 +372,7 @@ def main(
     if lightcurve:
         lc = LightCurve(ds, imag=imag)
         if polarisations:
-            plot_polarisation_lightcurve(lc, stokes=stokes, error_alpha=0.4)
+            plot_polarisation_lightcurve(lc, stokes=stokes)
         else:
             plot_lightcurve(lc, stokes=stokes)
 

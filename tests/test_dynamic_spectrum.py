@@ -35,19 +35,50 @@ def test_ds_fold_without_period_raises_error(ds_paths):
         DynamicSpectrum(ds_path, fold=True)
 
 
-@pytest.mark.parametrize(
-    "period, time_res",
-    [
-        (60, "39.149 s"),
-        (90, "25.532 s"),
-        (100, "22.979 s"),
-    ],
-)
-def test_ds_fold(ds_paths, period, time_res):
-    ds_path = ds_paths.get("atca_pulse")
-    ds = DynamicSpectrum(ds_path, fold=True, period=period, tunit=u.s)
+def make_pulse_array(period, tres):
+    # Initialise array
+    tsamples = 1000
+    shape = tsamples, 50
+    array = np.zeros(shape, dtype=np.complex128)
 
-    assert ds.header["time_resolution"] == time_res
+    # Make a pulse profile
+    sigma = 90
+    pulse_halfwidth = sigma // tres
+    x = np.tile(np.arange(-pulse_halfwidth, pulse_halfwidth).reshape(-1, 1), 50)
+    pulse = 100 * np.exp(-(x**2) / (2 * pulse_halfwidth**2)) + 1j * 0 * x
+
+    # Inject pulses
+    for pulse_index in range(10, tsamples - 10, period // tres):
+        array[pulse_index - pulse_halfwidth : pulse_index + pulse_halfwidth, :] += pulse
+
+    time = np.arange(0, tres * tsamples, tres)
+
+    return array, time
+
+
+@pytest.mark.parametrize("period", [1700, 3224])
+def test_ds_fold_conserves_flux(period, ds_paths):
+    ds_path = ds_paths.get("atca_pulse")
+
+    tres = 10
+    phase_bins = round(period / tres)
+
+    ds = DynamicSpectrum(
+        ds_path,
+        period=period,
+        tunit=u.s,
+        fold_periods=1,
+        phase_bins=phase_bins,
+    )
+
+    array, time = make_pulse_array(period, tres)
+    ds.time = time
+
+    folded = ds._fold(array)
+
+    # Check that folded pulse is within 1% of original
+    percentage_error = abs(folded.max() - array.max()) / array.max()
+    assert percentage_error < 0.01
 
 
 def test_ds_crop(ds_paths):
