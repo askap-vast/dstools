@@ -31,10 +31,12 @@ fixms = "^0.4.0"
 python-casacore = "^3.6.1"
 rm-lite = "^2025.4.0"
 cal-cabb = "^0.1.0"
+astroplan = "^0.10.1"
 
 [tool.poetry.scripts]
 dstools-atca-cal = "dstools.cli.atca_cal:main"
 dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
+dstools-derotate-feeds = "dstools.cli.derotate_feeds:main"
 dstools-create-model = "dstools.cli.create_model:main"
 dstools-insert-model = "dstools.cli.insert_model:main"
 dstools-selfcal = "dstools.cli.selfcal:main"
@@ -67,6 +69,12 @@ filterwarnings = [
     "ignore::DeprecationWarning:casaconfig",
     "ignore:'datfix' made the change.*:astropy.wcs.FITSFixedWarning",
     "ignore:'obsfix' made the change.*:astropy.wcs.FITSFixedWarning",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "@njit",
+    "pass",
 ]
 
 [tool.mypy]

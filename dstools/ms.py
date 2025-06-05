@@ -14,10 +14,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
+from astroplan import Observer
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from casacore.tables import table, tablecopy
 from matplotlib.gridspec import GridSpec
+from numba import njit
 
 from dstools.casa import (
     applycal,
@@ -29,9 +31,87 @@ from dstools.casa import (
     split,
     uvsub,
 )
-from dstools.utils import DataError, get_available_cpus, prompt
+from dstools.utils import (
+    LOCATIONS,
+    DataError,
+    chunk_iterator,
+    get_available_cpus,
+    prompt,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@njit
+def rotate_circular_feeds(data: np.ndarray, chi_array: np.ndarray) -> np.ndarray:
+    """Rotate polarisation basis from circularly polarised feed frame to sky frame.
+
+    Circular feeds need a complex phase rotation by 2*chi (RL) and -2*chi (LR)
+    in the cross-hand polarisations.
+
+    Input shape: (nvis, nchan, 4), with pol order: (RR, RL, LR, LL)
+    """
+    nvis, nchan, _ = data.shape
+    rotated = np.empty_like(data)
+    for i in range(nvis):
+        rot = np.exp(2j * chi_array[i])
+        inv_rot = np.exp(-2j * chi_array[i])
+
+        for f in range(nchan):
+            rotated[i, f, 0] = data[i, f, 0]
+            rotated[i, f, 1] = data[i, f, 1] * rot
+            rotated[i, f, 2] = data[i, f, 2] * inv_rot
+            rotated[i, f, 3] = data[i, f, 3]
+
+    return rotated
+
+
+@njit
+def rotate_linear_feeds(
+    data: np.ndarray,
+    chi_array: np.ndarray,
+    invert: bool,
+) -> np.ndarray:
+    """Rotate polarisation basis from linearly polarised feed frame to sky frame.
+
+    Linear feeds require a real-valued rotation of the visibility matrix by 2*chi.
+
+    Input shape: (nvis, nchan, 4), with pol order: (XX, XY, YX, YY)
+    """
+    nvis, nchan, _ = data.shape
+    rotated = np.empty_like(data)
+
+    for i in range(nvis):
+        cos_chi = np.cos(chi_array[i])
+        sin_chi = np.sin(chi_array[i])
+
+        if invert:
+            sin_chi *= -1
+
+        rot = np.array(
+            [
+                [cos_chi, sin_chi],
+                [-sin_chi, cos_chi],
+            ],
+            dtype=np.complex128,
+        )
+        inv_rot = rot.T.conj()
+
+        for f in range(nchan):
+            V = np.empty((2, 2), dtype=np.complex128)
+            V[0, 0] = data[i, f, 0]
+            V[0, 1] = data[i, f, 1]
+            V[1, 0] = data[i, f, 2]
+            V[1, 1] = data[i, f, 3]
+
+            V_rot = inv_rot @ V @ rot
+
+            rotated[i, f, 0] = V_rot[0, 0]
+            rotated[i, f, 1] = V_rot[0, 1]
+            rotated[i, f, 2] = V_rot[1, 0]
+            rotated[i, f, 3] = V_rot[1, 1]
+
+    return rotated
 
 
 @dataclass
@@ -66,6 +146,7 @@ class Table:
                 t = t.query(query)
             yield t
         finally:
+            t.unlock()
             t.close()
 
     def getcolumn(self, column: str, subtable: Optional[str] = None):
@@ -257,6 +338,10 @@ class MeasurementSet(Table):
         return str(self.getcolumn("TELESCOPE_NAME", subtable="OBSERVATION")[0])
 
     @property
+    def location(self):
+        return LOCATIONS.get(self.telescope)
+
+    @property
     def feedtype(self):
         poltype_col = self.getcolumn("POLARIZATION_TYPE", subtable="FEED")
         poltype = poltype_col.get("array")[0]
@@ -274,6 +359,11 @@ class MeasurementSet(Table):
             )
 
         return feedtype
+
+    @property
+    def row_size_bytes(self):
+        row_size = 16 * self.npols * self.nbaselines
+        return row_size
 
     @property
     def phasecentre(self):
@@ -393,6 +483,46 @@ class MeasurementSet(Table):
             f"Cannot transform from {self.nspws} to {nspws} spectral windows."
         )
 
+    def correct_feed_rotation(self, datacolumn="CORRECTED_DATA"):
+        """Apply corrections for parallactic angle rotation of feeds."""
+
+        # Disable correction for ASKAP which has fixed sky-frame due to roll axis
+        if self.telescope == "ASKAP":
+            logger.warning(
+                f"Correction for feed rotation not required for {self.telescope}. Will not apply."
+            )
+            return
+
+        logger.info("Correcting feed rotation by parallactic angle")
+
+        with self.open_table(readonly=False) as t:
+            observer = Observer(location=self.location)
+
+            # Iterate through table in chunks to limit memory footprint
+            nrows = t.nrows()
+            for startrow, chunk_size in chunk_iterator(nrows, self.row_size_bytes):
+                data = t.getcol(datacolumn, startrow=startrow, nrow=chunk_size)
+
+                # Compute parallactic angle of each timesample
+                mjd_sec = t.getcol("TIME", startrow=startrow, nrow=chunk_size)
+                time = Time(mjd_sec * u.s.to(u.day), format="mjd", scale="utc")
+                chi = observer.parallactic_angle(time, self.phasecentre).to(u.radian)
+                invert = self.telescope == "MeerKAT"
+
+                # Apply parallactic angle corrections
+                if self.feedtype == "linear":
+                    data_rot = rotate_linear_feeds(data, chi, invert=invert)
+                elif self.feedtype == "circular":
+                    data_rot = rotate_circular_feeds(data, chi)
+
+                # Write chunk back to table
+                t.putcol(datacolumn, data_rot, startrow=startrow, nrow=chunk_size)
+
+                # Free up memory
+                del data, data_rot, mjd_sec, time, chi
+
+        return
+
     def rotate_phasecentre(
         self,
         position: SkyCoord,
@@ -442,18 +572,18 @@ class MeasurementSet(Table):
             interval = t.getcol("INTERVAL")
             timebin = "{}s".format(min(interval) * 1e-2)
 
-            mstransform(
-                vis=str(self.path),
-                outputvis=str(outputvis),
-                datacolumn="all",
-                uvrange=f">{minuvdist}m",
-                timeaverage=True,
-                timebin=timebin,
-                keepflags=False,
-            )
+        mstransform(
+            vis=str(self.path),
+            outputvis=str(outputvis),
+            datacolumn="all",
+            uvrange=f">{minuvdist}m",
+            timeaverage=True,
+            timebin=timebin,
+            keepflags=False,
+        )
 
-            # Replace original antenna names
-            # with self.open_table(readonly=False) as t:
+        # Replace original antenna names
+        with self.open_table(readonly=False) as t:
             t.putcol("ANTENNA1", ant1)
             t.putcol("ANTENNA2", ant2)
 
@@ -682,16 +812,16 @@ def extract_baseline(
         data_idx = np.argwhere(~np.isin(bl_time, missing_times)).ravel()
 
         # Calculate UVrange for each baseline
-        bl_uvw = bl_tab.getcol("UVW").T
+        bl_uvw = bl_tab.getcol("UVW")
         bl_uvdist = np.sqrt(np.sum(np.square(bl_uvw), axis=1))
 
-        data_col = bl_tab.getcol(datacolumn).T
+        data_col = bl_tab.getcol(datacolumn)
 
         data = {
             "baseline": i,
             "data_idx": data_idx,
             "data": data_col,
-            "flags": bl_tab.getcol("FLAG").T,
+            "flags": bl_tab.getcol("FLAG"),
             "uvdist": np.nanmean(bl_uvdist, axis=0),
         }
 

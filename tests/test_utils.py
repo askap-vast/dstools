@@ -61,7 +61,7 @@ def test_get_available_mem_slurm(monkeypatch):
     assert avail_mem == 50 * 1024 * 1024 * 1024
 
 
-@pytest.mark.parametrize("nrows", [1023, 1024])
+@pytest.mark.parametrize("nrows", [459, 460])
 def test_chunk_iterator_single_chunk(nrows):
     row_size = 16 * 1024 * 1024
     indices = list(chunk_iterator(nrows, row_size))
@@ -71,9 +71,9 @@ def test_chunk_iterator_single_chunk(nrows):
 
 def test_chunk_iterator_multiple_chunks():
     row_size = 16 * 1024 * 1024
-    indices = list(chunk_iterator(1025, row_size))
+    indices = list(chunk_iterator(461, row_size))
 
-    assert indices == [(0, 1024), (1024, 1)]
+    assert indices == [(0, 460), (460, 1)]
 
 
 @pytest.mark.parametrize(

@@ -11,26 +11,14 @@ import astropy.units as u
 import h5py
 import numpy as np
 import pandas as pd
-from astropy.coordinates import Angle, EarthLocation, SkyCoord
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from rm_lite.utils.synthesis import freq_to_lambda2, make_phi_arr, rmsynth_nufft
 from scipy.signal import correlate
 
-from dstools.utils import rebin, rebin2D, slice_array
+from dstools.utils import LOCATIONS, rebin, rebin2D, slice_array
 
 logger = logging.getLogger(__name__)
-
-LOCATIONS = {
-    "ATCA": EarthLocation(
-        lat=Angle("-30:18:46.385", unit=u.degree),
-        lon=Angle(149.5501388, unit=u.degree),
-        height=236.87 * u.m,
-    ),
-    "GMRT": EarthLocation.of_site("GMRT"),
-    "VLA": EarthLocation.of_site("vla"),
-    "MeerKAT": EarthLocation.of_site("MeerKAT"),
-    "ASKAP": EarthLocation.of_site("ASKAP"),
-}
 
 
 @dataclass

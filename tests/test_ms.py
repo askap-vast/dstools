@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -11,18 +12,19 @@ from dstools.ms import (
     combine_spws,
     extract_baseline,
     extract_baselines,
+    rotate_circular_feeds,
+    rotate_linear_feeds,
     run_selfcal,
 )
 from dstools.utils import DataError
 
 ms_properties = [
     ("nspws", 1),
-    ("nbaselines", 1),
-    ("integrations", 11),
-    ("nchannels", 11),
+    ("nbaselines", 3),
+    ("integrations", 4),
+    ("nchannels", 21),
     ("npols", 4),
-    ("dimensions", (1, 11, 11, 4)),
-    ("ncorrelations", 484),
+    ("dimensions", (3, 4, 21, 4)),
     ("telescope", "ATCA"),
     ("feedtype", "linear"),
 ]
@@ -368,3 +370,98 @@ def test_extract_baselines_1baseline(ncpus, mocker, temp_environment):
     assert np.allclose(data["data_idx"], np.array([0, 1]))
     assert np.all(data["data"] == 0 + 0j)
     assert np.all(data["flags"])
+
+
+def test_rotate_linear_feeds():
+    nvis = 100
+    nchan = 1
+
+    # Create pure Stokes Q signal in linear basis
+    data = np.zeros((nvis, nchan, 4), dtype=np.complex128)
+    data[:, :, 0] = 2
+
+    # Reshape visibility matrices to (nvis, 2, 2)
+    V = np.zeros((nvis, 2, 2), dtype=np.complex128)
+    V[:, 0, 0] = data[:, 0, 0]
+    V[:, 0, 1] = data[:, 0, 1]
+    V[:, 1, 0] = data[:, 0, 2]
+    V[:, 1, 1] = data[:, 0, 3]
+
+    # Construct rotation matrix
+    chi = np.linspace(0, np.pi / 2, nvis).astype(np.float64)
+    R = np.empty((nvis, 2, 2), dtype=np.complex128)
+    cos_chi = np.cos(chi)
+    sin_chi = np.sin(chi)
+    R[:, 0, 0] = cos_chi
+    R[:, 0, 1] = sin_chi
+    R[:, 1, 0] = -sin_chi
+    R[:, 1, 1] = cos_chi
+
+    # Rotate to simulate observation
+    V_rot = R @ V @ np.transpose(R.conj(), axes=(0, 2, 1))
+
+    # Reshape back to 4 x nchan x nvis
+    rotated = np.zeros((nvis, nchan, 4), dtype=np.complex128)
+    rotated[:, 0, 0] = V_rot[:, 0, 0]
+    rotated[:, 0, 1] = V_rot[:, 0, 1]
+    rotated[:, 0, 2] = V_rot[:, 1, 0]
+    rotated[:, 0, 3] = V_rot[:, 1, 1]
+
+    # Test de-rotation
+    corrected = rotate_linear_feeds(rotated, chi)
+
+    # Check recovery of original pure Q signal
+    assert np.allclose(corrected, data, atol=1e-8)
+
+
+def test_rotate_circular_feeds():
+    nvis = 100
+    nchan = 1
+
+    # Create pure Stokes Q signal in circular basis
+    # RR = 1, LL = 1, RL = 0, LR = 0
+    data = np.zeros((nvis, nchan, 4), dtype=np.complex128)
+    data[:, 0, 0] = 1  # RR
+    data[:, 0, 3] = 1  # LL
+
+    # Rotate to simulate observation with circular feeds
+    rotated = data.copy()
+
+    chi = np.linspace(0, np.pi / 2, nvis).astype(np.float64)
+    rotated[:, 0, 1] = data[:, 0, 1] * np.exp(2j * chi)  # RL
+    rotated[:, 0, 2] = data[:, 0, 2] * np.exp(-2j * chi)  # LR
+
+    # Test de-rotation
+    corrected = rotate_circular_feeds(rotated, chi)
+
+    # Check recovery of original pure Q signal
+    assert np.allclose(corrected, data, atol=1e-8)
+
+
+def test_correct_feed_rotation_askap_does_not_rotate(temp_environment, caplog):
+    path = temp_environment["askap"]
+    ms = MeasurementSet(path)
+
+    ms.correct_feed_rotation(datacolumn="DATA")
+
+    assert "Will not apply" in caplog.text
+
+
+def test_correct_feed_rotation_linear(temp_environment, caplog):
+    path = temp_environment["minimal"]
+    ms = MeasurementSet(path)
+
+    with caplog.at_level(logging.INFO):
+        ms.correct_feed_rotation(datacolumn="DATA")
+
+    assert "Correcting" in caplog.text
+
+
+def test_correct_feed_rotation_circular(temp_environment, caplog):
+    path = temp_environment["vla"]
+    ms = MeasurementSet(path)
+
+    with caplog.at_level(logging.INFO):
+        ms.correct_feed_rotation(datacolumn="DATA")
+
+    assert "Correcting" in caplog.text

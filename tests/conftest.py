@@ -11,6 +11,13 @@ package_root = Path(dstools.__path__[0]).parent
 
 
 @pytest.fixture
+def disable_jit(monkeypatch):
+    monkeypatch.setenv("NUMBA_DISABLE_JIT", "1")
+
+    return
+
+
+@pytest.fixture
 def dispersed_pulse():
     return np.load(
         f"{package_root}/tests/data/ds/dispersed_pulse_dm3000.npy", allow_pickle=True
@@ -47,6 +54,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     rotated_ms_path = ms_path.with_suffix(".dstools-temp.rotated.ms")
     averaged_ms_path = ms_path.with_suffix(".dstools-temp.baseavg.ms")
     subbed_ms_path = ms_path.with_suffix(".subtracted.ms")
+    j1755_ms_path = package_root / "tests/data/msets/j1755.askap.ms"
+    vla_ms_path = package_root / "tests/data/msets/gpm.vla.ms"
 
     model_path = package_root / "tests/data/images"
     pb_path = model_path / "fred.atca.pb.fits"
@@ -65,6 +74,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     tmp_onespw_ms_path = tmp_path / "test.1spw.ms"
     tmp_twospw_ms_path = tmp_path / "test.2spw.ms"
     tmp_subbed_ms_path = tmp_path / "test.subtracted.ms"
+    tmp_vla_ms_path = tmp_path / "test.vla.ms"
+    tmp_askap_ms_path = tmp_path / "test.askap.ms"
     tmp_model_path = tmp_path / "model"
     tmp_pb_path = tmp_path / "test.pb.fits"
     tmp_target_mask_path = tmp_path / "target_mask.fits"
@@ -81,6 +92,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     os.system(f"cp -r {averaged_ms_path} {tmp_averaged_ms_path}")
     os.system(f"cp -r {ms_path} {tmp_combined_ms_path}")
     os.system(f"cp -r {subbed_ms_path} {tmp_subbed_ms_path}")
+    os.system(f"cp -r {vla_ms_path} {tmp_vla_ms_path}")
+    os.system(f"cp -r {j1755_ms_path} {tmp_askap_ms_path}")
     os.system(f"cp -r {model_path} {tmp_model_path}")
     os.system(f"cp -r {pb_path} {tmp_pb_path}")
     os.system(f"cp -r {target_mask_path} {tmp_target_mask_path}")
@@ -107,8 +120,6 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     mocker.patch("dstools.imaging.exportfits")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
     mocker.patch("dstools.ms.tablecopy")
-    mocker.patch("subprocess.Popen")
-    mocker.patch("subprocess.run")
     mocker.patch("os.system")
     mocker.patch("os.chdir")
 
@@ -119,6 +130,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
         "rotated": tmp_rotated_ms_path,
         "averaged": tmp_averaged_ms_path,
         "minimal": tmp_ms_min_path,
+        "vla": tmp_vla_ms_path,
+        "askap": tmp_askap_ms_path,
         "cal": tmp_caltable_path,
         "model": tmp_model_path,
         "pb": tmp_pb_path,

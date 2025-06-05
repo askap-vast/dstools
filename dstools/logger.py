@@ -23,6 +23,7 @@ def setupLogger(verbose: bool, filename: Optional[str] = None) -> None:
     logging.getLogger("urllib").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("h5py").setLevel(logging.INFO)
+    logging.getLogger("numba").setLevel(logging.INFO)
 
     if filename:
         formatter = logging.Formatter(

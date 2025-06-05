@@ -6,7 +6,7 @@ from typing import Iterator, Optional, Tuple
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle, EarthLocation, SkyCoord
 from numpy.typing import ArrayLike
 
 CONFIGS = ["6km", "750_no6", "750_6", "H168"]
@@ -21,6 +21,19 @@ BANDS = [
     "MKT_UHF",
     "MKT_L",
 ]
+
+
+LOCATIONS = {
+    "ATCA": EarthLocation(
+        lat=Angle("-30:18:46.385", unit=u.degree),
+        lon=Angle(149.5501388, unit=u.degree),
+        height=236.87 * u.m,
+    ),
+    "GMRT": EarthLocation.of_site("GMRT"),
+    "EVLA": EarthLocation.of_site("vla"),
+    "MeerKAT": EarthLocation.of_site("MeerKAT"),
+    "ASKAP": EarthLocation.of_site("ASKAP"),
+}
 
 
 logger = logging.getLogger(__name__)
@@ -52,24 +65,27 @@ def get_available_cpus() -> int:
 
 
 def get_available_mem() -> int:
-    """Returns the memory in MB allocated by SLURM or falls back to 16 GB default."""
+    """Returns the memory in bytes allocated by SLURM or falls back to 16 GB default."""
 
     # SLURM environment variables in MB
     mem_available_mb = int(os.environ.get("SLURM_MEM_PER_NODE", 16 * 1024))
     return mem_available_mb * 1024 * 1024
 
 
-def chunk_iterator(nrows: int, row_size_bytes: int) -> Iterator[Tuple[int, int]]:
+def chunk_iterator(
+    nrows: int,
+    row_size_bytes: int,
+    mem_fraction: float = 0.45,
+) -> Iterator[Tuple[int, int]]:
     """Generate indices to access a column in row-batched chunks based on available memory."""
 
-    chunk_nrows = int(get_available_mem() // row_size_bytes)
-    logger.debug(f"{chunk_nrows=}rows, {nrows=}")
+    chunk_nrows = int(mem_fraction * get_available_mem() // row_size_bytes)
 
     if chunk_nrows > nrows:
         yield 0, nrows
     else:
         nchunks = int(np.ceil(nrows / chunk_nrows)) + 1
-        print(nchunks)
+        logger.debug(f"Processing table in {nchunks} chunks of {chunk_nrows} rows")
         for chunk, start in enumerate(range(0, nrows, chunk_nrows)):
             logger.debug(
                 f"Processing chunk {chunk + 1}/{nchunks} ({start / nrows:.1%})"
@@ -78,7 +94,7 @@ def chunk_iterator(nrows: int, row_size_bytes: int) -> Iterator[Tuple[int, int]]
 
         logger.debug(f"Processing chunk {nchunks}/{nchunks} (100%)")
 
-        return
+    return
 
 
 def prompt(msg, bypass=False, bypass_msg=None, default_response=True):
