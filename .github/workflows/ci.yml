@@ -32,8 +32,6 @@ jobs:
           path: |
             ~/.cache/pypoetry
           key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            poetry-${{ runner.os }}-
 
       - name: Ensure ~/.casa/data exists
         run: mkdir -p ~/.casa/data
