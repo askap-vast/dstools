@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
     "--datacolumn",
     type=click.Choice(["data", "corrected", "model"]),
     default="data",
-    help="Selection of DATA, CORRECTED_DATA, or MODEL column.",
+    help="Selection of DATA, CORRECTED_DATA, or MODEL_DATA column.",
 )
 @click.option(
     "-p",
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
     default=None,
     help=(
         "Path to primary beam image with which to correct flux scale. "
-        " Must also provide phasecentre. Provide non-existent path to compute PB separately."
+        "Must also provide phasecentre. Provide non-existent path to compute PB separately."
     ),
 )
 @click.option(

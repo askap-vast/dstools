@@ -87,12 +87,12 @@ logger = logging.getLogger(__name__)
     help="Number of polynomial terms used to model spectral structure in MFS deconvolution.",
 )
 @click.option(
-    "--minuvw_m",
+    "--minuvw-m",
     default=None,
     help="Minimum uv distance in meters.",
 )
 @click.option(
-    "--minuvw_l",
+    "--minuvw-l",
     default=None,
     help="Minimum uv distance in wavelengths.",
 )
