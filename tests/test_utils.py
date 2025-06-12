@@ -6,7 +6,9 @@ from astropy.coordinates import SkyCoord
 
 from dstools.utils import (
     Array,
+    chunk_iterator,
     get_available_cpus,
+    get_available_mem,
     parse_coordinates,
     prompt,
     rebin,
@@ -44,6 +46,34 @@ def test_get_available_cpus_slurm_cpus_on_node_and_cpus_per_task(monkeypatch):
     cpus = get_available_cpus()
 
     assert cpus == 8
+
+
+def test_get_available_mem_non_slurm():
+    avail_mem = get_available_mem()
+
+    assert avail_mem == 16 * 1024 * 1024 * 1024
+
+
+def test_get_available_mem_slurm(monkeypatch):
+    monkeypatch.setenv("SLURM_MEM_PER_NODE", "51200")
+    avail_mem = get_available_mem()
+
+    assert avail_mem == 50 * 1024 * 1024 * 1024
+
+
+@pytest.mark.parametrize("nrows", [1023, 1024])
+def test_chunk_iterator_single_chunk(nrows):
+    row_size = 16 * 1024 * 1024
+    indices = list(chunk_iterator(nrows, row_size))
+
+    assert indices == [(0, nrows)]
+
+
+def test_chunk_iterator_multiple_chunks():
+    row_size = 16 * 1024 * 1024
+    indices = list(chunk_iterator(1025, row_size))
+
+    assert indices == [(0, 1024), (1024, 1)]
 
 
 @pytest.mark.parametrize(

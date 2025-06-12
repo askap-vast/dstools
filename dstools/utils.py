@@ -2,7 +2,7 @@ import logging
 import multiprocessing
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterator, Optional, Tuple
 
 import astropy.units as u
 import numpy as np
@@ -40,7 +40,7 @@ def parse_coordinates(coord: tuple[str, str]) -> SkyCoord:
     return position
 
 
-def get_available_cpus():
+def get_available_cpus() -> int:
     """Returns the number of CPUs allocated by SLURM or falls back to system count."""
 
     if "SLURM_CPUS_PER_TASK" in os.environ:
@@ -49,6 +49,36 @@ def get_available_cpus():
         return int(os.environ["SLURM_CPUS_ON_NODE"])
     else:
         return multiprocessing.cpu_count()
+
+
+def get_available_mem() -> int:
+    """Returns the memory in MB allocated by SLURM or falls back to 16 GB default."""
+
+    # SLURM environment variables in MB
+    mem_available_mb = int(os.environ.get("SLURM_MEM_PER_NODE", 16 * 1024))
+    return mem_available_mb * 1024 * 1024
+
+
+def chunk_iterator(nrows: int, row_size_bytes: int) -> Iterator[Tuple[int, int]]:
+    """Generate indices to access a column in row-batched chunks based on available memory."""
+
+    chunk_nrows = int(get_available_mem() // row_size_bytes)
+    logger.debug(f"{chunk_nrows=}rows, {nrows=}")
+
+    if chunk_nrows > nrows:
+        yield 0, nrows
+    else:
+        nchunks = int(np.ceil(nrows / chunk_nrows)) + 1
+        print(nchunks)
+        for chunk, start in enumerate(range(0, nrows, chunk_nrows)):
+            logger.debug(
+                f"Processing chunk {chunk + 1}/{nchunks} ({start / nrows:.1%})"
+            )
+            yield start, min(chunk_nrows, nrows - start)
+
+        logger.debug(f"Processing chunk {nchunks}/{nchunks} (100%)")
+
+        return
 
 
 def prompt(msg, bypass=False, bypass_msg=None, default_response=True):
