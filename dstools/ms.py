@@ -16,7 +16,7 @@ import pandas as pd
 import xarray as xr
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
-from casatools.table import table
+from casacore.tables import table, tablecopy
 from matplotlib.gridspec import GridSpec
 
 from dstools.casa import (
@@ -51,14 +51,17 @@ class Table:
     def open_table(
         self,
         subtable: Optional[str] = None,
-        nomodify: bool = True,
+        readonly: bool = True,
         query: Optional[str] = None,
     ):
-        path = f"{self.path}/{subtable}" if subtable else str(self.path)
-        t = table()
+        path = self.path / subtable if subtable else self.path
 
         try:
-            t.open(path, nomodify=nomodify)
+            t = table(
+                path.as_posix(),
+                readonly=readonly,
+                ack=False,
+            )
             if query is not None:
                 t = t.query(query)
             yield t
@@ -77,9 +80,7 @@ class Table:
             ant1 = t.getcol("ANTENNA1")
             ant2 = t.getcol("ANTENNA2")
 
-        antennas = np.unique(
-            np.append(ant1, ant2),
-        )
+        antennas = np.unique(np.append(ant1, ant2))
 
         # Remove flagged antennas with -1 index
         antennas = antennas[np.where(antennas != -1)]
@@ -112,7 +113,7 @@ class CalTable(Table):
 
     @property
     def npols(self):
-        return self.gains.shape[0]
+        return self.gains.shape[2]
 
     @property
     def phase_solutions(self):
@@ -168,7 +169,7 @@ class CalTable(Table):
                         t -= t[0]
 
                         # Select polarisation and current SPW
-                        g = gains[polaxis, 0, np.where(self.spw_ids == spw)]
+                        g = gains[np.where(self.spw_ids == spw), 0, polaxis]
 
                         # Select current antenna
                         g = g.reshape(-1, self.nantennas)[:, antaxis]
@@ -257,25 +258,26 @@ class MeasurementSet(Table):
 
     @property
     def feedtype(self):
-        feedtype = self.getcolumn("POLARIZATION_TYPE", subtable="FEED")[0, 0]
+        poltype_col = self.getcolumn("POLARIZATION_TYPE", subtable="FEED")
+        poltype = poltype_col.get("array")[0]
 
         feedtype = {
             "X": "linear",
             "Y": "linear",
             "R": "circular",
             "L": "circular",
-        }.get(feedtype)
+        }.get(poltype)
 
         if feedtype is None:
             raise ValueError(
-                f"Feed has polarisation type {feedtype} which cannot be recognised."
+                f"Feed has polarisation type {poltype} which cannot be recognised."
             )
 
         return feedtype
 
     @property
     def phasecentre(self):
-        phasecentre_coords = self.getcolumn("PHASE_DIR", subtable="FIELD")[:, 0, 0]
+        phasecentre_coords = self.getcolumn("PHASE_DIR", subtable="FIELD")[0, 0, :]
         phasecentre = SkyCoord(
             ra=phasecentre_coords[0],
             dec=phasecentre_coords[1],
@@ -333,9 +335,10 @@ class MeasurementSet(Table):
         # growing in size by a factor of nspws and driving up run-time, so we overwrite
         # the final FEED / SOURCE tables with those from the original MS
         for ms_table in ("FEED", "SOURCE"):
-            original_table = table(f"{self.original_path}/{ms_table}")
-            original_table.copy(newtablename=f"{one_spw_ms}/{ms_table}")
-            original_table.close()
+            tablecopy(
+                tablename=f"{self.original_path}/{ms_table}",
+                newtablename=f"{one_spw_ms}/{ms_table}",
+            )
 
         # Remove original and multi-SPW copies
         os.system(f"rm -r {self.original_path}")
@@ -427,11 +430,10 @@ class MeasurementSet(Table):
         outputvis = self.path.with_suffix(f".dstools-temp.baseavg{self.path.suffix}")
 
         # Set antenna pairs equal to prepare for baseline averaging
-        with self.open_table(nomodify=False) as t:
+        with self.open_table(readonly=False) as t:
             ant1 = t.getcol("ANTENNA1")
             ant2 = t.getcol("ANTENNA2")
 
-            # Set all antenna pairs equal for baseline averaging
             nrows = t.nrows()
             t.putcol("ANTENNA1", np.zeros(nrows))
             t.putcol("ANTENNA2", np.ones(nrows))
@@ -451,7 +453,7 @@ class MeasurementSet(Table):
             )
 
             # Replace original antenna names
-            # with self.open_table(nomodify=False) as t:
+            # with self.open_table(readonly=False) as t:
             t.putcol("ANTENNA1", ant1)
             t.putcol("ANTENNA2", ant2)
 
