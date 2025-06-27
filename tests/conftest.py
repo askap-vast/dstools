@@ -56,6 +56,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     subbed_ms_path = ms_path.with_suffix(".subtracted.ms")
     j1755_ms_path = package_root / "tests/data/msets/j1755.askap.ms"
     vla_ms_path = package_root / "tests/data/msets/gpm.vla.ms"
+    mkt_3c286_ms_path = package_root / "tests/data/msets/3C286.MKT_UHF.xyswapped.ms"
 
     model_path = package_root / "tests/data/images"
     pb_path = model_path / "fred.atca.pb.fits"
@@ -75,6 +76,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     tmp_twospw_ms_path = tmp_path / "test.2spw.ms"
     tmp_subbed_ms_path = tmp_path / "test.subtracted.ms"
     tmp_vla_ms_path = tmp_path / "test.vla.ms"
+    tmp_mkt_ms_path = tmp_path / "mkt.3c286.ms"
+    tmp_mkt_fix_ms_path = tmp_path / "mkt.3c286.fix.ms"
     tmp_askap_ms_path = tmp_path / "test.askap.ms"
     tmp_model_path = tmp_path / "model"
     tmp_pb_path = tmp_path / "test.pb.fits"
@@ -93,6 +96,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     os.system(f"cp -r {ms_path} {tmp_combined_ms_path}")
     os.system(f"cp -r {subbed_ms_path} {tmp_subbed_ms_path}")
     os.system(f"cp -r {vla_ms_path} {tmp_vla_ms_path}")
+    os.system(f"cp -r {mkt_3c286_ms_path} {tmp_mkt_ms_path}")
+    os.system(f"cp -r {mkt_3c286_ms_path} {tmp_mkt_fix_ms_path}")
     os.system(f"cp -r {j1755_ms_path} {tmp_askap_ms_path}")
     os.system(f"cp -r {model_path} {tmp_model_path}")
     os.system(f"cp -r {pb_path} {tmp_pb_path}")
@@ -131,6 +136,8 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
         "averaged": tmp_averaged_ms_path,
         "minimal": tmp_ms_min_path,
         "vla": tmp_vla_ms_path,
+        "mkt_3c286": tmp_mkt_ms_path,
+        "mkt_3c286_fix": tmp_mkt_fix_ms_path,
         "askap": tmp_askap_ms_path,
         "cal": tmp_caltable_path,
         "model": tmp_model_path,

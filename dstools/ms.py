@@ -43,6 +43,38 @@ logger = logging.getLogger(__name__)
 
 
 @njit
+def swap_xy_feeds(data: np.ndarray) -> np.ndarray:
+    """Correct for mislabelling of the X and Y feeds (e.g. MeerKAT).
+
+    Given the correlation Stokes parameter definitions:
+    I = (XX + YY) / 2
+    Q = (XX - YY) / 2
+    U = (XY + YX) / 2
+    V = 1j * (YX - XY) / 2
+
+    swapping the X and Y feeds on all antennas has the effect:
+    I ->  I
+    Q -> -Q
+    U ->  U
+    V -> -V
+
+    Here we swap the XX <-> YY and XY <-> YX correlations to correct for this.
+    """
+
+    nvis, nchan, _ = data.shape
+    corrected = np.empty_like(data)
+
+    for i in range(nvis):
+        for f in range(nchan):
+            corrected[i, f, 0] = data[i, f, 3]
+            corrected[i, f, 1] = data[i, f, 2]
+            corrected[i, f, 2] = data[i, f, 1]
+            corrected[i, f, 3] = data[i, f, 0]
+
+    return corrected
+
+
+@njit
 def rotate_circular_feeds(data: np.ndarray, chi_array: np.ndarray) -> np.ndarray:
     """Rotate polarisation basis from circularly polarised feed frame to sky frame.
 
@@ -70,7 +102,6 @@ def rotate_circular_feeds(data: np.ndarray, chi_array: np.ndarray) -> np.ndarray
 def rotate_linear_feeds(
     data: np.ndarray,
     chi_array: np.ndarray,
-    invert: bool,
 ) -> np.ndarray:
     """Rotate polarisation basis from linearly polarised feed frame to sky frame.
 
@@ -84,9 +115,6 @@ def rotate_linear_feeds(
     for i in range(nvis):
         cos_chi = np.cos(chi_array[i])
         sin_chi = np.sin(chi_array[i])
-
-        if invert:
-            sin_chi *= -1
 
         rot = np.array(
             [
@@ -483,7 +511,30 @@ class MeasurementSet(Table):
             f"Cannot transform from {self.nspws} to {nspws} spectral windows."
         )
 
-    def correct_feed_rotation(self, datacolumn="CORRECTED_DATA"):
+    def swap_xy_feeds(self, datacolumn: str = "CORRECTED_DATA"):
+        """Correct for mislabelling of the X and Y feeds (e.g. MeerKAT)."""
+
+        logger.info("Correcting X/Y feed orientations")
+        with self.open_table(readonly=False) as t:
+            nrows = t.nrows()
+            for startrow, chunk_size in chunk_iterator(nrows, self.row_size_bytes):
+                data = t.getcol(datacolumn, startrow=startrow, nrow=chunk_size)
+
+                corrected = swap_xy_feeds(data)
+
+                t.putcol(datacolumn, corrected, startrow=startrow, nrow=chunk_size)
+
+                del data, corrected
+
+        # Set FEED reference angle to 0 now that we have fixed the positions
+        with self.open_table(subtable="FEED", readonly=False) as t:
+            receptor = t.getcol("RECEPTOR_ANGLE")
+            receptor *= 0
+            t.putcol("RECEPTOR_ANGLE", receptor)
+
+        return
+
+    def correct_feed_rotation(self, datacolumn: str = "CORRECTED_DATA"):
         """Apply corrections for parallactic angle rotation of feeds."""
 
         # Disable correction for ASKAP which has fixed sky-frame due to roll axis
@@ -507,11 +558,10 @@ class MeasurementSet(Table):
                 mjd_sec = t.getcol("TIME", startrow=startrow, nrow=chunk_size)
                 time = Time(mjd_sec * u.s.to(u.day), format="mjd", scale="utc")
                 chi = observer.parallactic_angle(time, self.phasecentre).to(u.radian)
-                invert = self.telescope == "MeerKAT"
 
                 # Apply parallactic angle corrections
                 if self.feedtype == "linear":
-                    data_rot = rotate_linear_feeds(data, chi, invert=invert)
+                    data_rot = rotate_linear_feeds(data, chi)
                 elif self.feedtype == "circular":
                     data_rot = rotate_circular_feeds(data, chi)
 

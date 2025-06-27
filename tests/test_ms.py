@@ -15,6 +15,7 @@ from dstools.ms import (
     rotate_circular_feeds,
     rotate_linear_feeds,
     run_selfcal,
+    swap_xy_feeds,
 )
 from dstools.utils import DataError
 
@@ -370,6 +371,47 @@ def test_extract_baselines_1baseline(ncpus, mocker, temp_environment):
     assert np.allclose(data["data_idx"], np.array([0, 1]))
     assert np.all(data["data"] == 0 + 0j)
     assert np.all(data["flags"])
+
+
+def test_swap_xy_feeds_array():
+    nvis = 100
+    nchan = 5
+
+    data = np.random.random((nvis, nchan, 4)) + 1j * np.random.random((nvis, nchan, 4))
+    swapped = swap_xy_feeds(data)
+
+    assert np.all(data[:, :, 0] == swapped[:, :, 3])
+    assert np.all(data[:, :, 1] == swapped[:, :, 2])
+    assert np.all(data[:, :, 2] == swapped[:, :, 1])
+    assert np.all(data[:, :, 3] == swapped[:, :, 0])
+
+
+def test_swap_xy_feeds_ms(temp_environment):
+    ms = MeasurementSet(temp_environment["mkt_3c286"])
+    swapped_ms = MeasurementSet(temp_environment["mkt_3c286_fix"])
+
+    swapped_ms.swap_xy_feeds(datacolumn="DATA")
+
+    with ms.open_table() as t:
+        data = t.getcol("DATA")
+
+    with swapped_ms.open_table() as t:
+        swapped = t.getcol("DATA")
+
+    # Check that data axes have been swapped
+    assert np.all(data[:, :, 0] == swapped[:, :, 3])
+    assert np.all(data[:, :, 1] == swapped[:, :, 2])
+    assert np.all(data[:, :, 2] == swapped[:, :, 1])
+    assert np.all(data[:, :, 3] == swapped[:, :, 0])
+
+    # Check that new feed angle is correct
+    # This test portion of the band should align to +37 degrees
+    # so that the median across the band is +33 degrees
+    q = (swapped[:, :, 0] - swapped[:, :, 3]) / 2
+    u = (swapped[:, :, 1] + swapped[:, :, 2]) / 2
+    pa = 0.5 * np.atan2(u.real, q.real)
+
+    assert np.round(np.rad2deg(np.nanmedian(pa)), 1) == 37.0
 
 
 def test_rotate_linear_feeds():

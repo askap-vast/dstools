@@ -34,6 +34,10 @@ def main(ms, datacolumn, verbose):
     }
     datacolumn = columns[datacolumn]
 
+    # Swap incorrectly labelled X and Y feeds for MeerKAT
+    if ms.telescope == "MeerKAT":
+        ms.swap_xy_feeds(datacolumn=datacolumn)
+
     ms.correct_feed_rotation(datacolumn=datacolumn)
 
     return
