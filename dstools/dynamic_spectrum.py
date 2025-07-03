@@ -648,11 +648,12 @@ class TimeFreqSeries(ABC):
 
             self.flux = defaultdict()
             self.flux_err = defaultdict()
-            sqrtn = np.sqrt(self.ds.data["I"].shape[avg_axis])
 
             # Compute flux / errors in each Stokes parameter averaging over the DS
             for stokes in "IQUV":
                 data = self.ds.data[stokes]
+                sqrtn = np.sqrt(np.isfinite(data).sum(axis=avg_axis))
+
                 ydata = data.imag if self.imag else data.real
 
                 self.flux[stokes] = np.nanmean(ydata, axis=avg_axis)
