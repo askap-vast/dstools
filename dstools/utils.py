@@ -7,6 +7,7 @@ from typing import Iterator, Optional, Tuple
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import Angle, EarthLocation, SkyCoord
+from astropy.time import Time
 from numpy.typing import ArrayLike
 
 CONFIGS = ["6km", "750_no6", "750_6", "H168"]
@@ -51,6 +52,24 @@ def parse_coordinates(coord: tuple[str, str]) -> SkyCoord:
     position = SkyCoord(ra=ra, dec=dec, unit=(raunit, "deg"))
 
     return position
+
+
+def parse_time(time, tunit, time_start=None):
+    """Convert time into representation of time since obs start in units of tunit."""
+
+    # Time is already in float format
+    try:
+        return float(time)
+    except ValueError:
+        pass
+
+    # Time is in string format
+    if isinstance(time, str) and ":" in time:
+        t0 = Time(time_start)
+        date = time_start.split()[0]
+        time = Time(f"{date} {time}") - t0
+
+    return time.to(tunit).value
 
 
 def get_available_cpus() -> int:

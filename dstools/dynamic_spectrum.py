@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from importlib.metadata import version
-from typing import Optional
+from typing import Optional, Sequence
 
 import astropy.constants as c
 import astropy.units as u
@@ -16,9 +16,11 @@ from astropy.time import Time
 from rm_lite.utils.synthesis import freq_to_lambda2, make_phi_arr, rmsynth_nufft
 from scipy.signal import correlate
 
-from dstools.utils import LOCATIONS, rebin, rebin2D, slice_array
+from dstools.utils import LOCATIONS, parse_time, rebin, rebin2D, slice_array
 
 logger = logging.getLogger(__name__)
+
+FlagRanges = Sequence[tuple[float, float]]
 
 
 @dataclass
@@ -36,6 +38,8 @@ class DynamicSpectrum:
     maxuvdist: float = np.inf
     minuvwave: float = 0
     maxuvwave: float = np.inf
+    flag_channels: Optional[FlagRanges] = None
+    flag_times: Optional[FlagRanges] = None
 
     tunit: u.Quantity = u.hour
     corr_dumptime: float = 10.1
@@ -61,6 +65,12 @@ class DynamicSpectrum:
     def __post_init__(self):
         # Load instrumental polarisation time/frequency/uvdist arrays
         XX, XY, YX, YY = self._load_data()
+
+        # Flag specified channels / times
+        if self.flag_channels is not None:
+            XX, XY, YX, YY = self._flag_channels(XX, XY, YX, YY)
+        if self.flag_times is not None:
+            XX, XY, YX, YY = self._flag_times(XX, XY, YX, YY)
 
         # Insert calibrator scan breaks
         XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
@@ -347,6 +357,41 @@ class DynamicSpectrum:
                 "channels": len(self.freq),
             }
         )
+
+        return XX, XY, YX, YY
+
+    def _flag_channels(self, XX, XY, YX, YY):
+        for flagrange in self.flag_channels:
+            minfreq, maxfreq = flagrange
+
+            logger.debug(f"Flagging channels from {minfreq}-{maxfreq} MHz")
+            minfreq = np.argmax(self.freq > minfreq)
+            maxfreq = np.argmax(self.freq > maxfreq)
+
+            XX[:, minfreq:maxfreq] = np.nan
+            XY[:, minfreq:maxfreq] = np.nan
+            YX[:, minfreq:maxfreq] = np.nan
+            YY[:, minfreq:maxfreq] = np.nan
+
+        return XX, XY, YX, YY
+
+    def _flag_times(self, XX, XY, YX, YY):
+        for flagrange in self.flag_times:
+            tstart = self.header["time_start"]
+
+            mintime = parse_time(flagrange[0], self.tunit, tstart)
+            maxtime = parse_time(flagrange[1], self.tunit, tstart)
+
+            logger.debug(
+                f"Flagging time range from {mintime:.2f}-{maxtime:.2f} {self.tunit}"
+            )
+            mintime = np.argmax(self.time > mintime)
+            maxtime = np.argmax(self.time > maxtime)
+
+            XX[mintime:maxtime, :] = np.nan
+            XY[mintime:maxtime, :] = np.nan
+            YX[mintime:maxtime, :] = np.nan
+            YY[mintime:maxtime, :] = np.nan
 
         return XX, XY, YX, YY
 

@@ -181,6 +181,23 @@ stokes_choices = [
     help="Remove flagged channels at top/bottom of band.",
 )
 @click.option(
+    "-xf",
+    "--flag-channel-range",
+    default=None,
+    type=float,
+    nargs=2,
+    multiple=True,
+    help="Frequency range(s) to flag as a min/max frequency pair. Multiple pairs may be provided.",
+)
+@click.option(
+    "-xt",
+    "--flag-time-range",
+    default=None,
+    nargs=2,
+    multiple=True,
+    help="Time range(s) to flag as a min/max time pair. Multiple pairs may be provided.",
+)
+@click.option(
     "--fold",
     is_flag=True,
     default=False,
@@ -299,6 +316,8 @@ def main(
     dm,
     derotate,
     trim,
+    flag_channel_range,
+    flag_time_range,
     period,
     period_offset,
     fold_periods,
@@ -347,6 +366,8 @@ def main(
         period_offset=period_offset,
         fold_periods=fold_periods,
         phase_bins=phase_bins,
+        flag_channels=flag_channel_range,
+        flag_times=flag_time_range,
     )
 
     if verbose:

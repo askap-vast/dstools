@@ -95,6 +95,32 @@ def test_ds_crop(ds_paths):
     assert ds.data["I"].shape == (14, 101)
 
 
+def test_flag_channels(ds_paths):
+    ds_path = ds_paths.get("askap_pulse")
+
+    flag_chans = [(950, 1000)]
+    ds = DynamicSpectrum(ds_path, flag_channels=flag_chans)
+    I_lc = np.nanmean(ds.data["I"].real, axis=0)
+
+    assert np.isnan(I_lc).sum() == 50
+
+
+@pytest.mark.parametrize(
+    "flag_times",
+    [
+        [(1, 2)],
+        [("00:59:00", "01:00:00")],
+    ],
+)
+def test_flag_times(ds_paths, flag_times):
+    ds_path = ds_paths.get("askap_pulse")
+
+    ds = DynamicSpectrum(ds_path, flag_times=flag_times, tunit=u.min)
+    I_lc = np.nanmean(ds.data["I"].real, axis=1)
+
+    assert np.isnan(I_lc).sum() == 6
+
+
 def test_dedispersion(ds_paths, dispersed_pulse):
     ds_path = ds_paths.get("atca_pulse")
     ds = DynamicSpectrum(ds_path, DM=3000, dedisperse=True, tunit=u.s)
