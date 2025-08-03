@@ -419,7 +419,7 @@ class DynamicSpectrum:
         """Incoherently dedisperse using Fourier shift."""
 
         # Compute time-domain delays
-        a = (c.e.si**2 / (4 * np.pi**2 * c.eps0 * c.m_e * c.c)).to(
+        a = (c.e.si**2 / (8 * np.pi**2 * c.eps0 * c.m_e * c.c)).to(
             u.GHz**2 * u.cm**3 * u.pc**-1 * u.ms
         )
         DM = self.DM * u.pc / u.cm**3

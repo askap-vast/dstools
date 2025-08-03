@@ -123,7 +123,7 @@ def test_flag_times(ds_paths, flag_times):
 
 def test_dedispersion(ds_paths, dispersed_pulse):
     ds_path = ds_paths.get("atca_pulse")
-    ds = DynamicSpectrum(ds_path, DM=3000, dedisperse=True, tunit=u.s)
+    ds = DynamicSpectrum(ds_path, DM=6000, dedisperse=True, tunit=u.s)
 
     # Insert fake dispersed data
     tbins, fbins = (1000, 100)
