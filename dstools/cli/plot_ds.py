@@ -260,6 +260,11 @@ stokes_choices = [
     help="Dispersion measure in units of pc/cm^3.",
 )
 @click.option(
+    "--corr-dumptime",
+    default=10.1,
+    help="Correlator integration cycle time in units of seconds.",
+)
+@click.option(
     "-B",
     "--barycentre",
     is_flag=True,
@@ -311,6 +316,7 @@ def main(
     rm,
     acf,
     fold,
+    corr_dumptime,
     barycentre,
     dedisperse,
     dm,
@@ -356,6 +362,7 @@ def main(
         trim=trim,
         absolute_times=absolute_times,
         calscans=calscans,
+        corr_dumptime=corr_dumptime,
         barycentre=barycentre,
         derotate=derotate,
         dedisperse=dedisperse,
