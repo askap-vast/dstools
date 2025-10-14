@@ -9,14 +9,12 @@ from matplotlib.widgets import Button
 from mpl_point_clicker import clicker
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from dstools.imaging import Image
-
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
 
 @dataclass
 class Viewer:
-    images: list[Image]
+    images: list
 
     def __post_init__(self):
         for image in self.images:

@@ -1,6 +1,7 @@
 import astropy.units as u
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from dstools.imaging import (
@@ -38,6 +39,35 @@ def test_wsclean_model(im_paths):
     model = WSCleanModel(model_dir=model_path.parent)
 
     assert model.channels_out == 1
+
+
+@pytest.mark.parametrize("radius", [None, 5 * u.arcsec])
+def test_wsclean_model_get_circular_mask(radius, im_paths):
+    model_path = im_paths["model"]
+    model = WSCleanModel(model_dir=model_path.parent)
+
+    position = SkyCoord(model.phasecentre, unit="hourangle,deg")
+
+    mask = model.get_circular_mask(
+        position=position,
+        radius=radius,
+    )
+
+    assert mask.shape == Image(model.model).data.shape
+    print(mask.sum())
+    assert mask.sum() > 0
+
+
+def test_wsclean_model_get_interactive_mask(im_paths, mocker):
+    mocker.patch("matplotlib.pyplot.show")
+
+    model_path = im_paths["model"]
+    model = WSCleanModel(model_dir=model_path.parent)
+
+    mask = model.get_interactive_mask()
+
+    assert mask.shape == Image(model.model).data.shape
+    assert (~mask).sum() == 0
 
 
 def test_wsclean_model_applymask_alltrue(temp_environment):

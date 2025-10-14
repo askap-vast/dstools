@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from astropy.wcs import WCS
+from astropy.wcs.utils import proj_plane_pixel_scales
 from numpy.typing import ArrayLike
 
 from dstools.casa import exportfits, tclean
@@ -18,6 +20,7 @@ from dstools.logger import parse_stdout_stderr
 from dstools.mask import beam_shape_erode, minimum_absolute_clip
 from dstools.ms import MeasurementSet
 from dstools.utils import parse_coordinates
+from dstools.viewer import Viewer
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ class Model(ABC):
         """Validate existence of model images."""
 
     @abstractmethod
-    def insert_into(self):
+    def insert_into(self, ms: MeasurementSet):
         """Predict model visibilities into MODEL_DATA column of a Measurementset."""
 
     @abstractmethod
@@ -101,6 +104,53 @@ class WSCleanModel(Model):
             raise ValueError(msg)
 
         return
+
+    def get_interactive_mask(self):
+        """Set up interactive session to draw mask excluding pixels from model."""
+
+        logger.info("Launching interactive mask viewer...")
+        print("  click to draw mask polygon vertices")
+        print("  press 'x' to mask pixels within polygon")
+        print("  press 'c' to unmask pixels within polygon")
+        print("  close viewer when happy with masking.")
+
+        images = [
+            Image(name="image", path=self.image),
+            Image(name="residual", path=self.residual),
+            Image(name="model", path=self.model),
+        ]
+        viewer = Viewer(images=images)
+
+        return viewer.mask
+
+    def get_circular_mask(self, position: SkyCoord, radius: Optional[u.Quantity]):
+        """Generate full image-sized circular boolean mask around position."""
+
+        # Build WCS
+        with fits.open(self.model) as hdul:
+            header = hdul[0].header
+            wcs = WCS(header, naxis=2)
+
+        # Get pixel coordinates and scales
+        x0, y0 = wcs.world_to_pixel(position)
+        ypix, xpix = np.indices((header["NAXIS1"], header["NAXIS2"]), float)
+
+        sx, sy = proj_plane_pixel_scales(wcs.celestial) * u.deg
+        pixel_scale = np.sqrt(sx * sy)
+
+        # If unspecified, default to 5 pixel radius
+        if radius is None:
+            radius = pixel_scale * 5
+
+        # Mask pixels within radius (True outside radius)
+        pixel_radius = (radius.to(u.deg) / pixel_scale).value
+        mask = np.hypot(xpix - x0, ypix - y0) > pixel_radius
+
+        pos = position.to_string("hmsdms")
+        size = radius.to(u.arcsec)
+        logger.info(f"Creating {size:.1f} radius mask at {pos}")
+
+        return mask
 
     def get_phasecentre(self):
         with fits.open(self.model) as hdul:
