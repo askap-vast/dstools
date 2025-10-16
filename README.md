@@ -95,7 +95,7 @@ ASKAP data requires extra pre-processing to
 
 These corrections should be applied before any further imaging or dynamic spectrum tasks, and are implemented using the [FixMS](https://github.com/AlecThomson/fix-ms) package. You can run both steps with:
 ```
-dstools-askapsoft-preprocess <MS>
+dstools-askap-preprocess <MS>
 ```
 where `<MS>` is the path to your data in MeasurementSet format.
 
