@@ -102,7 +102,7 @@ where `<MS>` is the path to your data in MeasurementSet format.
 <a name="model-field"></a>
 ### Imaging and Self Calibration ###
 
-`dstools-create-field` is a script to image calibrated visibilities with WSclean and produce a model of sources in the field. See the [WSclean documentation](https://wsclean.readthedocs.io/en/latest/) for further information on imaging modes and parameters.
+`dstools-create-model` is a script to image calibrated visibilities with WSclean and produce a model of sources in the field. See the [WSclean documentation](https://wsclean.readthedocs.io/en/latest/) for further information on imaging modes and parameters.
 
 Run the script with
 ```
