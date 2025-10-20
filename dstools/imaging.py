@@ -223,6 +223,7 @@ class WSClean:
     multiscale: bool = False
     multiscale_scale_bias: float = 0.7
     multiscale_max_scales: int = 8
+    channel_range: Optional[tuple[int, int]] = None
 
     # masking / thresholds
     fits_mask: Optional[Path] = None
@@ -239,7 +240,7 @@ class WSClean:
 
     # data selection
     pol: str = "iquv"
-    data_column: Optional[str] = None
+    datacolumn: Optional[str] = None
     minuvw_m: Optional[float] = None
     minuvw_l: Optional[float] = None
     intervals_out: Optional[int] = None
@@ -268,7 +269,6 @@ class WSClean:
             "mniter",
             "local_rms_window",
             "parallel_deconvolution",
-            "data_column",
             "minuvw_m",
             "minuvw_l",
             "intervals_out",
@@ -287,6 +287,14 @@ class WSClean:
         if self.temp_dir is None:
             self.temp_dir = self.out_dir
         self.temp_dir = Path(self.temp_dir).absolute()
+
+    @property
+    def _datacolumn(self):
+        # Let WSclean handle defaulting to CORRECTED column
+        if self.datacolumn == "CORRECTED_DATA" or self.datacolumn is None:
+            return ""
+
+        return f"-data-column {self.datacolumn}"
 
     @property
     def _multiscale_args(self):
@@ -395,6 +403,14 @@ class WSClean:
 
         return f"-{arg} {val}"
 
+    @property
+    def _channel_range(self):
+        if self.channel_range is not None:
+            min, max = self.channel_range
+            return f"-channel-range {min} {max}"
+
+        return ""
+
     def run(self, ms: MeasurementSet, name: str):
         # Add all essential arguments
         wsclean_cmd = [
@@ -408,6 +424,8 @@ class WSClean:
             f"-weight briggs {self.robust}",
             f"-auto-threshold {self.auto_threshold}",
             f"-auto-mask {self.mask_threshold}",
+            self._channel_range,
+            self._datacolumn,
             self._phasecentre_args,
             self._multiscale_args,
             self._spectral_args,
@@ -437,7 +455,8 @@ class WSClean:
         os.chdir(model_path)
 
         logger.info(
-            f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, {self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
+            f"Imaging {ms} with name {name}, {self.imsize}x{self.imsize} {self.cellsize} pixels, "
+            f"{self.channels_out} channels, and {self.spectral_pol_terms} spectral terms."
         )
         logger.debug(wsclean_cmd)
 

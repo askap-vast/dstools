@@ -70,6 +70,13 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-d",
+    "--datacolumn",
+    type=click.Choice(["data", "corrected"]),
+    default="corrected",
+    help="Selection of DATA or CORRECTED_DATA column.",
+)
+@click.option(
+    "-d",
     "--deconvolution-channels",
     default=8,
     help="Number of sub-bands over which to run deconvolution.",
@@ -235,6 +242,7 @@ def main(
     cell,
     config,
     band,
+    datacolumn,
     iterations,
     mgain,
     minuvw_m,
@@ -286,6 +294,13 @@ def main(
     fits_mask = fits_mask.absolute() if fits_mask else None
     galvin_clip_mask = galvin_clip_mask.absolute() if galvin_clip_mask else None
 
+    if datacolumn:
+        columns = {
+            "data": "DATA",
+            "corrected": "CORRECTED_DATA",
+        }
+        datacolumn = columns[datacolumn]
+
     # Run WSclean
     # -----------------
 
@@ -293,6 +308,7 @@ def main(
         imsize=imsize,
         cellsize=cellsize,
         spectral_pol_terms=spectral_pol_terms,
+        datacolumn=datacolumn,
         minuvw_m=minuvw_m,
         minuvw_l=minuvw_l,
         multiscale=multiscale,
