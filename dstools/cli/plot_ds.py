@@ -284,6 +284,12 @@ stokes_choices = [
     help="Toggle inclusion of null-valued time chunks while off-source.",
 )
 @click.option(
+    "--mask-sigma",
+    default=4.0,
+    type=float,
+    help="SNR threshold for masking of polarisation properties.",
+)
+@click.option(
     "-Y",
     "--summary",
     is_flag=True,
@@ -331,6 +337,7 @@ def main(
     absolute_times,
     calscans,
     summary,
+    mask_sigma,
     verbose,
     ds_path,
 ):
@@ -389,7 +396,7 @@ def main(
     # Spectrum
     # --------------------------------------
     if spectrum:
-        sp = Spectrum(ds, imag=imag)
+        sp = Spectrum(ds, imag=imag, pol_sigma=mask_sigma)
         if polarisations:
             plot_polarisation_spectrum(sp, stokes=stokes)
         else:
@@ -398,7 +405,8 @@ def main(
     # Light Curve
     # --------------------------------------
     if lightcurve:
-        lc = LightCurve(ds, imag=imag)
+        lc = LightCurve(ds, imag=imag, pol_sigma=mask_sigma)
+
         if polarisations:
             plot_polarisation_lightcurve(lc, stokes=stokes)
         else:

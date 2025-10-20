@@ -677,8 +677,10 @@ class TimeFreqSeries(ABC):
         L = self.flux["L"] = np.sqrt(Q**2 + U**2)
         Lerr = self.flux_err["L"] = 1 / L * np.sqrt((Q * Qerr) ** 2 + (U * Uerr) ** 2)
 
-        P = self.pol_fraction = np.sqrt(L**2 + V**2)
-        self.pol_fraction_err = 1 / P * np.sqrt((L * Lerr) ** 2 + (V * Verr) ** 2)
+        P = np.sqrt(L**2 + V**2)
+        Perr = (1 / P) * np.sqrt((L * Lerr) ** 2 + (V * Verr) ** 2)
+
+        self.pol_fraction = P / I
 
         self.polangle = 0.5 * np.arctan2(U, Q) * u.rad.to(u.deg)
         self.ellipticity = 0.5 * np.arctan2(V, L) * u.rad.to(u.deg)
@@ -686,30 +688,36 @@ class TimeFreqSeries(ABC):
         self.circular_fraction = np.abs(V / I)
 
         # Propagate errors
-        qu_err = (Q * Qerr) ** 2 + (U * Uerr) ** 2
-        vl_err = (V * Verr) ** 2 + (L * Lerr) ** 2
+        qu_err = (Q * Uerr) ** 2 + (U * Qerr) ** 2
+        vl_err = (V * Lerr) ** 2 + (L * Verr) ** 2
+        pi_err = (Perr / P) ** 2 + (Ierr / I) ** 2
         li_err = (Lerr / L) ** 2 + (Ierr / I) ** 2
         vi_err = (Verr / V) ** 2 + (Ierr / I) ** 2
         self.polangle_err = (0.5 * np.sqrt(qu_err) / L**2) * u.rad.to(u.deg)
         self.ellipticity_err = (0.5 * np.sqrt(vl_err) / P**2) * u.rad.to(u.deg)
+        self.pol_fraction_err = np.abs(P / I) * np.sqrt(pi_err)
         self.linear_fraction_err = np.abs(L / I) * np.sqrt(li_err)
         self.circular_fraction_err = np.abs(V / I) * np.sqrt(vi_err)
 
         # Mask low signifiance points
-        mask = I < self.pa_sigma * Ierr
+        L_mask = L < self.pol_sigma * Lerr
+        V_mask = np.abs(V) < self.pol_sigma * Verr
+        P_mask = P < self.pol_sigma * Perr
 
         # Remove any isolated unmasked values (likely noise)
-        isolated = mask[:-2] & mask[2:]
-        mask[1:-1][isolated] = True
+        isolated = L_mask[:-2] & L_mask[2:]
+        L_mask[1:-1][isolated] = True
 
-        self.polangle[mask] = np.nan
-        self.polangle_err[mask] = np.nan
-        self.ellipticity[mask] = np.nan
-        self.ellipticity_err[mask] = np.nan
-        self.linear_fraction[mask] = np.nan
-        self.linear_fraction_err[mask] = np.nan
-        self.circular_fraction[mask] = np.nan
-        self.circular_fraction_err[mask] = np.nan
+        self.polangle[L_mask] = np.nan
+        self.polangle_err[L_mask] = np.nan
+        self.ellipticity[P_mask] = np.nan
+        self.ellipticity_err[P_mask] = np.nan
+        self.pol_fraction[P_mask] = np.nan
+        self.pol_fraction_err[P_mask] = np.nan
+        self.linear_fraction[L_mask] = np.nan
+        self.linear_fraction_err[L_mask] = np.nan
+        self.circular_fraction[V_mask] = np.nan
+        self.circular_fraction_err[V_mask] = np.nan
 
         return
 
@@ -726,6 +734,8 @@ class TimeFreqSeries(ABC):
             df["polarisation_angle_err"] = self.polangle_err
             df["ellipticity"] = self.ellipticity
             df["ellipticity_err"] = self.ellipticity_err
+            df["pol_fraction"] = self.pol_fraction
+            df["pol_fraction_err"] = self.pol_fraction_err
             df["linear_fraction"] = self.linear_fraction
             df["linear_fraction_err"] = self.linear_fraction_err
             df["circular_fraction"] = self.circular_fraction
@@ -740,7 +750,7 @@ class TimeFreqSeries(ABC):
 class LightCurve(TimeFreqSeries):
     ds: DynamicSpectrum
     imag: bool = False
-    pa_sigma: int = 5
+    pol_sigma: float = 4
 
     def __post_init__(self):
         self.column = "time"
@@ -768,7 +778,7 @@ class LightCurve(TimeFreqSeries):
 class Spectrum(TimeFreqSeries):
     ds: DynamicSpectrum
     imag: bool = False
-    pa_sigma: int = 5
+    pol_sigma: float = 4
 
     def __post_init__(self):
         self.column = "frequency"
