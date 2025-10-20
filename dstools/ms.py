@@ -149,9 +149,6 @@ class Table:
     path: Path | str
 
     def __post_init__(self):
-        if not os.path.exists(self.path):
-            raise FileNotFoundError(f"MeasurementSet {self.path} not found")
-
         if isinstance(self.path, str):
             self.path = Path(self.path)
 
@@ -321,6 +318,13 @@ class CalTable(Table):
 class MeasurementSet(Table):
     def __post_init__(self):
         super().__post_init__()
+
+        if not os.path.exists(self.path):
+            raise FileNotFoundError(f"MeasurementSet {self.path} not found")
+
+        if not self.path.suffix == ".ms":
+            raise ValueError(f"Path {self.path} is not a MeasurementSet!")
+
         self.original_path = None
 
     def __str__(self):
