@@ -119,6 +119,7 @@ def plot_ds(
         norm=norm,
         clim=(cmin, cmax),
         cmap=cmap,
+        interpolation=None
     )
 
     ax.set_xlabel(ds._timelabel)
@@ -391,6 +392,7 @@ def plot_acf(ds, stokes="I", contrast=0.4):
         aspect="auto",
         norm=norm,
         cmap="plasma",
+        interpolation=None
     )
     cb = acf_fig.colorbar(
         im,
