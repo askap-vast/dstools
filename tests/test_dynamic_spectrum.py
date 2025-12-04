@@ -155,6 +155,22 @@ def test_rm_synthesis(ds_paths):
     assert round(ds.RM, 1) == -830.5
 
 
+def test_rm_synthesis_handles_calibrator_scan(ds_paths):
+    ds_path = ds_paths.get("atca_pulse")
+    ds = DynamicSpectrum(ds_path)
+
+    # Simulate early cal scan
+    ds.data["I"][5, :] = np.nan
+    ds.data["L"][5, :] = np.nan
+
+    # Test that RM extraction runs on the pulse at later time index
+    I = ds.data["I"]
+    L = ds.data["L"].T
+    RM = ds.rm_synthesis(I, L)
+
+    assert round(RM, 1) == -830.5
+
+
 def test_ds_acf(ds_paths):
     ds_path = ds_paths.get("atca_pulse")
     ds = DynamicSpectrum(ds_path)

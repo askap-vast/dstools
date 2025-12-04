@@ -627,7 +627,8 @@ class DynamicSpectrum:
         # to pull Q / U from the cleaned RM synthesis FDF spectrum.
         fdf_peak_timeseries = np.argmax(np.abs(fdf_spectrum), axis=0)
         peak_rm_spectrum = phis[fdf_peak_timeseries]
-        tslice = np.argmax(np.nanmean(I.real, axis=1))
+        tslice = np.nanargmax(np.nanmean(I.real, axis=1))
+
         RM = peak_rm_spectrum[tslice]
         logger.debug(f"Peak RM of {RM:.1f} rad/m2")
 
