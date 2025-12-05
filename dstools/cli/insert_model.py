@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import astropy.units as u
 import click
 
 from dstools.imaging import WSCleanModel
@@ -49,9 +50,12 @@ def main(mask_pos, mask_radius, interactive, model_dir, ms):
     # Read model images in
     model = WSCleanModel(model_dir)
 
+    if mask_radius is not None:
+        mask_radius *= u.arcsec
+
     # Generate a mask array
     if interactive:
-        mask = model.get_auto_mask()
+        mask = model.get_interactive_mask()
     else:
         mask_pos = ms.phasecentre if mask_pos is None else parse_coordinates(mask_pos)
         mask = model.get_circular_mask(mask_pos, mask_radius)
