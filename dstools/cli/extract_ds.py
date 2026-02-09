@@ -129,20 +129,9 @@ def main(
     if baseline_average:
         ms = ms.average_baselines(minuvdist)
 
-    # Initialise output arrays
-    visibilities = np.full(ms.dimensions, np.nan, dtype=complex)
-    flags = np.full(ms.dimensions, np.nan, dtype=bool)
-    uvdist = np.full(ms.nbaselines, np.nan)
-
     # Construct 4D data and flag cubes on each baseline separately
     # to verify indices of missing data (e.g. due to correlator dropouts)
-    results = extract_baselines(ms, datacolumn)
-
-    for baseline in results:
-        baseline_idx, data_idx = baseline["baseline"], baseline["data_idx"]
-        visibilities[baseline_idx, data_idx] = baseline["data"]
-        flags[baseline_idx, data_idx] = baseline["flags"]
-        uvdist[baseline_idx] = baseline["uvdist"]
+    visibilities, flags, uvdist = extract_baselines(ms, datacolumn)
 
     # Apply flags
     if not noflag:

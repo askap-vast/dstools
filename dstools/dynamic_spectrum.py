@@ -288,8 +288,9 @@ class DynamicSpectrum:
 
         # Optionally remove flagged channels at top/bottom of band
         if self.trim:
-            # Create binary mask identifying non-nan values across all polarisations
-            full = np.nansum((XX + XY + YX + YY), axis=0)
+            # Create binary mask identifying non-nan values
+            # after summing across time and polarisation axes
+            full = np.nansum([XX, XY, YX, YY], axis=(0, 1))
             full[full == 0.0 + 0.0j] = np.nan
             allpols = np.isfinite(full)
 
@@ -534,38 +535,334 @@ class DynamicSpectrum:
         # Compute Stokes products from instrumental pols
         feedtype = self.header["feeds"]
         if feedtype == "linear":
-            I = (XX + YY) / 2
-            Q = (XX - YY) / 2
-            U = (XY + YX) / 2
-            V = 1j * (YX - XY) / 2
+            I = 0.5 * np.nansum([XX, +YY], axis=0)
+            Q = 0.5 * np.nansum([XX, -YY], axis=0)
+            U = 0.5 * np.nansum([XY, +YX], axis=0)
+            V = 0.5 * np.nansum([YX, -XY], axis=0) * 1j
         elif feedtype == "circular":
-            I = (XX + YY) / 2
-            Q = (XY + YX) / 2
-            U = 1j * (XY - YX) / 2
-            V = (XX - YY) / 2
+            I = 0.5 * np.nansum([XX, +YY], axis=0)
+            Q = 0.5 * np.nansum([XY, +YX], axis=0)
+            U = 0.5 * np.nansum([XY, -YX], axis=0) * 1j
+            V = 0.5 * np.nansum([XX, -YY], axis=0)
         else:
             raise ValueError(
                 f"Feed type {feedtype} not recognised, should be either 'linear' or 'circular'."
             )
 
+        # Identically zero values should only arise from
+        # np.nansum converting an all-NaN range to 0 + 0j
+        # Set these back to NaN for clarity
+        I[I == 0 + 0j] = np.nan
+        Q[Q == 0 + 0j] = np.nan
+        U[U == 0 + 0j] = np.nan
+        V[V == 0 + 0j] = np.nan
+
         L = Q.real + 1j * U.real
+        Li = Q.imag + 1j * U.imag
 
         if self.derotate:
             if self.RM is None:
-                self.RM = self.rm_synthesis(I, L.T)
+                fdf = rm_synthesis(L, self.freq)
+                fdf_im = rm_synthesis(Li, self.freq)
 
-            # Build L from imaginary components
-            Li = Q.imag + 1j * U.imag
+                # Constant RM
+                # self.RM = constant_rm_from_fdf(FDF2D, I)
 
-            # Derotate real and imaginary L
-            L = self.derotate_faraday(L)
-            Li = self.derotate_faraday(Li)
+                import matplotlib.pyplot as plt
 
-            # Compute complex Q and U from L
-            Q = L.real + 1j * Li.real
-            U = L.imag + 1j * Li.imag
-        else:
-            self.polobs = None
+                # Variable RM
+                # rmts = dynamic_rm_from_fdf(fdf, fdf_im, I)
+                # fig, ax = plt.subplots()
+                # ax.axhline(self.RM, color="r")
+                # ax.errorbar(
+                #     x=self.time,
+                #     y=rmts.data,
+                #     yerr=rmts.error,
+                #     color="k",
+                #     marker="o",
+                #     markersize=1,
+                #     ls="none",
+                # )
+                # rmts = smooth_rm_timeseries(rmts, mode="spline")
+                # ax.plot(
+                #     self.time,
+                #     rmts.model,
+                #     color="b",
+                # )
+                # fig, ax = plt.subplots()
+                # tbins = 200
+                # t = np.linspace(-0.5, 0.5, tbins)
+                # f = np.arange(888 - 144, 888 + 144)
+                # rm_t = 150 + 10 * np.sin(40 * t)
+                # # rm_t = np.linspace(0, 500, tbins)
+                # i, q, u, v = make_synthetic_rvm_dynamic_spectrum(
+                #     t,
+                #     f,
+                #     rm_t,
+                #     t0_phase=0,
+                #     width_phase=0.1,
+                # )
+                # fdf = rm_synthesis(q.real + 1j * u.real, f)
+                # fdf_im = rm_synthesis(q.imag + 1j * u.imag, f)
+
+                rmts = dynamic_rm_from_fdf(
+                    fdf,
+                    fdf_im,
+                    I,
+                    snr_min=10,
+                )
+                # fig, ax = plt.subplots()
+
+                # ax.errorbar(
+                #     x=t,
+                #     y=rmts.data,
+                #     yerr=rmts.error,
+                #     color="k",
+                #     marker="o",
+                #     markersize=1,
+                #     ls="none",
+                # )
+
+                # rmts = smooth_rm_timeseries(rmts, mode="spline")
+                rmts = smooth_rm_timeseries(rmts, mode="constant")
+
+                # ax.plot(
+                #     t,
+                #     rmts.model,
+                #     color="b",
+                # )
+                from astropy.visualization import ImageNormalize, ZScaleInterval
+
+                fig, ax = plt.subplots()
+                norm = ImageNormalize(
+                    np.abs(fdf.fdf).T,
+                    interval=ZScaleInterval(contrast=0.2),
+                )
+                ax.imshow(
+                    np.abs(fdf.fdf).T,
+                    cmap="coolwarm",
+                    aspect="auto",
+                    norm=norm,
+                )
+
+                # fig, ax = plt.subplots()
+                # ax.imshow(i.T.real, cmap="coolwarm", aspect="auto")
+                # fig, ax = plt.subplots()
+                # ax.imshow(q.T.real, cmap="coolwarm", aspect="auto")
+                # fig, ax = plt.subplots()
+                # ax.imshow(u.T.real, cmap="coolwarm", aspect="auto")
+
+                print(rmts.model)
+                L = Q.real + 1j * U.real
+                L = derotate_l_dynamic_spectrum(L, self.freq, rmts.model)
+                Li = derotate_l_dynamic_spectrum(Li, self.freq, rmts.model)
+                Q = L.real + 1j * Li.real
+                U = L.imag + 1j * Li.imag
+
+                # fig, ax = plt.subplots()
+                # ax.imshow(Q.T.real, cmap="coolwarm", aspect="auto")
+                # fig, ax = plt.subplots()
+                # ax.imshow(U.T.real, cmap="coolwarm", aspect="auto")
+
+                # qt = np.nanmean(q, axis=1)
+                # ut = np.nanmean(u, axis=1)
+                # pa = 0.5 * np.arctan2(ut, qt)
+
+                # fig, ax = plt.subplots()
+                # ax.plot(t, pa * 180 / np.pi)
+
+                # L = derotate_l_dynamic_spectrum(L, self.freq, rmts.model)
+                # Li = derotate_l_dynamic_spectrum(Li, self.freq, rmts.model)
+                # Q = L.real + 1j * Li.real
+                # U = L.imag + 1j * Li.imag
+
+                # self.RM = self.rm_synthesis(I, L.T)
+        #         self.RM, fdf_spectrum, phis, lam_sq_0_m2 = rm_synthesis(self.freq, I, L)
+
+        #         peak_pi_spectrum = np.max(np.abs(fdf_spectrum), axis=0)
+
+        #         max_pixels = np.argmax(np.abs(fdf_spectrum), axis=0)
+        #         # print(lam_sq_0_m2)
+
+        #         peak_rm_spectrum = phis[max_pixels]
+        #         peak_spectrum = fdf_spectrum[
+        #             max_pixels,
+        #             np.arange(fdf_spectrum.shape[1]),
+        #         ]
+
+        #         peak_q_spectrum = peak_spectrum.real
+        #         peak_u_spectrum = peak_spectrum.imag
+        #         noise = peak_pi_spectrum < 8.5
+        #         # peak_pa_spectrum_detrot[noise] = np.nan
+        #         peak_rm_spectrum[noise] = np.nan
+        #         # peak_rm_spectrum[:] = 961.8 # np.nanmean(peak_rm_spectrum)
+        #         # print(peak_rm_spectrum)
+        #         # peak_rm_spectrum[noise] = np.nan
+        #         peak_rm_spectrum_peak = peak_rm_spectrum.copy()
+        #         peak_rm_spectrum_peak[:] = np.nanmedian(peak_rm_spectrum)
+        #         peak_rm_spectrum_peak[noise] = np.nan
+
+        #         peak_pa_spectrum = (
+        #             np.rad2deg(0.5 * np.arctan2(peak_u_spectrum, peak_q_spectrum)) % 180
+        #             - 90
+        #         )
+        #         peak_pa_spectrum[noise] = np.nan
+
+        #         peak_pa_spectrum_detrot = (
+        #             np.rad2deg(
+        #                 np.deg2rad(peak_pa_spectrum) - (peak_rm_spectrum * lam_sq_0_m2)
+        #             )
+        #             % 180
+        #             - 90
+        #         )
+        #         peak_pa_spectrum_detrot_peak = (
+        #             np.rad2deg(
+        #                 np.deg2rad(peak_pa_spectrum)
+        #                 - (peak_rm_spectrum_peak * lam_sq_0_m2)
+        #             )
+        #             % 180
+        #             - 90
+        #         )
+
+        #         import matplotlib.pyplot as plt
+
+        #         fig0, ax0 = plt.subplots()
+
+        #         from astropy.visualization import ImageNormalize, ZScaleInterval
+
+        #         norm = ImageNormalize(
+        #             np.abs(fdf_spectrum),
+        #             vmax=100,
+        #             vmin=0,
+        #             # interval=ZScaleInterval(contrast=0.2),
+        #         )
+        #         ax0.imshow(
+        #             np.flip(np.abs(fdf_spectrum)),
+        #             extent=[self.tmin, self.tmax, phis[0], phis[-1]],
+        #             aspect="auto",
+        #             norm=norm,
+        #             cmap="coolwarm",
+        #         )
+        #         fig = plt.figure(figsize=(10, 10))
+        #         from matplotlib.gridspec import GridSpec
+
+        #         gs = GridSpec(4, 1, figure=fig)
+        #         ax = fig.add_subplot(gs[2:, 0])
+        #         ax2 = fig.add_subplot(gs[1, 0])
+        #         rm_ax = fig.add_subplot(gs[0, 0])
+        #         It = np.nanmean(I.real, axis=1)
+        #         Vt = np.nanmean(V.real, axis=1)
+        #         Imax = self.time[np.nanargmax(It)]
+        #         rm_ax.plot(self.time, peak_rm_spectrum, color="b", label="RM(t)")
+        #         rm_ax.plot(
+        #             self.time, peak_rm_spectrum_peak, color="r", label="RM[I$_{peak}$]"
+        #         )
+
+        #         ax.axvline(Imax, color="k", ls=":")
+        #         ax2.axvline(Imax, color="k", ls=":")
+        #         rm_ax.axvline(Imax, color="k", ls=":")
+        #         ax.plot(self.time, It, color="firebrick", label="I")
+        #         ax.plot(
+        #             self.time,
+        #             peak_q_spectrum,
+        #             color="lightgreen",
+        #             label="Q",
+        #             alpha=0.4,
+        #         )
+        #         ax.plot(
+        #             self.time,
+        #             peak_u_spectrum,
+        #             color="darkorchid",
+        #             label="U",
+        #             alpha=0.4,
+        #         )
+        #         ax.plot(self.time, Vt, color="darkorange", label="V")
+        #         ax.plot(
+        #             self.time,
+        #             peak_pi_spectrum,
+        #             color="dodgerblue",
+        #             label="L (RM synthesis)",
+        #         )
+        #         ax2.plot(self.time, peak_pa_spectrum, color="k", label="RM Synthesis")
+        #         ax2.plot(
+        #             self.time,
+        #             peak_pa_spectrum_detrot_peak,
+        #             color="r",
+        #             label="RM synthesis -> derotated at RM$[I_{peak}]$",
+        #         )
+        #         ax2.plot(
+        #             self.time,
+        #             peak_pa_spectrum_detrot,
+        #             color="b",
+        #             label="RM synthesis -> derotated at RM(t)",
+        #         )
+        #         # fig2, newax = plt.subplots()
+
+        #         # def debiased(L, Q, U):
+        #         #     sigmaQ = np.nanstd(Q.imag, axis=1) / np.sqrt(Q.shape[1])
+        #         #     sigmaU = np.nanstd(U.imag, axis=1) / np.sqrt(U.shape[1])
+        #         #     sigma_QU = (sigmaQ + sigmaU) / 2
+        #         #     bias = np.sqrt(sigmaQ**2 + sigmaU**2)
+        #         #     # print(bias)
+        #         #     return np.sqrt(L**2 - 2.3 * sigma_QU**2)
+
+        #         # newax.plot(
+        #         #     peak_pi_spectrum,
+        #         #     color="dodgerblue",
+        #         # )
+        #         # newax.plot(
+        #         #     debiased(peak_pi_spectrum, Q, U),
+        #         #     color="b",
+        #         # )
+        #         pad = (self.time.max() - self.time.min()) * 0.05
+        #         ax.set_xlim([self.time.min() - pad, self.time.max() + pad])
+        #         ax2.set_xlim([self.time.min() - pad, self.time.max() + pad])
+        #         rm_ax.set_xlim([self.time.min() - pad, self.time.max() + pad])
+        #         ax.set_xlabel("Time (min)")
+        #         ax2.set_ylabel("P.A. (deg)")
+        #         rm_ax.set_ylabel(r"RM (rad/m$^2$)")
+        #         ax.set_ylabel("Flux Density (mJy)")
+        #         ax2.set_ylim(-90, 90)
+        #         # rm_ax.set_ylim(950, 970)
+        #         fig.tight_layout()
+
+        #     # Build L from imaginary components
+        #     Li = Q.imag + 1j * U.imag
+
+        #     # Derotate real and imaginary L
+        #     L = self.derotate_faraday(L, self.RM)
+        #     Li = self.derotate_faraday(Li, self.RM)
+
+        #     # Compute complex Q and U from L
+        #     Q = L.real + 1j * Li.real
+        #     U = L.imag + 1j * Li.imag
+
+        #     Qt = np.nanmean(Q.real, axis=1)
+        #     Ut = np.nanmean(U.real, axis=1)
+        #     PA = 0.5 * np.arctan2(Ut, Qt) * u.rad.to(u.deg)
+        #     # PA[noise] = np.nan
+
+        #     # ax.plot(
+        #     #     self.time,
+        #     #     np.sqrt(Qt**2 + Ut**2),
+        #     #     color="b",
+        #     #     label="L (derotated at RM$[I_{peak}]$)",
+        #     # )
+        #     # ax2.plot(
+        #     #     self.time,
+        #     #     PA,
+        #     #     color="darkorange",
+        #     #     label="Derotated at RM$[I_{peak}]$",
+        #     # )
+
+        #     # ax.legend()
+        #     # ax2.legend()
+        #     # rm_ax.legend()
+
+        # else:
+        #     self.polobs = None
+
+        # plt.show()
 
         self.data = {
             "XX": XX,
@@ -660,7 +957,8 @@ class TimeFreqSeries(ABC):
                 self.flux[stokes] = np.nanmean(ydata, axis=avg_axis)
                 self.flux_err[stokes] = np.nanstd(data.imag, axis=avg_axis) / sqrtn
 
-        self._calc_polarisation_params()
+        with np.errstate(invalid="ignore", divide="ignore"):
+            self._calc_polarisation_params()
 
         return
 

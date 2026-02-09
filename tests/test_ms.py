@@ -12,6 +12,7 @@ from dstools.ms import (
     combine_spws,
     extract_baseline,
     extract_baselines,
+    get_polslice,
     rotate_circular_feeds,
     rotate_linear_feeds,
     run_selfcal,
@@ -24,8 +25,8 @@ ms_properties = [
     ("nbaselines", 3),
     ("integrations", 4),
     ("nchannels", 21),
-    ("npols", 4),
-    ("dimensions", (3, 4, 21, 4)),
+    ("npols", 1),
+    ("dimensions", (3, 4, 21, 1)),
     ("telescope", "ATCA"),
     ("feedtype", "linear"),
 ]
@@ -507,3 +508,56 @@ def test_correct_feed_rotation_circular(temp_environment, caplog):
         ms.correct_feed_rotation(datacolumn="DATA")
 
     assert "Correcting" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "pol_indices",
+    [
+        [5, 6, 7, 8],
+        [9, 10, 11, 12],
+    ],
+)
+def test_get_polslice_all_pols(pol_indices):
+    polslice = get_polslice(pol_indices)
+
+    assert polslice == slice(0, 4)
+
+
+@pytest.mark.parametrize(
+    "pol_indices",
+    [
+        [5, 8],
+        [9, 12],
+    ],
+)
+def test_get_polslice_parallel_hand_pols(pol_indices):
+    polslice = get_polslice(pol_indices)
+
+    assert polslice == slice(0, 4, 3)
+
+
+@pytest.mark.parametrize(
+    "pol_indices",
+    [
+        [5],
+        [9],
+    ],
+)
+def test_get_polslice_single_pol(pol_indices):
+    polslice = get_polslice(pol_indices)
+
+    assert polslice == slice(0, 1)
+
+
+@pytest.mark.parametrize(
+    "pol_indices",
+    [
+        [1, 2, 3, 4],  # Stokes IQUV
+        [9, 12, 10, 11],  # XX, YY, XY, YX order
+        [10],  # just YY
+        [0],  # unregistered corr_type
+    ],
+)
+def test_get_polslice_unsupported_raises_error(pol_indices):
+    with pytest.raises(DataError):
+        get_polslice(pol_indices)
