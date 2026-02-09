@@ -355,7 +355,7 @@ class MeasurementSet(Table):
 
     @property
     def npols(self):
-        return 4
+        return self.getcolumn("NUM_CORR", subtable="POLARIZATION")[0]
 
     @property
     def dimensions(self):
@@ -851,7 +851,7 @@ def run_selfcal(
 
 def extract_baseline(
     ms: MeasurementSet,
-    baseline: tuple[str, str],
+    baseline: tuple[int, tuple[str, str]],
     datacolumn: str,
 ) -> dict:
     i, (ant1, ant2) = baseline
@@ -882,20 +882,70 @@ def extract_baseline(
     return data
 
 
-def extract_baselines(ms: MeasurementSet, datacolumn: str) -> list[dict]:
+def get_polslice(pol_products: np.ndarray[str]) -> slice:
+    """
+    Get a slice object representing the polarisation axis indices that should contain the data.
+    """
+
+    # CORR_TYPE definitions from casacore StokesTypes enum
+    CORRTYPES = {
+        1: "I",
+        2: "Q",
+        3: "U",
+        4: "V",
+        5: "RR",
+        6: "RL",
+        7: "LR",
+        8: "LL",
+        9: "XX",
+        10: "XY",
+        11: "YX",
+        12: "YY",
+    }
+    products = [CORRTYPES.get(product) for product in pol_products]
+
+    # In DynamicSpectrum we expect the polarisation axis to be either
+    # (RR, RL, LR, LL) or (XX, XY, YX, YY)
+    # We also allow just the parallel hands or single polarisation,
+    # and return the appropriate slice to avoid copying the data
+    # across multiple polarisations
+    match products:
+        case ["XX", "XY", "YX", "YY"] | ["RR", "RL", "LR", "LL"]:
+            polslice = slice(0, 4)
+        case ["XX", "YY"] | ["RR", "LL"]:
+            polslice = slice(0, 4, 3)
+        case ["XX"] | ["RR"]:
+            polslice = slice(0, 1)
+        case _:
+            raise DataError(f"Feed correlation types not supported: {products}")
+
+    return polslice
+
+
+def extract_baselines(
+    ms: MeasurementSet,
+    datacolumn: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # We always initialise all four instrumental pols whether or not they are
+    # present, to ensure downstream processing can rely upon their presence
+    dimensions = (ms.nbaselines, ms.integrations, ms.nchannels, 4)
     baselines = list(it.combinations(ms.antennas, 2))
-    nbaselines = len(baselines)
+
+    # Initialise output arrays
+    visibilities = np.full(dimensions, np.nan + np.nan * 1j, dtype=complex)
+    flags = np.full(dimensions, np.nan, dtype=bool)
+    uvdist = np.full(ms.nbaselines, np.nan)
 
     # If more than 1 CPU available, use multiple processes to extract baselines in parallel
     ncpus = get_available_cpus()
 
-    if ncpus > 1 and nbaselines > 1:
+    if ncpus > 1 and ms.nbaselines > 1:
         with ProcessPoolExecutor(max_workers=ncpus) as executor:
             processes = executor.map(
                 extract_baseline,
-                [ms] * nbaselines,
+                [ms] * ms.nbaselines,
                 enumerate(baselines),
-                [datacolumn] * nbaselines,
+                [datacolumn] * ms.nbaselines,
             )
             results = [p for p in as_completed(processes)]
     else:
@@ -904,4 +954,12 @@ def extract_baselines(ms: MeasurementSet, datacolumn: str) -> list[dict]:
             for baseline in enumerate(baselines)
         ]
 
-    return results
+    pol_products = ms.getcolumn("CORR_TYPE", subtable="POLARIZATION")[0]
+    polslice = get_polslice(pol_products)
+    for baseline in results:
+        baseline_idx, data_idx = baseline["baseline"], baseline["data_idx"]
+        visibilities[baseline_idx, data_idx, :, polslice] = baseline["data"]
+        flags[baseline_idx, data_idx, :, polslice] = baseline["flags"]
+        uvdist[baseline_idx] = baseline["uvdist"]
+
+    return visibilities, flags, uvdist
