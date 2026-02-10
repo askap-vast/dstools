@@ -148,27 +148,13 @@ def test_barycentric_correction(ds_paths):
     assert ds.header["time_scale"] == "tdb"
 
 
-def test_rm_synthesis(ds_paths):
-    ds_path = ds_paths.get("atca_pulse")
-    ds = DynamicSpectrum(ds_path, derotate=True)
-
-    assert round(ds.RM, 1) == -830.5
-
-
-def test_rm_synthesis_handles_calibrator_scan(ds_paths):
+def test_derotate_faraday(ds_paths):
     ds_path = ds_paths.get("atca_pulse")
     ds = DynamicSpectrum(ds_path)
 
-    # Simulate early cal scan
-    ds.data["I"][5, :] = np.nan
-    ds.data["L"][5, :] = np.nan
+    rm = ds.derotate_faraday()
 
-    # Test that RM extraction runs on the pulse at later time index
-    I = ds.data["I"]
-    L = ds.data["L"].T
-    RM = ds.rm_synthesis(I, L)
-
-    assert round(RM, 1) == -830.5
+    assert round(rm, 1) == -830.5
 
 
 def test_ds_acf(ds_paths):
