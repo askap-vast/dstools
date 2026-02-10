@@ -358,20 +358,16 @@ def test_extract_baselines_1baseline(ncpus, mocker, temp_environment):
     mocker.patch("dstools.ms.get_available_cpus", return_value=ncpus)
 
     ms = MeasurementSet(temp_environment["minimal"])
-    data = extract_baselines(
+    vis, flags, uvws = extract_baselines(
         ms,
         datacolumn="DATA",
     )
 
-    assert len(data) == 1
-
-    # Check single baseline results
-    data = data[0]
-
-    assert data["baseline"] == 0
-    assert np.allclose(data["data_idx"], np.array([0, 1]))
-    assert np.all(data["data"] == 0 + 0j)
-    assert np.all(data["flags"])
+    assert vis.shape == (1, 2, 3, 4)
+    assert np.all(vis[:, :, :, 0] == 0 + 0j)
+    assert np.all(np.isnan(vis[:, :, :, 1:]))
+    assert np.all(flags)
+    assert np.all(uvws > 0)
 
 
 def test_swap_xy_feeds_array():

@@ -244,7 +244,19 @@ stokes_choices = [
     "--RM",
     type=float,
     default=None,
-    help="Rotation measure in units of rad/m^2. Default is to compute via Faraday synthesis.",
+    help="Rotation measure in units of rad/m^2. Default is to compute via RM synthesis.",
+)
+@click.option(
+    "--RM-model",
+    type=click.Choice(["peak", "constant", "polynomial", "spline", "periodic"]),
+    default="peak",
+    help="Model to fit to RM time series.",
+)
+@click.option(
+    "--RM-poly-deg",
+    type=int,
+    default=1,
+    help="Polynomial degree in RM time series fit (--RM-model polynomial)",
 )
 @click.option(
     "-D",
@@ -320,6 +332,8 @@ def main(
     spectrum,
     polarisations,
     rm,
+    rm_model,
+    rm_poly_deg,
     acf,
     fold,
     corr_dumptime,
@@ -371,10 +385,8 @@ def main(
         calscans=calscans,
         corr_dumptime=corr_dumptime,
         barycentre=barycentre,
-        derotate=derotate,
         dedisperse=dedisperse,
         DM=dm,
-        RM=rm,
         fold=fold,
         period=period,
         period_offset=period_offset,
@@ -386,6 +398,11 @@ def main(
 
     if verbose:
         logger.debug(f"Dynamic spectrum attributes:\n{ds}")
+
+    # Faraday derotation
+    # -------------------
+    if derotate:
+        ds.derotate_faraday(rm, model=rm_model, poly_deg=rm_poly_deg)
 
     # Dynamic Spectrum
     # --------------------------------------
