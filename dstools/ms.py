@@ -374,6 +374,12 @@ class MeasurementSet(Table):
         return LOCATIONS.get(self.telescope)
 
     @property
+    def receptor_angle(self):
+        with self.open_table(subtable="FEED") as t:
+            angle = t.getcol("RECEPTOR_ANGLE")
+        return angle[0, 0] * u.radian
+
+    @property
     def feedtype(self):
         poltype_col = self.getcolumn("POLARIZATION_TYPE", subtable="FEED")
         poltype = poltype_col.get("array")[0]
@@ -548,6 +554,7 @@ class MeasurementSet(Table):
             )
             return
 
+        # Determine receptor angle offset from IAU standard (X - North, Y - East at zenith)
         logger.info("Correcting feed rotation by parallactic angle")
 
         with self.open_table(readonly=False) as t:
@@ -562,6 +569,13 @@ class MeasurementSet(Table):
                 mjd_sec = t.getcol("TIME", startrow=startrow, nrow=chunk_size)
                 time = Time(mjd_sec * u.s.to(u.day), format="mjd", scale="utc")
                 chi = observer.parallactic_angle(time, self.phasecentre).to(u.radian)
+
+                # Offset parallactic angle by the receptor angle
+                recep = self.receptor_angle
+                logger.info(
+                    f"Accounting for feed angle offset of {recep.to(u.deg):.0f}"
+                )
+                chi -= recep
 
                 # Apply parallactic angle corrections
                 if self.feedtype == "linear":
