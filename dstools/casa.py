@@ -139,6 +139,16 @@ def split(*args, **kwargs):
     pass
 
 
+@run_in_subprocess("exportuvfits")
+def exportuvfits(*args, **kwargs):
+    pass
+
+
+@run_in_subprocess("concat")
+def concat(*args, **kwargs):
+    pass
+
+
 @run_in_subprocess("tclean")
 @filter_stdout("Restoring with an empty model image")
 def tclean(*args, **kwargs):
