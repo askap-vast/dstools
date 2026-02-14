@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+import astropy.units as u
 import matplotlib.dates as mdates
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ from dstools.dynamic_spectrum import (
     Spectrum,
     TimeFreqSeries,
 )
+from dstools.polarisation import RMTimeSeries
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,76 @@ DS_LABELS = {
     "P": r"P = $\sqrt{Q^2 + U^2 + V^2}$",
     "PA": r"P.A. = $\atan{U/Q}$",
 }
+
+
+def plot_secondary_spectrum(ds, remove_mean=False):
+    I = ds.data["Q"].real
+    dt = ds.time_res.value
+    df = ds.freq_res.to(u.Hz).value
+
+    X = np.array(I, dtype=np.float64, copy=True)
+    X[np.isnan(X)] = np.nanmean(X)
+
+    nt, nf = X.shape
+
+    if remove_mean:
+        X -= X.mean(axis=0, keepdims=True)
+        X -= X.mean(axis=1, keepdims=True)
+
+    w = np.outer(np.hanning(nt), np.hanning(nf))
+    X *= w
+
+    S = np.fft.fftshift(np.abs(np.fft.fft2(X)) ** 2)
+
+    # Physical axes
+    f_t = np.fft.fftshift(np.fft.fftfreq(nt, d=dt))  # mHz (Doppler/fringe rate)
+    tau = np.fft.fftshift(np.fft.fftfreq(nf, d=df)) * 1e6  # us (delay)
+
+    # Plot: choose orientation explicitly: x=f_t, y=tau
+    Z = np.log10(S + 1e-12)
+    mid_tau = len(tau) // 2
+
+    fig, ax = plt.subplots()
+    ax.imshow(
+        Z[:, mid_tau:].T,
+        origin="lower",
+        aspect="auto",
+        extent=[f_t[0], f_t[-1], tau[mid_tau], tau[-1]],
+        cmap="plasma",
+    )
+    ax.set_xlabel(r"$f_t$ [Hz]")
+    ax.set_ylabel(r"$\tau$ [$\mu$s]")
+
+    return S, f_t, tau
+
+
+def plot_sec_spectrum(ds, detrend=True):
+    I = ds.data["V"].copy()
+    I[np.isnan(I)] = np.nanmean(I)
+
+    if detrend:
+        I -= np.mean(I)
+
+    # Optional windowing to reduce edge artifacts
+    window = np.outer(np.hanning(I.shape[0]), np.hanning(I.shape[1]))
+    I *= window
+
+    fft2 = np.fft.fft2(I)
+    secspec = np.fft.fftshift(np.abs(fft2) ** 2)
+
+    fig, ax = plt.subplots()
+    norm = ImageNormalize(secspec, interval=ZScaleInterval(contrast=0.05))
+    ax.imshow(
+        secspec.T,
+        cmap="plasma",
+        aspect="auto",
+        origin="lower",
+        norm=norm,
+    )
+    ax.set_xlabel(r"$f_t$")
+    ax.set_ylabel(r"$f_\nu$")
+
+    return
 
 
 def format_timeaxis(ds: DynamicSpectrum, ax):
@@ -78,6 +150,10 @@ def format_timeaxis(ds: DynamicSpectrum, ax):
     return
 
 
+def plot_broken_axis_ds():
+    return
+
+
 def plot_ds(
     ds: DynamicSpectrum,
     stokes,
@@ -85,6 +161,7 @@ def plot_ds(
     imag=False,
     fig=None,
     ax=None,
+    pcolor=False,
 ):
     """Plot dynamic spectrum for single Stokes parameter."""
 
@@ -111,16 +188,27 @@ def plot_ds(
     phasemax = 0.5 * ds.fold_periods
     tmin, tmax = (-phasemax, phasemax) if ds.fold else (ds.tmin, ds.tmax)
 
-    im = ax.imshow(
-        data.T,
-        extent=[tmin, tmax, ds.fmin, ds.fmax],
-        aspect="auto",
-        origin="lower",
-        norm=norm,
-        clim=(cmin, cmax),
-        cmap=cmap,
-        interpolation=None
-    )
+    if not pcolor:
+        im = ax.imshow(
+            data.T,
+            extent=[tmin, tmax, ds.fmin, ds.fmax],
+            aspect="auto",
+            origin="lower",
+            norm=norm,
+            clim=(cmin, cmax),
+            cmap=cmap,
+        )
+
+    else:
+        im = ax.pcolormesh(
+            data.T,
+            # extent=[tmin, tmax, ds.fmin, ds.fmax],
+            # aspect="auto",
+            # origin="lower",
+            norm=norm,
+            clim=(cmin, cmax),
+            cmap=cmap,
+        )
 
     ax.set_xlabel(ds._timelabel)
     ax.set_ylabel("Frequency (MHz)")
@@ -244,6 +332,8 @@ def plot_summary(
         fig=fig,
         ax=lc_ax,
     )
+    # for ax in [I_ax, Q_ax, U_ax, V_ax, lc_ax]:
+    #     ax.set_xlim(-0.1, 0.1)
 
     fig.subplots_adjust(
         left=0.06,
@@ -265,6 +355,22 @@ def plot_polarisation_lightcurve(lc: LightCurve, stokes: str, error_alpha: float
 
 def plot_polarisation_spectrum(sp: Spectrum, stokes: str, error_alpha: float = 0.4):
     return _plot_polarisations(sp, stokes=stokes, error_alpha=error_alpha)
+
+
+def plot_rmts(ds: DynamicSpectrum, rmts: RMTimeSeries):
+    # Plot RM
+    fig, ax = plt.subplots()
+    # rmax = data_ax.twinx()
+    rm = rmts * np.ones(len(ds.time)) if np.isscalar(rmts) else rmts
+    # print(rm)
+    ax.plot(
+        ds.time,
+        rm,
+        color="fuchsia",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel(r"RM [rad/m$^2$]")
 
 
 def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
@@ -323,6 +429,17 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
 
     pol_ax.errorbar(
         tf.x,
+        y=tf.pol_fraction,
+        yerr=tf.pol_fraction_err,
+        color="k",
+        alpha=error_alpha,
+        marker="o",
+        markersize=1,
+        label="$|P/I|$",
+        ls="none",
+    )
+    pol_ax.errorbar(
+        tf.x,
         y=tf.linear_fraction,
         yerr=tf.linear_fraction_err,
         color="dodgerblue",
@@ -358,11 +475,13 @@ def _plot_polarisations(tf: TimeFreqSeries, stokes: str, error_alpha: float):
     pol_ax.set_xlim([xmin - pad, xmax + pad])
 
     pa_ax.set_ylim(-100, 100)
-    ell_ax.set_ylim(-100, 100)
+    ell_ax.set_ylim(-50, 50)
     pol_ax.set_ylim(-0.1, 1.1)
-    pa_ax.set_yticks([-90, 0, 90])
-    ell_ax.set_yticks([-90, 0, 90])
+    # pol_ax.set_ylim(-0.05, 0.18)
+    pa_ax.set_yticks([-90, -45, 0, 45, 90])
+    ell_ax.set_yticks([-45, -30, -15, 0, 15, 30, 45])
     pol_ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+    # pol_ax.set_yticks([0, 0.05, 0.1, 0.15])
 
     pa_ax.set_ylabel("P.A. (deg)")
     ell_ax.set_ylabel("Ellipticity (deg)")
@@ -392,7 +511,6 @@ def plot_acf(ds, stokes="I", contrast=0.4):
         aspect="auto",
         norm=norm,
         cmap="plasma",
-        interpolation=None
     )
     cb = acf_fig.colorbar(
         im,
@@ -405,6 +523,36 @@ def plot_acf(ds, stokes="I", contrast=0.4):
 
     acf_ax.set_xlabel(f"Time Lag ({ds.tunit})")
     acf_ax.set_ylabel("Frequency Lag (MHz)")
+
+    # # Plot zero time lag trace
+    # acfzt_fig, acfzt_ax = plt.subplots(figsize=(7, 5))
+
+    # zero_t_trace_acf = acf2d[1:, 0]
+    # freq_lag = np.linspace(0, ds.fmax - ds.fmin, len(zero_t_trace_acf))
+    # acfzt_ax.plot(
+    #     freq_lag,
+    #     zero_t_trace_acf,
+    #     color="k",
+    # )
+
+    # acfzt_ax.set_xlabel("Frequency Lag (MHz)")
+    # acfzt_ax.set_ylabel("ACF")
+
+    # acft_peaks, t_props = find_peaks(zero_t_trace_acf, prominence=(None, None))
+
+    # max_prom_t = np.argsort(t_props["prominences"])[::-1]
+    # ds.peak_f_lags = freq_lag[acft_peaks[max_prom_t]]
+
+    # acfzt_ax.axvline(
+    #     ds.peak_f_lags[0],
+    #     color="darkorange",
+    #     ls="--",
+    # )
+
+    # import astropy.units as u
+
+    # peak_lag = ds.peak_f_lags[0] * u.MHz
+    # logger.debug(f"Stokes {stokes} ACF peak at {peak_lag:.3f}")
 
     # Plot zero frequency lag trace
     acfz_fig, acfz_ax = plt.subplots(figsize=(7, 5))
