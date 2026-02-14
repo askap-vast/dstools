@@ -7,9 +7,6 @@ import pytest
 
 from dstools.dynamic_spectrum import DynamicSpectrum
 from dstools.plotting import (
-    _plot_polarisations,
-    _plot_timefreqseries,
-    format_timeaxis,
     plot_acf,
     plot_ds,
     plot_lightcurve,
@@ -17,6 +14,11 @@ from dstools.plotting import (
     plot_polarisation_spectrum,
     plot_spectrum,
     plot_summary,
+)
+from dstools.plotting.plotting import (
+    _plot_polarisations,
+    _plot_timefreqseries,
+    format_timeaxis,
 )
 
 
@@ -98,6 +100,8 @@ def create_fake_tfseries(
         circular_fraction_err=np.array([0.1, 0.1, 0.1]),
         linear_fraction=np.array([0.5, 0.3, 0.4]),
         linear_fraction_err=np.array([0.1, 0.1, 0.1]),
+        pol_fraction=np.array([0.95, 0.94, 0.95]),
+        pol_fraction_err=np.array([0.1, 0.1, 0.1]),
         ds=ds,
     )
 
