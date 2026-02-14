@@ -795,6 +795,10 @@ class TimeFreqSeries(ABC):
         # Remove any isolated unmasked values (likely noise)
         isolated = L_mask[:-2] & L_mask[2:]
         L_mask[1:-1][isolated] = True
+        isolated = V_mask[:-2] & V_mask[2:]
+        V_mask[1:-1][isolated] = True
+        isolated = P_mask[:-2] & P_mask[2:]
+        P_mask[1:-1][isolated] = True
 
         self.polangle[L_mask] = np.nan
         self.polangle_err[L_mask] = np.nan
