@@ -47,6 +47,7 @@ class DynamicSpectrum:
     maxuvwave: float = np.inf
     flag_channels: Optional[FlagRanges] = None
     flag_times: Optional[FlagRanges] = None
+    flag_imag_snr: Optional[float] = 10000
 
     tunit: u.Quantity = u.hour
     corr_dumptime: float = 10.1
@@ -79,6 +80,10 @@ class DynamicSpectrum:
             XX, XY, YX, YY = self._flag_channels(XX, XY, YX, YY)
         if self.flag_times is not None:
             XX, XY, YX, YY = self._flag_times(XX, XY, YX, YY)
+        if self.flag_imag_snr is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                XX, XY, YX, YY = self._flag_imag_snr(XX, XY, YX, YY)
 
         # Insert calibrator scan breaks
         XX, XY, YX, YY = self._stack_cal_scans(XX, XY, YX, YY)
@@ -368,6 +373,42 @@ class DynamicSpectrum:
                 "channels": len(self.freq),
             }
         )
+
+        return XX, XY, YX, YY
+
+    def _flag_imag_snr(self, XX, XY, YX, YY):
+        I = (XX + YY) / 2
+        Q = (XX - YY) / 2
+        U = (XY + YX) / 2
+        V = 1j * (YX - XY) / 2
+
+        chan_mask = np.full(XX.shape[1], False)
+        time_mask = np.full(XX.shape[0], False)
+
+        for vis in [I.imag]:  # , Q.imag, U.imag, V.imag]:
+            sp = np.nanmean(vis, axis=0)
+            lc = np.nanmean(vis, axis=1)
+            sqrt_f = np.sqrt(vis.shape[0])
+            sqrt_t = np.sqrt(vis.shape[0])
+
+            sp_snr = np.abs(self.flag_imag_snr * np.nanstd(vis, axis=0) / sqrt_f)
+            lc_snr = np.abs(self.flag_imag_snr * np.nanstd(vis, axis=1) / sqrt_t)
+
+            chan_mask = chan_mask | (sp > sp_snr) | (sp < -sp_snr)
+            time_mask = time_mask | (lc > lc_snr) | (lc < -lc_snr)
+
+        XX[:, chan_mask] = np.nan
+        XY[:, chan_mask] = np.nan
+        YX[:, chan_mask] = np.nan
+        YY[:, chan_mask] = np.nan
+
+        XX[time_mask, :] = np.nan
+        XY[time_mask, :] = np.nan
+        YX[time_mask, :] = np.nan
+        YY[time_mask, :] = np.nan
+
+        # rfi_mask = self.flag_imag_snr
+        # print(sp_snr, lc_snr)
 
         return XX, XY, YX, YY
 
