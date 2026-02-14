@@ -2,6 +2,7 @@ import itertools as it
 import logging
 import os
 import re
+import shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -40,6 +41,26 @@ from dstools.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def invert_caltable(caltable, inv_caltable):
+    if os.path.exists(inv_caltable):
+        raise FileExistsError(f"{inv_caltable} already exists")
+
+    # Copy calibration table
+    shutil.copytree(caltable.as_posix(), inv_caltable.as_posix())
+
+    # Calculate inverse of gain solutions
+    cal = Table(caltable.as_posix())
+    C = cal.getcolumn("CPARAM")
+    Cinv = 1.0 / C
+
+    # Write to inverted calibration table
+    inv_cal = Table(inv_caltable.as_posix())
+    with inv_cal.open_table(readonly=False) as t:
+        t.putcol("CPARAM", Cinv)
+
+    return inv_caltable.as_posix()
 
 
 @njit
@@ -759,15 +780,21 @@ class MeasurementSet(Table):
 
         return MeasurementSet(outms)
 
-    def applycal(
-        self,
-        # gaintable: Path,
-        # unapply: bool = False,
-    ):
-        # TODO: Implement applycal myself along with an unapply option
+    def applycal(self, unapply: bool = False):
+        if self.caltable is None:
+            raise ValueError("Gain solutions not found, run .solve_gains() first!")
+
+        if unapply:
+            caltable = invert_caltable(
+                caltable=self.caltable.path,
+                inv_caltable=self.caltable.path.with_suffix(".inv.cal"),
+            )
+        else:
+            caltable = self.caltable.path.as_posix()
+
         applycal(
-            vis=str(self.path),
-            gaintable=[str(self.caltable.path)],
+            vis=self.path.as_posix(),
+            gaintable=[caltable],
             interp="linear",
         )
 
