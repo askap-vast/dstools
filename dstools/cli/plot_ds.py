@@ -394,6 +394,7 @@ def main(
         phase_bins=phase_bins,
         flag_channels=flag_channel_range,
         flag_times=flag_time_range,
+        flag_imag_snr=None,
     )
 
     if verbose:
