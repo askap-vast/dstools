@@ -11,9 +11,12 @@ from erfa import ErfaWarning
 from dstools.dynamic_spectrum import DynamicSpectrum, LightCurve, Spectrum
 from dstools.logger import setupLogger
 from dstools.plotting import (
+    GnomonicProjection,
+    StereographicProjection,
     plot_acf,
     plot_ds,
     plot_lightcurve,
+    plot_poincare_sphere,
     plot_polarisation_lightcurve,
     plot_polarisation_spectrum,
     plot_spectrum,
@@ -302,6 +305,12 @@ stokes_choices = [
     help="SNR threshold for masking of polarisation properties.",
 )
 @click.option(
+    "--poincare",
+    is_flag=True,
+    default=False,
+    help="Plot lightcurve on the poincare sphere.",
+)
+@click.option(
     "-Y",
     "--summary",
     is_flag=True,
@@ -351,6 +360,7 @@ def main(
     absolute_times,
     calscans,
     summary,
+    poincare,
     mask_sigma,
     verbose,
     ds_path,
@@ -428,6 +438,30 @@ def main(
             plot_polarisation_lightcurve(lc, stokes=stokes)
         else:
             plot_lightcurve(lc, stokes=stokes)
+
+    # Poincare Sphere
+    # --------------------------------------
+    if poincare:
+        proj = GnomonicProjection(lc)
+        fig, ax = proj.prepare_grid()
+        proj.plot(
+            lc,
+            fig,
+            ax,
+            plot_errors=True,
+            fit_linear_model=False,
+            connect_points=True,
+        )
+        fig.tight_layout()
+
+        # proj = StereographicProjection(lc)
+
+        # fig, ax = proj.prepare_grid()
+        # proj.plot(lc, fig, ax)
+
+        fig.tight_layout()
+
+        plot_poincare_sphere(lc)
 
     # Summary plot
     # --------------------------------------
