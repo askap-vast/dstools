@@ -130,8 +130,11 @@ class DynamicSpectrum:
             self.time = rebin(len(self.time), len(XX), axis=0) @ self.time
 
         # Store time and frequency resolution
-        self.time_res = (self.time[1] - self.time[0]) * self.tunit
-        self.freq_res = (self.freq[1] - self.freq[0]) * u.MHz
+        if len(self.time) > 1:
+            self.time_res = (self.time[1] - self.time[0]) * self.tunit
+        if len(self.freq) > 1:
+            self.freq_res = (self.freq[1] - self.freq[0]) * u.MHz
+
         self.header.update(
             {
                 "time_resolution": f"{self.time_res.to(u.s):.3f}",
@@ -292,6 +295,13 @@ class DynamicSpectrum:
         self.corr_dumptime /= time_scale_factor
         self._timelabel = "Phase" if self.fold else f"Time ({self.tunit})"
 
+        # Set an initial time / freq resolution.
+        # This will be updated after folding / data selection,
+        # but we set a default to fall back on in case further
+        # processing restricts to single channel / integration
+        self.time_res = (time[1] - time[0]) * self.tunit
+        self.freq_res = (freq[1] - freq[0]) * u.MHz
+
         # Flip ATCA L-band frequency axis to intuitive order
         if freq[0] > freq[-1]:
             XX = np.flip(XX, axis=1)
@@ -329,7 +339,7 @@ class DynamicSpectrum:
             mintime = 0
 
         if self.maxtime:
-            maxtime = -np.argmax((time - time[0] < self.maxtime)[::-1]) + 1
+            maxtime = -(np.argmax((time - time[0] < self.maxtime)[::-1])) + 1
         else:
             maxtime = 0
 
@@ -498,13 +508,13 @@ class DynamicSpectrum:
         """Insert null data representing off-source time."""
 
         scan_start_idx, scan_end_idx = self._get_scan_intervals()
+        dt = self.time_res.value
 
         # Calculate number of cycles in each calibrator/stow break
         time_end_break = self.time[scan_start_idx[1:]]
         time_start_break = self.time[scan_end_idx[:-1]]
 
         # Count number of samples within each calibrator / stow break
-        dt = self.time[1] - self.time[0]
         num_break_cycles = np.append((time_end_break - time_start_break), 0) / dt
         num_channels = self.header["channels"]
 
