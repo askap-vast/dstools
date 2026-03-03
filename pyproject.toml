@@ -37,6 +37,7 @@ numba = "^0.61.2"
 [tool.poetry.scripts]
 dstools-atca-cal = "dstools.cli.atca_cal:main"
 dstools-askap-preprocess = "dstools.cli.askap_preprocess:main"
+dstools-concat = "dstools.cli.concat:main"
 dstools-derotate-feeds = "dstools.cli.derotate_feeds:main"
 dstools-create-model = "dstools.cli.create_model:main"
 dstools-insert-model = "dstools.cli.insert_model:main"

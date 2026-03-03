@@ -242,14 +242,9 @@ class DynamicSpectrum:
 
         return
 
-    def _load_data(self):
-        """Load instrumental pols and uvdist/time/freq data, converting to MHz, s, and mJy."""
-
-        # Import instrumental polarisations and time/frequency/uvdist arrays
-        with h5py.File(self.ds_path, "r") as f:
+    def _parse_observations(self, f: h5py.File):
+        if "observations" not in f:
             self._validate(f)
-
-            # Read header
             self.header = dict(f.attrs)
 
             # Read uvdist, time, frequency, and flux arrays
@@ -257,6 +252,99 @@ class DynamicSpectrum:
             time = f["time"][:]
             freq = f["frequency"][:] / 1e6
             flux = f["flux"][:] * 1e3
+
+            t = Time(
+                (time * self.tunit).to(u.day),
+                format="mjd",
+                scale="utc",
+            )
+
+            return flux, time, freq, uvdist
+
+        # Metadata about observations
+        observations = f["observations"]
+        logger.info(f"DS file contains {len(observations)} datasets")
+        [print(obs) for obs in observations]
+
+        header = []
+        frequency = []
+        time = []
+        uvdist = []
+
+        self.observations = dict()
+
+        for obs in observations:
+            self._validate(observations[obs])
+
+            t = observations[obs]["time"][:]
+            t = Time(
+                (t * u.s).to(u.day),
+                format="mjd",
+                scale="utc",
+            )
+            ra, dec = observations[obs].attrs["phasecentre"].split()
+            telescope = observations[obs].attrs["telescope"]
+            t = self._barycentre_times(t, ra, dec, telescope)
+
+            header.append(observations[obs].attrs)
+            frequency.append(observations[obs]["frequency"][:])
+            time.append(t.mjd)
+            uvdist.append(observations[obs]["uvdist"][:])
+
+        # Read header
+        self.header = dict(header[0])
+
+        comb_freq = np.unique(np.concatenate(frequency))
+        comb_time = np.unique(np.concatenate(time))
+        comb_shape = (1, comb_time.size, comb_freq.size, 4)
+        comb_uvdist = uvdist[0]
+
+        comb_flux = np.full(comb_shape, 0 + 0j)
+
+        for obs in observations:
+            freq = observations[obs]["frequency"][:]
+            time = observations[obs]["time"][:]
+            flux = observations[obs]["flux"][:]
+            uvdist = observations[obs]["uvdist"][:]
+
+            self.observations[obs] = {
+                "header": observations[obs].attrs,
+                "flux": flux,
+                "frequency": frequency,
+                "time": time,
+                "uvdist": uvdist,
+            }
+
+            t = Time(
+                (time * u.s).to(u.day),
+                format="mjd",
+                scale="utc",
+            )
+
+            ra, dec = observations[obs].attrs["phasecentre"].split()
+            telescope = observations[obs].attrs["telescope"]
+            t = self._barycentre_times(t, ra, dec, telescope)
+
+            t = np.searchsorted(comb_time, t.mjd)
+            f = np.searchsorted(comb_freq, freq)
+
+            ti, fi = np.ix_(t, f)
+
+            comb_flux[:, ti, fi, :] += flux
+
+        comb_time *= u.day.to(u.s)
+
+        # TODO: convert back to UTC at say the telescope that appears most often?
+
+        return comb_flux * 1e3, comb_time, comb_freq / 1e6, comb_uvdist
+
+    def _load_data(self):
+        """Load instrumental pols and uvdist/time/freq data, converting to MHz, s, and mJy."""
+
+        # Import instrumental polarisations and time/frequency/uvdist arrays
+        with h5py.File(self.ds_path, "r") as f:
+            # Read uvdist, time, frequency, and flux arrays
+            flux, time, freq, uvdist = self._parse_observations(f)
 
             # Make baseline selection using UV distance
             blmask = (uvdist >= self.minuvdist) & (uvdist <= self.maxuvdist)
@@ -279,9 +367,12 @@ class DynamicSpectrum:
             uvwave[uvwave_mask] = np.nan
 
             # Average over baseline axis
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                flux = np.nanmean(flux, axis=0)
+            if flux.shape[0] == 1:
+                flux = flux[0, :, :, :]
+            else:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    flux = np.nanmean(flux, axis=0)
 
             # Read out instrumental polarisations
             XX = flux[:, :, 0]
@@ -457,11 +548,16 @@ class DynamicSpectrum:
 
         return XX, XY, YX, YY
 
-    def _barycentre_times(self, time: Time):
+    def _barycentre_times(self, time: Time, ra, dec, telescope):
         """Apply corrections to Barycentric Dynamical Timescale."""
+        # TODO: we should refactor barycentre / topocentre conversions
+        # to some static utils functions, and then rethink when these
+        # get called in the DS initialisaiton (e.g. for multiple telescope
+        # datasets)
 
-        ra, dec = self.header.get("phasecentre").split()
-        location = LOCATIONS.get(self.header.get("telescope"))
+        # ra, dec = self.header.get("phasecentre").split()
+        # location = LOCATIONS.get(self.header.get("telescope"))
+        location = LOCATIONS.get(telescope)
 
         target_coord = SkyCoord(
             ra=ra,
@@ -545,6 +641,13 @@ class DynamicSpectrum:
                 # longer than the rest, but this only affects the visual presentation
                 # of the lightcurve / dynamic spectrum, not the timestamps.
                 num_timesteps = int(round(num_scans) - 1)
+                if num_timesteps > 100:
+                    logger.warning(
+                        "Gap of more than 100 integrations detected! "
+                        "Limiting to 100 to save memory so your time axis will be wrong!"
+                    )
+                    num_timesteps = 100
+
                 num_nans = (num_timesteps, num_channels)
                 nan_chunk = np.full(num_nans, np.nan + np.nan * 1j)
 
