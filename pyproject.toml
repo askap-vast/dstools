@@ -33,6 +33,7 @@ rm-lite = "^2025.4.0"
 cal-cabb = "^0.1.0"
 astroplan = "^0.10.1"
 numba = "^0.61.2"
+datashader = "^0.18.2"
 
 [tool.poetry.scripts]
 dstools-atca-cal = "dstools.cli.atca_cal:main"

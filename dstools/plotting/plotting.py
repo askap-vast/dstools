@@ -1,10 +1,12 @@
 import logging
 from typing import Optional
 
+import datashader
 import matplotlib.dates as mdates
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 from astropy.time import Time
 from astropy.visualization import ImageNormalize, ZScaleInterval
 from matplotlib.gridspec import GridSpec
@@ -83,6 +85,69 @@ def plot_broken_axis_ds():
     return
 
 
+def generate_xarray(ds: DynamicSpectrum, stokes: str, imag: bool):
+    # Select polarisation
+    if stokes == "L":
+        data = np.abs(ds.data[stokes])
+    else:
+        data = ds.data[stokes].imag if imag else ds.data[stokes].real
+
+    if ds.fold:
+        phasemax = 0.5 * ds.fold_periods
+        time = np.linspace(-phasemax, phasemax, ds.phase_bins * ds.fold_periods)
+    else:
+        time = ds.time
+
+    T, F = np.meshgrid(time, ds.freq)
+
+    dataset = xr.Dataset(
+        {
+            "flux": (("freq", "time"), data.T),
+            "time": (("freq", "time"), T),
+            "freq": (("freq", "time"), F),
+        }
+    )
+
+    return dataset
+
+
+def rasterise(fig, ax, dataset):
+    bbox = ax.get_window_extent()
+    height, width = int(bbox.height), int(bbox.width)
+
+    tmin, tmax = ax.get_xlim()
+    fmin, fmax = ax.get_ylim()
+
+    cvs = datashader.Canvas(
+        plot_width=width,
+        plot_height=height,
+        x_range=(tmin, tmax),
+        y_range=(fmin, fmax),
+    )
+
+    quads = cvs.quadmesh(
+        dataset,
+        x="time",
+        y="freq",
+        agg=datashader.mean("flux"),
+    )
+
+    return quads, (tmin, tmax, fmin, fmax)
+
+
+def make_update(fig, ax, im, dataset):
+    def update(event):
+        data, extent = rasterise(fig, ax, dataset)
+        im.set_data(data)
+        im.set_extent(extent)
+
+        fig.canvas.draw_idle()
+
+        return
+
+    return update
+
+
 def plot_ds(
     ds: DynamicSpectrum,
     stokes,
@@ -97,11 +162,17 @@ def plot_ds(
     if fig is None or ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
 
-    # Select polarisation
-    if stokes == "L":
-        data = np.abs(ds.data[stokes])
-    else:
-        data = ds.data[stokes].imag if imag else ds.data[stokes].real
+    # Set up dynamic rasterisation
+    dataset = generate_xarray(ds, stokes=stokes, imag=imag)
+
+    # Set time axis to phase if folding
+    phasemax = 0.5 * ds.fold_periods
+    tmin, tmax = (-phasemax, phasemax) if ds.fold else (ds.tmin, ds.tmax)
+
+    ax.set_xlim(tmin, tmax)
+    ax.set_ylim(ds.freq[0], ds.freq[-1])
+
+    data, extent = rasterise(fig, ax, dataset)
 
     # Produce normalisation for products with valid data
     if not np.isnan(data).all():
@@ -113,20 +184,22 @@ def plot_ds(
     cmap = "plasma" if stokes in ["I", "L"] else "coolwarm"
     cmin = -2 if stokes in ["I", "L"] else -cmax
 
-    # Set time axis to phase if folding
-    phasemax = 0.5 * ds.fold_periods
-    tmin, tmax = (-phasemax, phasemax) if ds.fold else (ds.tmin, ds.tmax)
-
     if not pcolor:
         im = ax.imshow(
-            data.T,
-            extent=[tmin, tmax, ds.fmin, ds.fmax],
+            data,
+            extent=extent,
             aspect="auto",
             origin="lower",
             norm=norm,
             clim=(cmin, cmax),
+            interpolation="nearest",
             cmap=cmap,
         )
+        update = make_update(fig=fig, ax=ax, im=im, dataset=dataset)
+
+        fig.canvas.mpl_connect("resize_event", update)
+        ax.callbacks.connect("xlim_changed", update)
+        ax.callbacks.connect("ylim_changed", update)
 
     else:
         im = ax.pcolormesh(
