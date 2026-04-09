@@ -796,6 +796,7 @@ class MeasurementSet(Table):
             vis=self.path.as_posix(),
             gaintable=[caltable],
             interp="linear",
+            applymode="calonly",
         )
 
         return
