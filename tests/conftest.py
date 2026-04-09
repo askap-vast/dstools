@@ -122,7 +122,7 @@ def temp_environment(tmp_path_factory, mocker, ms_path):
     mocker.patch("dstools.ms.gaincal")
     mocker.patch("dstools.ms.applycal")
     mocker.patch("dstools.imaging.tclean")
-    mocker.patch("dstools.imaging.exportfits")
+    mocker.patch("dstools.imaging.exportuvfits")
     mocker.patch("dstools.imaging.parse_stdout_stderr")
     mocker.patch("dstools.ms.tablecopy")
     mocker.patch("os.system")

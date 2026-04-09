@@ -15,7 +15,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 from numpy.typing import ArrayLike
 
-from dstools.casa import exportfits, tclean
+from dstools.casa import exportuvfits, tclean
 from dstools.logger import parse_stdout_stderr
 from dstools.mask import beam_shape_erode, minimum_absolute_clip
 from dstools.ms import MeasurementSet
@@ -490,7 +490,7 @@ def make_pb_image(pb_image: Path, ms: MeasurementSet, position: SkyCoord):
         pbcor=True,
     )
 
-    exportfits(
+    exportuvfits(
         imagename="dstools-pb.pb",
         fitsimage=str(pb_image),
     )

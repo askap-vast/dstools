@@ -88,11 +88,6 @@ def cvel(*args, **kwargs):
     pass
 
 
-@run_in_subprocess("exportuvfits")
-def exportfits(*args, **kwargs):
-    pass
-
-
 @run_in_subprocess("flagdata")
 def flagdata(*args, **kwargs):
     pass
