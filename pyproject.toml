@@ -8,32 +8,36 @@ packages = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License"
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.12"
-click = "^8.0.3"
-matplotlib = "^3.8.2"
-numpy = "^2.0.0"
-scipy = "^1.14.1"
-astropy = "6.1.7"
-pandas = "2.2.3"
-h5py = "^3.11.0"
-colorlog = "^6.8.2"
-casatasks = "^6.7"
-dask = "^2024.11.2"
-xarray = "^2024.11.0"
-mpl-point-clicker = "^0.4.1"
-radio-beam = "^0.3.8"
-fixms = "^0.4.0"
-python-casacore = "^3.6.1"
-rm-lite = "^2025.4.0"
-cal-cabb = "^0.1.0"
-astroplan = "^0.10.1"
-numba = "^0.61.2"
-datashader = "^0.18.2"
+python = ">=3.12,<3.14"
+click = ">=8.1,<9"
+matplotlib = ">=3.8,<3.11"
+numpy = ">=2.0,<2.3"
+scipy = ">=1.14,<1.17"
+astropy = ">=6.1.7,<7"
+pandas = ">=2.2.3,<3"
+h5py = ">=3.11,<4"
+colorlog = ">=6.8,<7"
+casaconfig = {version = ">=1.5,<2", markers = "platform_system == 'Linux' and platform_machine == 'x86_64'"}
+casatasks = {version = ">=6.7.3,<6.8", markers = "platform_system == 'Linux' and platform_machine == 'x86_64'"}
+casatools = {version = ">=6.7.3,<6.8", markers = "platform_system == 'Linux' and platform_machine == 'x86_64'"}
+dask = ">=2024.11,<2026"
+xarray = ">=2024.11,<2026"
+mpl-point-clicker = ">=0.4.1,<0.5"
+radio-beam = ">=0.3.8,<0.4"
+fixms = {version = ">=0.4.1,<0.5", markers = "platform_system == 'Linux' and platform_machine == 'x86_64'"}
+python-casacore = {version = ">=3.7.1,<4", markers = "platform_system == 'Linux' and platform_machine == 'x86_64'"}
+rm-lite = ">=2025.4,<2026"
+cal-cabb = ">=0.1.0,<0.2"
+astroplan = ">=0.10.1,<0.11"
+numba = ">=0.61.2,<0.62"
+datashader = ">=0.18.2,<0.19"
+scikit-learn = "^1.8.0"
 
 [tool.poetry.scripts]
 dstools-atca-cal = "dstools.cli.atca_cal:main"
@@ -67,10 +71,14 @@ reportOptionalSubscript = false
 reportOptionalMemberAccess = false
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 filterwarnings = [
     "ignore::DeprecationWarning:casaconfig",
     "ignore:'datfix' made the change.*:astropy.wcs.FITSFixedWarning",
     "ignore:'obsfix' made the change.*:astropy.wcs.FITSFixedWarning",
+]
+markers = [
+    "fullstack: CASA/casacore-backed tests for MeasurementSet, imaging, and related workflows",
 ]
 
 [tool.coverage.report]

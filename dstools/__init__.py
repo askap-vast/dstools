@@ -1,7 +1,10 @@
 from importlib.metadata import version
 
-from casaconfig import config
-
 __version__ = version("radio-dstools")
 
-config.logfile = "/dev/null"
+try:
+    from casaconfig import config
+except ImportError:
+    config = None
+else:
+    config.logfile = "/dev/null"

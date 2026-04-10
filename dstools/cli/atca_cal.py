@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 
 import click
-from cal_cabb.logger import setupLogger
 from cal_cabb.miriad import BANDS, CABBContinuumPipeline, MiriadWrapper
+
+from dstools.logger import setupLogger
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +200,7 @@ def main(
         )
     except ValueError as e:
         logger.error(e)
-        exit(1)
+        raise SystemExit(1)
 
     if not skip_pipeline:
         pipeline.run()

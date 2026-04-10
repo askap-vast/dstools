@@ -4,10 +4,16 @@ from pathlib import Path
 import astropy.units as u
 import click
 
-from dstools.imaging import WSCleanModel
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet
 from dstools.utils import parse_coordinates
+
+try:
+    from dstools.imaging import WSCleanModel
+    from dstools.ms import MeasurementSet
+
+    HAS_CASA_SUPPORT = True
+except ImportError:
+    HAS_CASA_SUPPORT = False
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +45,19 @@ logger = logging.getLogger(__name__)
     help="Radius of automatic target mask in arcseconds.",
 )
 @click.argument("model_dir", type=Path)
-@click.argument("ms", type=MeasurementSet)
+@click.argument("ms", type=Path)
 def main(mask_pos, mask_radius, interactive, model_dir, ms):
     setupLogger(verbose=False)
 
+    if not HAS_CASA_SUPPORT:
+        logger.error("Model insertion is not supported on this system.")
+        raise SystemExit(1)
+
+    ms = MeasurementSet(ms)
+
     if not model_dir.exists():
         logger.error(f"Path {model_dir} does not exist.")
-        exit(1)
+        raise SystemExit(1)
 
     # Read model images in
     model = WSCleanModel(model_dir)

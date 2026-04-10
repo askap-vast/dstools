@@ -1,10 +1,17 @@
 import logging
+from pathlib import Path
 
 import click
 
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet, run_selfcal
 from dstools.utils import DataError
+
+try:
+    from dstools.ms import MeasurementSet, run_selfcal
+
+    HAS_CASA_SUPPORT = True
+except ImportError:
+    HAS_CASA_SUPPORT = False
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +64,15 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Number of spectral windows in which to derive independent gain solutions.",
 )
-@click.argument("ms", type=MeasurementSet)
+@click.argument("ms", type=Path)
 def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, nspws):
     setupLogger(verbose=False)
+
+    if not HAS_CASA_SUPPORT:
+        logger.error("Self-calibration is not supported on this system.")
+        raise SystemExit(1)
+
+    ms = MeasurementSet(ms)
 
     gaintype = "T" if combine_pols else "G"
     try:
@@ -75,7 +88,7 @@ def main(ms, calmode, interval, refant, combine_pols, split_data, interactive, n
         )
     except (ValueError, DataError) as exc:
         logger.error(exc)
-        exit(1)
+        raise SystemExit(1)
 
     return
 

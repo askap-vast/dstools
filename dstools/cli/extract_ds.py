@@ -9,10 +9,16 @@ import h5py
 import numpy as np
 from astropy.wcs import FITSFixedWarning
 
-from dstools.imaging import get_pb_correction
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet, combine_spws, extract_baselines
 from dstools.utils import parse_coordinates
+
+try:
+    from dstools.imaging import get_pb_correction
+    from dstools.ms import MeasurementSet, combine_spws, extract_baselines
+
+    HAS_CASA_SUPPORT = True
+except ImportError:
+    HAS_CASA_SUPPORT = False
 
 warnings.filterwarnings("ignore", category=FITSFixedWarning, append=True)
 
@@ -76,7 +82,7 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms", type=MeasurementSet)
+@click.argument("ms", type=Path)
 @click.argument("outfile", type=Path)
 def main(
     ms,
@@ -91,6 +97,12 @@ def main(
 ):
     setupLogger(verbose=verbose)
 
+    if not HAS_CASA_SUPPORT:
+        logger.error("Dynamic spectrum extraction is not supported on this system.")
+        raise SystemExit(1)
+
+    ms = MeasurementSet(ms)
+
     columns = {
         "data": "DATA",
         "corrected": "CORRECTED_DATA",
@@ -101,7 +113,7 @@ def main(
     # Check that selected column exists in MS
     if not ms.column_exists(datacolumn):
         logger.error(f"{ms} does not contain {datacolumn} column.")
-        exit(1)
+        raise SystemExit(1)
 
     # Combine multiple spectral windows (e.g. VLA)
     # This also appears to fix an MS corrupted by model insertion

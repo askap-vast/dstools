@@ -5,13 +5,13 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: Test on Python ${{ matrix.python-version }} - ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  linux-default:
+    name: Linux Default - Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.11"]
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -26,12 +26,11 @@ jobs:
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Cache Poetry virtualenv and packages
+      - name: Cache Poetry packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/pypoetry
-          key: poetry-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Ensure ~/.casa/data exists
         run: mkdir -p ~/.casa/data
@@ -39,17 +38,137 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
 
-      - name: Run pytest with coverage
+      - name: Run default cross-platform test path
+        env:
+          NUMBA_DISABLE_JIT: "1"
+          MPLBACKEND: Agg
+          MPLCONFIGDIR: /tmp/mpl
         run: |
-          poetry run pytest --cov=dstools --cov-report=xml
+          poetry run pytest \
+            -m "not fullstack" \
+            --cov=dstools \
+            --cov-report=xml \
+            tests
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  linux-fullstack:
+    name: Linux Fullstack - Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Poetry packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-system-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Ensure ~/.casa/data exists
+        run: mkdir -p ~/.casa/data
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Verify full-stack imports
+        run: |
+          poetry run python -c "import casatasks, casatools, casaconfig"
+          poetry run python -c "from casacore.tables import tableexists"
+
+      - name: Run fullstack test branch
+        env:
+          NUMBA_DISABLE_JIT: "1"
+          MPLBACKEND: Agg
+          MPLCONFIGDIR: /tmp/mpl
+        run: poetry run pytest -m fullstack tests
+
+  macos-default:
+    name: macOS Default - Python ${{ matrix.python-version }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Poetry packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Run default cross-platform test path
+        env:
+          NUMBA_DISABLE_JIT: "1"
+          MPLBACKEND: Agg
+          MPLCONFIGDIR: /tmp/mpl
+        run: poetry run pytest -m "not fullstack" tests
+
+  lint:
+    name: Lint And Lock Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Poetry packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-lint-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Check lock file
+        run: poetry check --lock
+
+      - name: Install dependencies
+        run: poetry install --with dev
 
       - name: Check formatting with ruff
         run: poetry run ruff check .
 
       - name: Check import sorting with isort
         run: poetry run isort --check-only --profile black .
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}

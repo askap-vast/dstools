@@ -4,10 +4,16 @@ from pathlib import Path
 
 import click
 
-from dstools.imaging import WSClean
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet
 from dstools.utils import BANDS, CONFIGS, Array
+
+try:
+    from dstools.imaging import WSClean
+    from dstools.ms import MeasurementSet
+
+    HAS_CASA_SUPPORT = True
+except ImportError:
+    HAS_CASA_SUPPORT = False
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +241,7 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms", type=MeasurementSet)
+@click.argument("ms", type=Path)
 def main(
     ms,
     imsize,
@@ -273,6 +279,14 @@ def main(
     parallel_reordering,
     verbose,
 ):
+    setupLogger(verbose=verbose)
+
+    if not HAS_CASA_SUPPORT:
+        logger.error("Model creation is not supported on this system.")
+        raise SystemExit(1)
+
+    ms = MeasurementSet(ms)
+
     os.system(f"mkdir -p {ms.path.parent.absolute() / out_dir}")
     logfile = (
         ms.path.parent.absolute() / out_dir / "create-model.log" if savelogs else None

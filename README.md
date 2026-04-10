@@ -30,18 +30,26 @@
 
 ### Dependencies ###
 
+`DStools` is compatible with Python 3.12 and 3.13.
+
+The dynamic spectrum manipulation and plotting library are fully supported on both Linux `x86_64` and macOS (`ARM` and `x86_64`).
+Field modelling, subtraction, and dynamic spectrum extraction tools are currently only supported on Linux `x86_64`, as `python-casacore` is not currently supported on macOS or Windows. 
+
 `DStools` uses `miriad` for pre-processing and calibration of ATCA observations, and `WSclean` for imaging and model insertion. Make sure these tools are installed on your system if you wish to use these parts of the package:
 
 * `miriad`
 * `WSclean 3.5`
-
-`DStools` is built on top of modular `CASA` which is presently only available on linux.
 
 ### Installation / Configuration ###
 
 Install `DStools` using `pip` or your preferred package manager:
 ```
 pip install radio-dstools
+```
+
+For latest features, install the development version hosted on Github:
+```
+pip install git+https://github.com/askap-vast/dstools.git@dev
 ```
 
 <a name="cli"></a>

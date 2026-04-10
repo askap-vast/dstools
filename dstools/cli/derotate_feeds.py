@@ -1,9 +1,16 @@
 import logging
+from pathlib import Path
 
 import click
 
 from dstools.logger import setupLogger
-from dstools.ms import MeasurementSet
+
+try:
+    from dstools.ms import MeasurementSet
+
+    HAS_CASA_SUPPORT = True
+except ImportError:
+    HAS_CASA_SUPPORT = False
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +30,15 @@ logger = logging.getLogger(__name__)
     default=False,
     help="Enable verbose logging.",
 )
-@click.argument("ms", type=MeasurementSet)
+@click.argument("ms", type=Path)
 def main(ms, datacolumn, verbose):
     setupLogger(verbose=verbose)
+
+    if not HAS_CASA_SUPPORT:
+        logger.error("Feed derotation is not supported on this system.")
+        raise SystemExit(1)
+
+    ms = MeasurementSet(ms)
 
     columns = {
         "data": "DATA",
