@@ -90,7 +90,7 @@ The output from this script will be a calibrated target dataset in MeasurementSe
 
 ASKAP data requires extra pre-processing to 
 1) set the instrumental polarisation flux scale to agree with CASA conventions (e.g. `I = (XX + YY)/2`), 
-2) set the instrumental polarisation axis to align with IAU conventions (`X` and `Y` receivers aligned N-S and E-W respectively), and 
+2) set the instrumental polarisation axis to align with the IAU convention (`X` and `Y` receivers aligned N-S and E-W respectively), and 
 2) set the reference frame of the beam phase centre to the correct coordinates (by default the phase centre is oriented to the mosaicked field centre coordinates).
 
 These corrections should be applied before any further imaging or dynamic spectrum tasks, and are implemented using the [FixMS](https://github.com/AlecThomson/fix-ms) package. You can run both steps with:
