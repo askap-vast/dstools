@@ -90,8 +90,8 @@ The output from this script will be a calibrated target dataset in MeasurementSe
 
 ASKAP data requires extra pre-processing to 
 1) set the instrumental polarisation flux scale to agree with CASA conventions (e.g. `I = (XX + YY)/2`), 
-2) set the instrumental polarisation axis to align with IAU convention (`X` and `Y` receivers aligned N-S and E-W respectively), and 
-2) set the reference frame of the beam phase centre to the correct coordinates (by default the phasecentre is oriented to the mosaicked field centre coordinates).
+2) set the instrumental polarisation axis to align with IAU conventions (`X` and `Y` receivers aligned N-S and E-W respectively), and 
+2) set the reference frame of the beam phase centre to the correct coordinates (by default the phase centre is oriented to the mosaicked field centre coordinates).
 
 These corrections should be applied before any further imaging or dynamic spectrum tasks, and are implemented using the [FixMS](https://github.com/AlecThomson/fix-ms) package. You can run both steps with:
 ```
@@ -111,7 +111,7 @@ dstools-create-model <MS>
 
 You can supply further options (see details with `dstools-create-model --help`) including:
 * array configuration and frequency band (to help choose imaging parameters),
-* imaging phasecentre,
+* imaging phase centre,
 * mask threshold,
 * clean threshold,
 * robust parameter,
@@ -168,9 +168,9 @@ dstools-extract-ds <MS> <DS>
 where `<MS>` is the path to your data and `<DS>` is the path to store your output dynamic spectrum.
 
 You can supply further options (see details with `dstools-extract-ds --help`) to:
-* set the phasecentre at which to extract the dynamic spectrum with `-p <RA> <DEC>` (coordinates can be in sexagesimal or decimal degree formats),
+* set the phase centre at which to extract the dynamic spectrum with `-p <RA> <DEC>` (coordinates can be in sexagesimal or decimal degree formats),
 * select extraction from either the `DATA`, `CORRECTED_DATA`, or `MODEL_DATA` column with `-d`,
-* throw away baselines shorter than some threshold in meters with (for example) `-u 500`
+* throw away baselines shorter than some threshold in metres with (for example) `-u 500`
 * disable averaging over the baseline axis with `-B`,
 * correct for primary beam attenuation by supplying a primary beam map with `-P <PB_PATH>.fits`,
 * disable masking of flagged data with `-F`.
@@ -226,12 +226,12 @@ The `DynamicSpectrum` class takes the following keyword arguments:
 | `favg`                    | int              | 1       | factor by which to average the data across frequency channels |
 | `mintime` / `maxtime`     | float            | None    | min and max cuts on time in units of `tunit`                  |
 | `minfreq` / `maxfreq`     | float            | None    | min and max cuts on frequency in units of MHz                 |
-| `minuvdist` / `maxuvdist` | float            | None    | min and max cuts on baseline distance in units of meters      |
+| `minuvdist` / `maxuvdist` | float            | None    | min and max cuts on baseline distance in units of metres      |
 | `minuvwave` / `maxuvwave` | float            | None    | min and max cuts on baseline distance in units of wavelengths |
 | `tunit`                   | astropy Quantity | u.hour  | time unit to use for selection and plotting                   |
 | `corr_dumptime`           | astropy Quantity | 10*u.s  | correlator dumptime, used to detect calibrator scan breaks    |
-| `derotate`                | bool             | False   | Apply Faraday de-rotation to linear polarisations             |
-| `RM`                      | float            | None    | User provided rotation measure in units of rad / m^2          |
+| `derotate`                | bool             | False   | apply Faraday de-rotation to linear polarisations             |
+| `RM`                      | float            | None    | user provided rotation measure in units of rad / m^2          |
 | `fold`                    | bool             | False   | enable folding, must also provide `period` keyword            |
 | `period`                  | float            | None    | period on which to fold the data in units of `tunit`          |
 | `period_offset`           | float            | 0.0     | period phase offset in units of `period`                      |
