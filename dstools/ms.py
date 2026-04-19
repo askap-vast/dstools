@@ -181,6 +181,7 @@ class Table:
         query: Optional[str] = None,
     ):
         path = self.path / subtable if subtable else self.path
+        t = None
 
         try:
             t = table(
@@ -192,8 +193,9 @@ class Table:
                 t = t.query(query)
             yield t
         finally:
-            t.unlock()
-            t.close()
+            if t is not None:
+                t.unlock()
+                t.close()
 
     def getcolumn(self, column: str, subtable: Optional[str] = None):
         with self.open_table(subtable=subtable) as t:
@@ -333,7 +335,7 @@ class CalTable(Table):
             savefile = self.path.with_suffix(f".{calmode}.cal{subfig}.png")
             fig.savefig(savefile, format="png")
 
-        return
+        return fig
 
 
 class MeasurementSet(Table):
@@ -596,7 +598,7 @@ class MeasurementSet(Table):
                 logger.info(
                     f"Accounting for feed angle offset of {recep.to(u.deg):.0f}"
                 )
-                chi -= recep
+                chi = (chi - recep).to_value(u.radian)
 
                 # Apply parallactic angle corrections
                 if self.feedtype == "linear":

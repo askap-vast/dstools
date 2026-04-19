@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "-B",
-    "--baseline-average",
+    "--baseline-average/--no-baseline-average",
     is_flag=True,
     default=True,
     help="Average over baseline axis.",

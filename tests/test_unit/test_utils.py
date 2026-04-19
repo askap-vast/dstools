@@ -92,20 +92,21 @@ def test_parse_coordinates(coord):
     assert parsed.to_string("hmsdms") == c.to_string("hmsdms")
 
 
-def test_prompt_no_bypass_yes(mocker):
-    mocker.patch("builtins.input", side_effect=["y"])
+def test_prompt_no_bypass_yes(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _: "y")
 
     assert prompt("continue")
 
 
-def test_prompt_no_bypass_no(mocker):
-    mocker.patch("builtins.input", side_effect=["n"])
+def test_prompt_no_bypass_no(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _: "n")
 
     assert not prompt("continue")
 
 
-def test_prompt_no_bypass_wrong_input(mocker):
-    mocker.patch("builtins.input", side_effect=["d", "n"])
+def test_prompt_no_bypass_wrong_input(monkeypatch):
+    answers = iter(["d", "n"])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
 
     assert not prompt("continue")
 
@@ -118,10 +119,13 @@ def test_prompt_bypass_no():
     assert not prompt("continue", bypass=True, default_response=False)
 
 
-def test_prompt_bypass_message_warns():
-    assert not prompt(
-        "continue", bypass=True, bypass_msg="hello", default_response=False
-    )
+def test_prompt_bypass_message_warns(caplog):
+    with caplog.at_level("WARNING", logger="dstools.utils"):
+        assert not prompt(
+            "continue", bypass=True, bypass_msg="hello", default_response=False
+        )
+
+    assert "hello" in caplog.text
 
 
 def test_rebin_row():

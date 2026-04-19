@@ -1,4 +1,9 @@
-from dstools.casa import flagdata
+import pytest
+
+pytest.importorskip("casacore.tables")
+pytestmark = pytest.mark.fullstack
+
+from dstools.casa import flagdata  # noqa: E402
 
 
 def test_casacore_casatasks_bindings_dont_clash(ms, mocker):

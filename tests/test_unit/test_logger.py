@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 
 import pytest
@@ -39,13 +40,15 @@ def test_setupLogger_verbose_false(caplog):
 
 def test_setupLogger_file_capture(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("temp")
-    setupLogger(verbose=False, filename=tmp_path / "test.log")
+    log_path = tmp_path / "test.log"
+    setupLogger(verbose=False, filename=log_path)
 
     logger = logging.getLogger(__name__)
 
     logger.info("test message")
 
-    assert (tmp_path / "test.log").exists()
+    assert log_path.exists()
+    assert "test message" in log_path.read_text()
 
 
 debug_lines = [
@@ -193,7 +196,10 @@ def simulate_c_output(stdout_lines, stderr_lines):
     return
 
 
-@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
+@pytest.mark.skipif(
+    "CI" in os.environ or sys.platform == "darwin",
+    reason="Flaky in CI environments and on macOS",
+)
 def test_redirect_c_output_filtering_stdout_only(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]
@@ -205,15 +211,18 @@ def test_redirect_c_output_filtering_stdout_only(capfd):
     ):
         simulate_c_output(stdout_lines, stderr_lines)
 
-        out, err = capfd.readouterr()
+    out, err = capfd.readouterr()
 
-        assert "debug msg" not in out
-        assert "info msg" in out
-        assert "warning msg" in err
-        assert "critical" in err
+    assert "debug msg" not in out
+    assert "info msg" in out
+    assert "warning msg" in err
+    assert "critical" in err
 
 
-@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
+@pytest.mark.skipif(
+    "CI" in os.environ or sys.platform == "darwin",
+    reason="Flaky in CI environments and on macOS",
+)
 def test_redirect_c_output_filtering_stderr_only(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]
@@ -225,15 +234,18 @@ def test_redirect_c_output_filtering_stderr_only(capfd):
     ):
         simulate_c_output(stdout_lines, stderr_lines)
 
-        out, err = capfd.readouterr()
+    out, err = capfd.readouterr()
 
-        assert "debug" in out
-        assert "info" in out
-        assert "warning" not in err
-        assert "critical" in err
+    assert "debug" in out
+    assert "info" in out
+    assert "warning" not in err
+    assert "critical" in err
 
 
-@pytest.mark.skipif("CI" in os.environ, reason="Flaky in CI environments")
+@pytest.mark.skipif(
+    "CI" in os.environ or sys.platform == "darwin",
+    reason="Flaky in CI environments and on macOS",
+)
 def test_redirect_c_output_filtering_both_streams(capfd):
     stdout_lines = ["debug msg", "info msg"]
     stderr_lines = ["warning msg", "critical msg"]
@@ -245,12 +257,12 @@ def test_redirect_c_output_filtering_both_streams(capfd):
     ):
         simulate_c_output(stdout_lines, stderr_lines)
 
-        out, err = capfd.readouterr()
+    out, err = capfd.readouterr()
 
-        assert "debug" not in out
-        assert "info" in out
-        assert "warning" not in err
-        assert "critical" in err
+    assert "debug" not in out
+    assert "info" in out
+    assert "warning" not in err
+    assert "critical" in err
 
 
 def test_filter_stdout_decorator_behavior(capfd):

@@ -76,10 +76,12 @@ def skewed_image():
 
 def test_boxcar_skew_mask_output_shape_and_types(simple_image):
     result = create_boxcar_skew_mask(simple_image, skew_delta=0.2, box_size=3)
-    assert isinstance(result.positive_pixel_frac, np.ndarray)
-    assert isinstance(result.skew_mask, np.ndarray)
     assert result.positive_pixel_frac.shape == simple_image.shape
     assert result.skew_mask.shape == simple_image.shape
+    assert result.skew_mask.dtype == bool
+    assert np.all(
+        (0.0 <= result.positive_pixel_frac) & (result.positive_pixel_frac <= 1.0)
+    )
     assert result.skew_delta == 0.2
     assert result.box_size == 3
 

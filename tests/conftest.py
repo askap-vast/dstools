@@ -1,13 +1,90 @@
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 
 import dstools
-from dstools.ms import MeasurementSet
 
-package_root = Path(dstools.__path__[0]).parent
+PACKAGE_ROOT = Path(dstools.__path__[0]).parent
+TEST_DATA_ROOT = PACKAGE_ROOT / "tests" / "data"
+TEST_MPLCONFIGDIR = Path(tempfile.gettempdir()) / "dstools-mpl"
+
+os.environ.setdefault("NUMBA_DISABLE_JIT", "1")
+os.environ.setdefault("MPLCONFIGDIR", str(TEST_MPLCONFIGDIR))
+TEST_MPLCONFIGDIR.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_path(src: Path, dst: Path) -> Path:
+    if src.is_dir():
+        shutil.copytree(src, dst)
+    else:
+        shutil.copy2(src, dst)
+
+    return dst
+
+
+def _copy_named_paths(
+    sources: dict[str, Path],
+    workspace: Path,
+    names: tuple[str, ...],
+    destination_names: dict[str, str] | None = None,
+) -> dict[str, Path]:
+    copied = {}
+    destination_names = destination_names or {}
+
+    for name in names:
+        dst_name = destination_names.get(name, sources[name].name)
+        copied[name] = _copy_path(sources[name], workspace / dst_name)
+
+    return copied
+
+
+def _replace_path(src: Path, dst: Path) -> Path:
+    if dst.exists():
+        if dst.is_dir():
+            shutil.rmtree(dst)
+        else:
+            dst.unlink()
+
+    return _copy_path(src, dst)
+
+
+def _set_ms_phasecentre(ms_path: Path, phasecenter: str) -> None:
+    casacore = pytest.importorskip("casacore.tables")
+    position = SkyCoord(phasecenter.replace("J2000 ", ""), unit=("hourangle", "deg"))
+
+    with casacore.table(
+        (ms_path / "FIELD").as_posix(),
+        readonly=False,
+        ack=False,
+    ) as table:
+        for column in ("PHASE_DIR", "REFERENCE_DIR", "DELAY_DIR"):
+            if column not in table.colnames():
+                continue
+
+            data = table.getcol(column)
+            if data.shape[0] == 2:
+                data[0, ...] = position.ra.rad
+                data[1, ...] = position.dec.rad
+            elif data.shape[-1] == 2:
+                data[..., 0] = position.ra.rad
+                data[..., 1] = position.dec.rad
+            else:
+                raise ValueError(f"Unexpected FIELD/{column} shape: {data.shape}")
+
+            table.putcol(column, data)
+
+
+def _set_data_from_corrected(ms_path: Path) -> None:
+    casacore = pytest.importorskip("casacore.tables")
+
+    with casacore.table(ms_path.as_posix(), readonly=False, ack=False) as table:
+        corrected = table.getcol("CORRECTED_DATA")
+        table.putcol("DATA", corrected)
 
 
 @pytest.fixture
@@ -20,152 +97,194 @@ def disable_jit(monkeypatch):
 @pytest.fixture
 def dispersed_pulse():
     return np.load(
-        f"{package_root}/tests/data/ds/dispersed_pulse_dm3000.npy", allow_pickle=True
+        TEST_DATA_ROOT / "ds" / "dispersed_pulse_dm6000.npy", allow_pickle=True
     )
 
 
 @pytest.fixture
 def ms_path():
-    return package_root / "tests/data/msets/fred.atca.ms"
+    return TEST_DATA_ROOT / "msets" / "fred.atca.ms"
+
+
+@pytest.fixture
+def ms_sources(ms_path):
+    return {
+        "onespw": ms_path,
+        "twospw": ms_path.with_suffix(".2spw.ms"),
+        "minimal": ms_path.with_suffix(".minimal.ms"),
+        "rotated": ms_path.with_suffix(".dstools-temp.rotated.ms"),
+        "averaged": ms_path.with_suffix(".dstools-temp.baseavg.ms"),
+        "subtracted": ms_path.with_suffix(".subtracted.ms"),
+        "vla": TEST_DATA_ROOT / "msets" / "gpm.vla.ms",
+        "mkt_3c286": TEST_DATA_ROOT / "msets" / "3C286.MKT_UHF.xyswapped.ms",
+        "askap": TEST_DATA_ROOT / "msets" / "j1755.askap.ms",
+    }
+
+
+@pytest.fixture
+def caltable_sources(ms_path):
+    return {"fred": ms_path.with_suffix(".cal")}
 
 
 @pytest.fixture
 def im_paths():
-    images = {
-        "image": package_root / "tests/data/images/test-MFS-I-image.fits",
-        "model": package_root / "tests/data/images/test-MFS-I-model.fits",
-        "residual": package_root / "tests/data/images/test-MFS-I-residual.fits",
+    return {
+        "image": TEST_DATA_ROOT / "images" / "test-MFS-I-image.fits",
+        "model": TEST_DATA_ROOT / "images" / "test-MFS-I-model.fits",
+        "residual": TEST_DATA_ROOT / "images" / "test-MFS-I-residual.fits",
     }
-
-    return images
 
 
 @pytest.fixture
-def temp_environment(tmp_path_factory, mocker, ms_path):
-    """Set up temporary filesystem environment to test I/O operations with CASA tasks mocked."""
+def image_sources():
+    return {
+        "model_dir": TEST_DATA_ROOT / "images",
+        "pb": TEST_DATA_ROOT / "images" / "fred.atca.pb.fits",
+        "target_mask": TEST_DATA_ROOT / "images" / "target_mask.fits",
+        "clean_mask": TEST_DATA_ROOT / "images" / "clean_mask.fits",
+        "final_mask": TEST_DATA_ROOT / "images" / "final_mask.fits",
+    }
 
-    # Set up temporary directory for test
-    tmp_path = tmp_path_factory.mktemp("temp")
 
-    # Copy MSets over
-    nspw_ms_path = ms_path.with_suffix(".2spw.ms")
-    caltable_path = ms_path.with_suffix(".cal")
-    ms_min_path = ms_path.with_suffix(".minimal.ms")
-    rotated_ms_path = ms_path.with_suffix(".dstools-temp.rotated.ms")
-    averaged_ms_path = ms_path.with_suffix(".dstools-temp.baseavg.ms")
-    subbed_ms_path = ms_path.with_suffix(".subtracted.ms")
-    j1755_ms_path = package_root / "tests/data/msets/j1755.askap.ms"
-    vla_ms_path = package_root / "tests/data/msets/gpm.vla.ms"
-    mkt_3c286_ms_path = package_root / "tests/data/msets/3C286.MKT_UHF.xyswapped.ms"
+@pytest.fixture
+def temp_workspace(tmp_path):
+    return tmp_path
 
-    model_path = package_root / "tests/data/images"
-    pb_path = model_path / "fred.atca.pb.fits"
 
-    target_mask_path = model_path / "target_mask.fits"
-    clean_mask_path = model_path / "clean_mask.fits"
-    final_mask_path = model_path / "final_mask.fits"
+@pytest.fixture
+def workspace_onespw_ms(copy_paths_into_workspace, ms_sources):
+    return copy_paths_into_workspace(
+        ms_sources,
+        ("onespw",),
+        destination_names={"onespw": "test.ms"},
+    )["onespw"]
 
-    tmp_ms_path = tmp_path / "test.ms"
-    tmp_ms_min_path = tmp_path / "test.minimal.ms"
-    tmp_caltable_path = tmp_path / "test.cal"
-    tmp_selfcal_ms_path = tmp_path / "test.selfcal1.ms"
-    tmp_rotated_ms_path = tmp_path / "test.dstools-temp.rotated.ms"
-    tmp_averaged_ms_path = tmp_path / "test.dstools-temp.baseavg.ms"
-    tmp_combined_ms_path = tmp_path / "test.dstools-temp.comb.ms"
-    tmp_onespw_ms_path = tmp_path / "test.1spw.ms"
-    tmp_twospw_ms_path = tmp_path / "test.2spw.ms"
-    tmp_subbed_ms_path = tmp_path / "test.subtracted.ms"
-    tmp_vla_ms_path = tmp_path / "test.vla.ms"
-    tmp_mkt_ms_path = tmp_path / "mkt.3c286.ms"
-    tmp_mkt_fix_ms_path = tmp_path / "mkt.3c286.fix.ms"
-    tmp_askap_ms_path = tmp_path / "test.askap.ms"
-    tmp_model_path = tmp_path / "model"
-    tmp_pb_path = tmp_path / "test.pb.fits"
-    tmp_target_mask_path = tmp_path / "target_mask.fits"
-    tmp_clean_mask_path = tmp_path / "clean_mask.fits"
-    tmp_final_mask_path = tmp_path / "final_mask.fits"
 
-    os.system(f"cp -r {ms_path} {tmp_ms_path}")
-    os.system(f"cp -r {ms_min_path} {tmp_ms_min_path}")
-    os.system(f"cp -r {ms_path} {tmp_selfcal_ms_path}")
-    os.system(f"cp -r {caltable_path} {tmp_caltable_path}")
-    os.system(f"cp -r {ms_path} {tmp_onespw_ms_path}")
-    os.system(f"cp -r {nspw_ms_path} {tmp_twospw_ms_path}")
-    os.system(f"cp -r {rotated_ms_path} {tmp_rotated_ms_path}")
-    os.system(f"cp -r {averaged_ms_path} {tmp_averaged_ms_path}")
-    os.system(f"cp -r {ms_path} {tmp_combined_ms_path}")
-    os.system(f"cp -r {subbed_ms_path} {tmp_subbed_ms_path}")
-    os.system(f"cp -r {vla_ms_path} {tmp_vla_ms_path}")
-    os.system(f"cp -r {mkt_3c286_ms_path} {tmp_mkt_ms_path}")
-    os.system(f"cp -r {mkt_3c286_ms_path} {tmp_mkt_fix_ms_path}")
-    os.system(f"cp -r {j1755_ms_path} {tmp_askap_ms_path}")
-    os.system(f"cp -r {model_path} {tmp_model_path}")
-    os.system(f"cp -r {pb_path} {tmp_pb_path}")
-    os.system(f"cp -r {target_mask_path} {tmp_target_mask_path}")
-    os.system(f"cp -r {clean_mask_path} {tmp_clean_mask_path}")
-    os.system(f"cp -r {final_mask_path} {tmp_final_mask_path}")
+@pytest.fixture
+def imaging_workspace(copy_paths_into_workspace, image_sources):
+    copied = copy_paths_into_workspace(
+        image_sources,
+        ("model_dir", "pb", "target_mask", "clean_mask", "final_mask"),
+        destination_names={
+            "model_dir": "model",
+            "pb": "test.pb.fits",
+            "target_mask": "target_mask.fits",
+            "clean_mask": "clean_mask.fits",
+            "final_mask": "final_mask.fits",
+        },
+    )
 
-    # Mock CASA tasks and file-system operations, as we will directly compare
-    # the MS state to the temporary MS files
+    return {
+        "model": copied["model_dir"],
+        "pb": copied["pb"],
+        "target_mask": copied["target_mask"],
+        "clean_mask": copied["clean_mask"],
+        "final_mask": copied["final_mask"],
+    }
+
+
+@pytest.fixture
+def copy_paths_into_workspace(temp_workspace):
+    def _copy(
+        sources: dict[str, Path],
+        names: tuple[str, ...],
+        destination_names: dict[str, str] | None = None,
+    ) -> dict[str, Path]:
+        return _copy_named_paths(
+            sources=sources,
+            workspace=temp_workspace,
+            names=names,
+            destination_names=destination_names,
+        )
+
+    return _copy
+
+
+@pytest.fixture
+def casa_task_mocks(
+    mocker,
+    ms_sources,
+    caltable_sources,
+    image_sources,
+):
     flagstats = {
         "antenna": {
             "1": {"flagged": 240.0, "total": 1620.0},
             "6": {"flagged": 244.0, "total": 1620.0},
         },
     }
-    mocker.patch("dstools.ms.mstransform")
-    mocker.patch("dstools.ms.cvel")
-    mocker.patch("dstools.ms.phaseshift")
+
+    def _copy_ms_output(src: str, dst: str, fallback: Path | None = None) -> None:
+        src_path = Path(src)
+        dst_path = Path(dst)
+        _replace_path(fallback or src_path, dst_path)
+
+    def _mstransform_side_effect(vis, outputvis, **kwargs):
+        if kwargs.get("nspw") == 2:
+            _copy_ms_output(vis, outputvis, fallback=ms_sources["twospw"])
+        elif str(outputvis).endswith(".dstools-temp.baseavg.ms"):
+            _copy_ms_output(vis, outputvis, fallback=ms_sources["averaged"])
+        else:
+            _copy_ms_output(vis, outputvis)
+
+    def _cvel_side_effect(vis, outputvis, **kwargs):
+        _copy_ms_output(vis, outputvis, fallback=ms_sources["onespw"])
+
+    def _phaseshift_side_effect(vis, outputvis, phasecenter, **kwargs):
+        _copy_ms_output(vis, outputvis)
+        _set_ms_phasecentre(Path(outputvis), phasecenter)
+
+    def _split_side_effect(vis, outputvis, datacolumn, **kwargs):
+        _copy_ms_output(vis, outputvis)
+        if datacolumn == "corrected":
+            _set_data_from_corrected(Path(outputvis))
+
+    def _gaincal_side_effect(vis, caltable, **kwargs):
+        _replace_path(caltable_sources["fred"], Path(caltable))
+
+    def _tablecopy_side_effect(tablename, newtablename):
+        _replace_path(Path(tablename), Path(newtablename))
+
+    def _exportuvfits_side_effect(imagename, fitsimage, **kwargs):
+        _replace_path(image_sources["pb"], Path(fitsimage))
+
+    mocker.patch("dstools.ms.mstransform", side_effect=_mstransform_side_effect)
+    mocker.patch("dstools.ms.cvel", side_effect=_cvel_side_effect)
+    mocker.patch("dstools.ms.phaseshift", side_effect=_phaseshift_side_effect)
     mocker.patch("dstools.ms.uvsub")
     mocker.patch("dstools.ms.flagdata", return_value=flagstats)
-    mocker.patch("dstools.ms.split")
-    mocker.patch("dstools.ms.gaincal")
+    mocker.patch("dstools.ms.split", side_effect=_split_side_effect)
+    mocker.patch("dstools.ms.gaincal", side_effect=_gaincal_side_effect)
     mocker.patch("dstools.ms.applycal")
     mocker.patch("dstools.imaging.tclean")
-    mocker.patch("dstools.imaging.exportuvfits")
+    mocker.patch("dstools.imaging.exportuvfits", side_effect=_exportuvfits_side_effect)
     mocker.patch("dstools.imaging.parse_stdout_stderr")
-    mocker.patch("dstools.ms.tablecopy")
+    mocker.patch("dstools.ms.tablecopy", side_effect=_tablecopy_side_effect)
     mocker.patch("os.system")
     mocker.patch("os.chdir")
 
-    # Pass temporary paths to test
-    tmp_ms_paths = {
-        "onespw": tmp_ms_path,
-        "twospw": tmp_twospw_ms_path,
-        "rotated": tmp_rotated_ms_path,
-        "averaged": tmp_averaged_ms_path,
-        "minimal": tmp_ms_min_path,
-        "vla": tmp_vla_ms_path,
-        "mkt_3c286": tmp_mkt_ms_path,
-        "mkt_3c286_fix": tmp_mkt_fix_ms_path,
-        "askap": tmp_askap_ms_path,
-        "cal": tmp_caltable_path,
-        "model": tmp_model_path,
-        "pb": tmp_pb_path,
-        "target_mask": tmp_target_mask_path,
-        "clean_mask": tmp_clean_mask_path,
-        "final_mask": tmp_final_mask_path,
-    }
-    yield tmp_ms_paths
-
-    # Clean up temp path
-    os.system(f"rm -r {tmp_ms_path}")
-
-    return
+    return flagstats
 
 
 @pytest.fixture
-def ms(temp_environment):
-    return MeasurementSet(temp_environment["onespw"])
+def ms(workspace_onespw_ms):
+    MeasurementSet = pytest.importorskip("dstools.ms").MeasurementSet
+
+    return MeasurementSet(workspace_onespw_ms)
+
+
+@pytest.fixture
+def mocked_ms(workspace_onespw_ms, casa_task_mocks):
+    MeasurementSet = pytest.importorskip("dstools.ms").MeasurementSet
+
+    return MeasurementSet(workspace_onespw_ms)
 
 
 @pytest.fixture
 def ds_paths():
-    paths = {
-        "atca_pulse": f"{package_root}/tests/data/ds/fred.atca.pulse.ds",
-        "atca_calscan": f"{package_root}/tests/data/ds/fred.atca.calscan.ds",
-        "vla_pulse": f"{package_root}/tests/data/ds/gpm1839.vla.pulse.ds",
-        "askap_pulse": f"{package_root}/tests/data/ds/j1755.askap.pulse.ds",
+    return {
+        "atca_pulse": str(TEST_DATA_ROOT / "ds" / "fred.atca.pulse.ds"),
+        "atca_calscan": str(TEST_DATA_ROOT / "ds" / "fred.atca.calscan.ds"),
+        "vla_pulse": str(TEST_DATA_ROOT / "ds" / "gpm1839.vla.pulse.ds"),
+        "askap_pulse": str(TEST_DATA_ROOT / "ds" / "j1755.askap.pulse.ds"),
     }
-
-    return paths
