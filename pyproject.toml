@@ -43,7 +43,7 @@ dstools-extract-ds = "dstools.cli.extract_ds:main"
 dstools-plot-ds = "dstools.cli.plot_ds:main"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
+pytest = ">=8,<10"
 pre-commit = "^4.1.0"
 coverage = "^7.4.1"
 mypy = "^1.15.0"
